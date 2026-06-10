@@ -6,7 +6,7 @@ $DesktopBackendDir = Join-Path $RootDir "desktop\resources\backend"
 $PythonBin = $env:PC_SERVER_PYTHON
 
 if (-not $PythonBin) {
-  $PythonBin = Join-Path $BackendDir ".venv\Scripts\python.exe"
+  $PythonBin = Join-Path $BackendDir ".venv-win\Scripts\python.exe"
 }
 
 if (-not (Test-Path $PythonBin)) {

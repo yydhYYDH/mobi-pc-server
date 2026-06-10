@@ -1,40 +1,42 @@
 # PC MNN Server
 
-PC-side control application for running an MNN server, downloading models from ModelScope, and connecting to HarmonyOS phones through `hdc`.
+PC 侧控制台应用，用于启动和管理本地 MNN server、从 ModelScope 下载模型，并通过 `hdc` 连接 HarmonyOS 设备。
 
-## Stack
+英文版 README 保留在 [README.en.md](README.en.md)。
 
-- Frontend: React + Vite + TypeScript
-- Backend: FastAPI
-- Desktop shell: Electron
-- Native runtime: MNN under `3rdparty/MNN`
-- Model source: ModelScope
-- Device bridge: HarmonyOS `hdc`
+## 技术栈
 
-## Repository Layout
+- 前端：React + Vite + TypeScript
+- 后端：FastAPI
+- 桌面壳：Electron
+- 原生运行时：`3rdparty/MNN` 下的 MNN
+- 模型来源：ModelScope
+- 设备桥接：HarmonyOS `hdc`
+
+## 目录结构
 
 ```text
-frontend/        Browser control panel
-backend/         Local API service and process wrappers
-desktop/         Electron shell for desktop launch
-configs/         Model catalog and static config
-models/          Downloaded model files, ignored by Git
-logs/            Runtime logs, ignored by Git
-3rdparty/MNN     MNN upstream source as a Git submodule
-docs/            Project documentation
-scripts/         Developer scripts
+frontend/        浏览器控制台页面
+backend/         本地 API 服务和进程封装
+desktop/         Electron 桌面启动壳
+configs/         模型目录和静态配置
+models/          下载后的模型文件，不提交到 Git
+logs/            运行日志，不提交到 Git
+3rdparty/MNN     作为 Git submodule 引入的 MNN 上游源码
+docs/            项目文档
+scripts/         开发脚本
 ```
 
-## Development
+## 开发运行
 
-Use Node.js 20 or newer:
+需要 Node.js 20 或更新版本：
 
 ```bash
 nvm install 20
 nvm use 20
 ```
 
-Backend:
+启动后端：
 
 ```bash
 cd backend
@@ -44,7 +46,7 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Frontend:
+启动前端：
 
 ```bash
 cd frontend
@@ -52,9 +54,13 @@ npm install
 npm run dev
 ```
 
-The frontend expects the backend at `http://127.0.0.1:8000`.
+前端默认访问后端地址：
 
-Desktop shell:
+```text
+http://127.0.0.1:8000
+```
+
+启动桌面开发版：
 
 ```bash
 cd desktop
@@ -62,23 +68,22 @@ npm install
 npm run dev
 ```
 
-In development, Electron starts both the Vite frontend and the FastAPI backend,
-waits for `http://127.0.0.1:5173` and `http://127.0.0.1:8000/api/health`, then
-opens the desktop window.
+开发模式下，Electron 会启动 Vite 前端和 FastAPI 后端，等待
+`http://127.0.0.1:5173` 与 `http://127.0.0.1:8000/api/health` 可用后打开桌面窗口。
 
-If the backend is already running and should not be started by Electron:
+如果后端已经单独启动，不希望 Electron 再启动后端：
 
 ```bash
 PC_SERVER_SKIP_BACKEND=1 npm run dev
 ```
 
-If the frontend is already running and should not be started by Electron:
+如果前端已经单独启动，不希望 Electron 再启动前端：
 
 ```bash
 PC_SERVER_SKIP_FRONTEND=1 npm run dev
 ```
 
-Useful desktop environment variables:
+桌面开发常用环境变量：
 
 ```text
 PC_SERVER_BACKEND_HOST=127.0.0.1
@@ -88,80 +93,45 @@ PC_SERVER_SKIP_BACKEND=1
 PC_SERVER_SKIP_FRONTEND=1
 ```
 
-## Packaging
+## 打包
 
-The desktop package uses Electron Builder. Runtime files are collected under:
+详细打包说明见：
 
-```text
-desktop/resources/
-  frontend/   Copied from frontend/dist
-  backend/    pc-server-backend or pc-server-backend.exe
-  mnn/        MNN runtime files, added later
-  hdc/        hdc runtime files, added later
-```
-
-Linux packaging from this environment:
-
-```bash
-./scripts/build-backend.sh
-cd desktop
-npm run package
-```
-
-This creates an unpacked app at:
-
-```text
-desktop/release/linux-unpacked/
-```
-
-Windows packaging should be done from a native Windows shell, not WSL:
-
-```powershell
-cd backend
-py -3.11 -m venv .venv
-.\.venv\Scripts\activate
-pip install -e .
-
-cd ..
-.\scripts\windows\build-backend.ps1
-
-cd desktop
-npm install
-npm run dist:win
-```
-
-The Windows package expects `desktop/resources/backend/pc-server-backend.exe`.
-Place Windows MNN and hdc binaries under `desktop/resources/mnn/` and
-`desktop/resources/hdc/` before running `npm run dist:win`.
+- Windows：[docs/packaging-windows.md](docs/packaging-windows.md)
+- Linux/WSL：[docs/packaging-linux.md](docs/packaging-linux.md)
 
 ## MNN
 
-MNN should be added as:
+MNN 应添加到：
 
 ```bash
 git submodule add https://github.com/alibaba/MNN.git 3rdparty/MNN
 ```
 
-Build instructions and local binary configuration should be documented in `docs/mnn.md`.
+MNN 的构建步骤和本地二进制配置应记录在 [docs/mnn.md](docs/mnn.md)。
 
-After the submodule is present, try:
+submodule 准备好后，可以尝试：
 
 ```bash
 ./scripts/build-mnncli.sh
 ```
 
-This runs MNN's two-stage `apps/mnncli/build.sh` flow: first building the static MNN library, then building `mnncli`. The expected binary is:
+该脚本会执行 MNN `apps/mnncli/build.sh` 的两阶段流程：先构建 MNN 静态库，再构建 `mnncli`。默认期望的二进制路径是：
 
 ```text
 3rdparty/MNN/apps/mnncli/build_mnncli/mnncli
 ```
 
-If the binary is built elsewhere, set `MNNCLI_BIN=/absolute/path/to/mnncli` before starting the backend.
+如果二进制在其他位置，启动后端前设置：
 
-## Models
+```bash
+MNNCLI_BIN=/absolute/path/to/mnncli
+```
 
-Model options are defined in `configs/models.json`. Downloaded model files go under `models/<model-id>/` and are not committed.
+## 模型
 
-## HarmonyOS Devices
+模型选项定义在 `configs/models.json`。下载后的模型文件放在 `models/<model-id>/`，不提交到 Git。
 
-Install `hdc`, ensure it is available on `PATH`, then use the backend API or frontend device panel to inspect connected devices.
+## HarmonyOS 设备
+
+安装 `hdc` 并确保它在 `PATH` 中，然后通过后端 API 或前端设备面板查看已连接设备。

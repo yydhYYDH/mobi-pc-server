@@ -193,6 +193,11 @@ function App() {
     await load();
   }
 
+  async function autoConnectHdc() {
+    await fetch(`${API_BASE}/api/devices/hdc/auto-connect`, { method: "POST" });
+    await load();
+  }
+
   async function disconnectHdc() {
     if (!hdcTarget.trim()) {
       return;
@@ -487,6 +492,7 @@ function App() {
               placeholder="设备序列号或 host:port"
             />
             <div className="actions">
+              <button onClick={() => void autoConnectHdc()}>自动搜索</button>
               <button onClick={() => void connectHdc()}>连接</button>
               <button onClick={() => void disconnectHdc()}>断开</button>
             </div>

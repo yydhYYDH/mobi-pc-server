@@ -104,6 +104,7 @@ function startFrontendDevServer(): void {
   frontendProcess = spawn(npmCommand(), ["run", "dev"], {
     cwd: path.join(repoRoot(), "frontend"),
     env: process.env,
+    shell: process.platform === "win32",
     windowsHide: true
   });
   attachProcessLogging("frontend", frontendProcess);

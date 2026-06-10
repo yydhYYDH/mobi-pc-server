@@ -2,8 +2,9 @@
   color: #18202b;
   background: #eef1f4;
   font-family:
-    Inter, "Noto Sans SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+    Inter, "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei",
+    "PingFang SC", "WenQuanYi Micro Hei", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
