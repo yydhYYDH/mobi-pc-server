@@ -55,6 +55,14 @@ git submodule add https://github.com/alibaba/MNN.git 3rdparty/MNN
 
 Build instructions and local binary configuration should be documented in `docs/mnn.md`.
 
+After the submodule is present, try:
+
+```bash
+./scripts/build-mnncli.sh
+```
+
+If the binary is built elsewhere, set `MNNCLI_BIN=/absolute/path/to/mnncli` before starting the backend.
+
 ## Models
 
 Model options are defined in `configs/models.json`. Downloaded model files go under `models/<model-id>/` and are not committed.
@@ -62,4 +70,3 @@ Model options are defined in `configs/models.json`. Downloaded model files go un
 ## HarmonyOS Devices
 
 Install `hdc`, ensure it is available on `PATH`, then use the backend API or frontend device panel to inspect connected devices.
-

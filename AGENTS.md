@@ -268,6 +268,7 @@ Phase 4: MNN server control
 - Add start/stop/status APIs.
 - Add model loading API.
 - Capture logs and expose them to the UI.
+- Prefer MNN's `apps/mnncli` and its `serve` command before adding a custom server.
 
 Phase 5: `hdc` device control
 
@@ -304,4 +305,3 @@ Recommended first version:
 - `3rdparty/MNN`: Git submodule.
 
 This optimizes for fast iteration, simple debugging, and a clean boundary between UI and local system operations.
-

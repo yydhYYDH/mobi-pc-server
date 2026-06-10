@@ -83,7 +83,8 @@ dd {
   gap: 16px;
 }
 
-.panel {
+.panel,
+.log-panel {
   min-height: 260px;
   border: 1px solid #d9dee7;
   border-radius: 8px;
@@ -148,6 +149,37 @@ dd {
 
 .row-actions button {
   padding: 0 10px;
+}
+
+.log-panel {
+  min-height: 220px;
+  margin-top: 16px;
+}
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.log-header span {
+  color: #5d6472;
+  font-size: 13px;
+}
+
+pre {
+  min-height: 150px;
+  max-height: 340px;
+  overflow: auto;
+  border-radius: 6px;
+  background: #151820;
+  color: #e6e9ef;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 14px;
+  white-space: pre-wrap;
 }
 
 .row span,

@@ -35,20 +35,29 @@ function App() {
   const [models, setModels] = React.useState<CatalogModel[]>([]);
   const [localModels, setLocalModels] = React.useState<LocalModel[]>([]);
   const [hdc, setHdc] = React.useState<HdcStatus | null>(null);
+  const [logs, setLogs] = React.useState("");
   const [hdcTarget, setHdcTarget] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setError(null);
     try {
-      const [mnnResponse, modelsResponse, localModelsResponse, hdcResponse] = await Promise.all([
-        fetch(`${API_BASE}/api/mnn/status`),
-        fetch(`${API_BASE}/api/models/catalog`),
-        fetch(`${API_BASE}/api/models/local`),
-        fetch(`${API_BASE}/api/devices/hdc`)
-      ]);
+      const [mnnResponse, modelsResponse, localModelsResponse, hdcResponse, logsResponse] =
+        await Promise.all([
+          fetch(`${API_BASE}/api/mnn/status`),
+          fetch(`${API_BASE}/api/models/catalog`),
+          fetch(`${API_BASE}/api/models/local`),
+          fetch(`${API_BASE}/api/devices/hdc`),
+          fetch(`${API_BASE}/api/logs/mnncli`)
+        ]);
 
-      if (!mnnResponse.ok || !modelsResponse.ok || !localModelsResponse.ok || !hdcResponse.ok) {
+      if (
+        !mnnResponse.ok ||
+        !modelsResponse.ok ||
+        !localModelsResponse.ok ||
+        !hdcResponse.ok ||
+        !logsResponse.ok
+      ) {
         throw new Error("API request failed");
       }
 
@@ -56,6 +65,7 @@ function App() {
       setModels(await modelsResponse.json());
       setLocalModels(await localModelsResponse.json());
       setHdc(await hdcResponse.json());
+      setLogs((await logsResponse.json()).content);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unknown error");
     }
@@ -205,6 +215,14 @@ function App() {
             </div>
           </div>
         </article>
+      </section>
+
+      <section className="log-panel">
+        <div className="log-header">
+          <h2>Logs</h2>
+          <span>mnncli.log</span>
+        </div>
+        <pre>{logs || "No logs yet."}</pre>
       </section>
     </main>
   );

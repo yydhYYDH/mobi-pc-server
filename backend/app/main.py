@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import devices, health, mnn, models
+from app.api import devices, health, logs, mnn, models
 
 
 app = FastAPI(title="PC MNN Server", version="0.1.0")
@@ -18,4 +18,4 @@ app.include_router(health.router, prefix="/api")
 app.include_router(models.router, prefix="/api/models", tags=["models"])
 app.include_router(mnn.router, prefix="/api/mnn", tags=["mnn"])
 app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
-
+app.include_router(logs.router, prefix="/api/logs", tags=["logs"])
