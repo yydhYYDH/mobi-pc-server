@@ -1,6 +1,7 @@
 import json
 import shutil
 import threading
+import time
 from pathlib import Path
 
 from app.core.paths import MODEL_CATALOG_PATH, MODELS_DIR, REPO_ROOT
@@ -66,12 +67,16 @@ class ModelScopeService:
                 return existing
 
         item = self._find_model(model_id)
-        entry_path = self._safe_model_dir(item) / item.entry_file
+        model_dir = self._safe_model_dir(item)
+        entry_path = model_dir / item.entry_file
         if entry_path.exists():
+            downloaded_bytes = self._directory_size(model_dir)
             return ModelDownloadStatus(
                 model_id=model_id,
                 state="downloaded",
                 progress=100,
+                downloaded_bytes=downloaded_bytes,
+                total_bytes=downloaded_bytes,
                 message="Local model is ready.",
             )
         return ModelDownloadStatus(model_id=model_id, state="idle", progress=0, message=None)
@@ -87,16 +92,51 @@ class ModelScopeService:
             self._set_status(model_id, "failed", 0, f"Install backend dependencies first: {exc}")
             return
 
+        total_bytes = self._remote_model_size(item)
+        stop_monitor = threading.Event()
+        monitor = threading.Thread(
+            target=self._monitor_download_size,
+            args=(item, total_bytes, stop_monitor),
+            daemon=True,
+        )
+
         try:
-            self._set_status(model_id, "downloading", 8, f"Downloading {item.modelscope_id}.")
+            self._set_status(
+                model_id,
+                "downloading",
+                8,
+                f"Downloading {item.modelscope_id}.",
+                downloaded_bytes=self._directory_size(model_dir),
+                total_bytes=total_bytes,
+            )
+            monitor.start()
             snapshot_download(
                 model_id=item.modelscope_id,
                 revision=item.revision,
                 local_dir=str(model_dir),
             )
-            self._set_status(model_id, "verifying", 92, "Verifying downloaded files.")
+            stop_monitor.set()
+            monitor.join(timeout=1)
+            downloaded_bytes = self._directory_size(model_dir)
+            self._set_status(
+                model_id,
+                "verifying",
+                92,
+                "Verifying downloaded files.",
+                downloaded_bytes=downloaded_bytes,
+                total_bytes=total_bytes,
+            )
         except Exception as exc:  # noqa: BLE001 - return SDK errors to the UI as task status.
-            self._set_status(model_id, "failed", 0, str(exc))
+            stop_monitor.set()
+            monitor.join(timeout=1)
+            self._set_status(
+                model_id,
+                "failed",
+                0,
+                str(exc),
+                downloaded_bytes=self._directory_size(model_dir),
+                total_bytes=total_bytes,
+            )
             return
 
         entry_path = model_dir / item.entry_file
@@ -106,10 +146,20 @@ class ModelScopeService:
                 "failed",
                 0,
                 f"Downloaded model but did not find {entry_path}.",
+                downloaded_bytes=self._directory_size(model_dir),
+                total_bytes=total_bytes,
             )
             return
 
-        self._set_status(model_id, "downloaded", 100, f"Downloaded {item.modelscope_id}.")
+        downloaded_bytes = self._directory_size(model_dir)
+        self._set_status(
+            model_id,
+            "downloaded",
+            100,
+            f"Downloaded {item.modelscope_id}.",
+            downloaded_bytes=downloaded_bytes,
+            total_bytes=total_bytes or downloaded_bytes,
+        )
 
     def delete_model(self, model_id: str) -> dict[str, str]:
         item = self._find_model(model_id)
@@ -153,6 +203,8 @@ class ModelScopeService:
         state: str,
         progress: int,
         message: str | None,
+        downloaded_bytes: int = 0,
+        total_bytes: int | None = None,
     ) -> None:
         progress = max(0, min(progress, 100))
         with self._lock:
@@ -160,5 +212,65 @@ class ModelScopeService:
                 model_id=model_id,
                 state=state,
                 progress=progress,
+                downloaded_bytes=max(0, downloaded_bytes),
+                total_bytes=total_bytes if total_bytes and total_bytes > 0 else None,
                 message=message,
             )
+
+    def _monitor_download_size(
+        self,
+        item: ModelCatalogItem,
+        total_bytes: int | None,
+        stop_event: threading.Event,
+    ) -> None:
+        model_dir = self._safe_model_dir(item)
+        while not stop_event.wait(1):
+            downloaded_bytes = self._directory_size(model_dir)
+            progress = 8
+            if total_bytes:
+                progress = min(90, max(8, int(downloaded_bytes / total_bytes * 90)))
+            self._set_status(
+                item.id,
+                "downloading",
+                progress,
+                f"Downloading {item.modelscope_id}.",
+                downloaded_bytes=downloaded_bytes,
+                total_bytes=total_bytes,
+            )
+
+    def _directory_size(self, directory: Path) -> int:
+        if not directory.exists():
+            return 0
+
+        total = 0
+        for path in directory.rglob("*"):
+            if path.is_file():
+                try:
+                    total += path.stat().st_size
+                except OSError:
+                    continue
+        return total
+
+    def _remote_model_size(self, item: ModelCatalogItem) -> int | None:
+        try:
+            from modelscope.hub.api import HubApi
+        except ImportError:
+            return None
+
+        try:
+            files = HubApi().get_model_files(
+                item.modelscope_id,
+                revision=item.revision,
+                recursive=True,
+            )
+        except Exception:
+            return None
+
+        total = 0
+        for file_info in files:
+            size = file_info.get("Size") or file_info.get("size")
+            try:
+                total += int(size)
+            except (TypeError, ValueError):
+                continue
+        return total or None

@@ -3,6 +3,20 @@ import ReactDOM from "react-dom/client";
 import "./styles.css";
 
 const API_BASE = "";
+const STATUS_LABELS: Record<string, string> = {
+  stopped: "Stopped",
+  starting: "Starting",
+  running: "Running",
+  stopping: "Stopping",
+  error: "Error",
+  idle: "Idle",
+  queued: "Queued",
+  downloading: "Downloading",
+  verifying: "Verifying",
+  downloaded: "Downloaded",
+  failed: "Failed",
+  unknown: "Unknown"
+};
 
 type MnnStatus = {
   state: string;
@@ -27,6 +41,8 @@ type DownloadStatus = {
   model_id: string;
   state: string;
   progress: number;
+  downloaded_bytes: number;
+  total_bytes: number | null;
   message: string | null;
 };
 
@@ -36,6 +52,37 @@ type HdcStatus = {
   devices: Array<{ serial: string; state: string }>;
   message: string | null;
 };
+
+function statusLabel(status: string | undefined) {
+  return STATUS_LABELS[status ?? "unknown"] ?? status ?? "Unknown";
+}
+
+function formatBytes(bytes: number | null | undefined) {
+  if (!bytes || bytes <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const digits = value >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function formatDownloadSize(status: DownloadStatus | undefined, downloaded: boolean) {
+  if (!status) {
+    return downloaded ? "Local copy ready" : "Not downloaded";
+  }
+
+  const current = formatBytes(status.downloaded_bytes);
+  const total = status.total_bytes ? formatBytes(status.total_bytes) : "unknown";
+  return `${current} / ${total}`;
+}
 
 function App() {
   const [mnn, setMnn] = React.useState<MnnStatus | null>(null);
@@ -179,12 +226,17 @@ function App() {
     return ["queued", "downloading", "verifying"].includes(downloadStatus(modelId)?.state ?? "");
   }
 
+  const downloadedCount = localModels.filter((model) => model.downloaded).length;
+  const activeModelName = models.find((model) => model.id === mnn?.active_model_id)?.name;
+  const serverState = mnn?.state ?? "unknown";
+
   return (
     <main className="shell">
       <header className="topbar">
-        <div>
+        <div className="brand-block">
+          <span className="eyebrow">Local developer console</span>
           <h1>PC MNN Server</h1>
-          <p>Local console for ModelScope downloads, MNN serving, and HarmonyOS devices.</p>
+          <p>Manage ModelScope assets, MNN serving, runtime logs, and HarmonyOS device access.</p>
         </div>
         <button className="secondary-button" onClick={() => void load()}>
           Refresh
@@ -193,15 +245,44 @@ function App() {
 
       {error ? <div className="alert">{error}</div> : null}
 
+      <section className="summary-strip">
+        <div>
+          <span>MNN</span>
+          <strong>{statusLabel(serverState)}</strong>
+        </div>
+        <div>
+          <span>Active model</span>
+          <strong>{activeModelName ?? mnn?.active_model_id ?? "None"}</strong>
+        </div>
+        <div>
+          <span>Models ready</span>
+          <strong>
+            {downloadedCount}/{models.length}
+          </strong>
+        </div>
+        <div>
+          <span>HarmonyOS devices</span>
+          <strong>{hdc?.devices.length ?? 0}</strong>
+        </div>
+      </section>
+
       <section className="grid">
-        <article className="panel">
+        <article className="panel server-panel">
           <div className="panel-title">
-            <h2>MNN Server</h2>
-            <span className={`status-pill ${mnn?.state ?? "unknown"}`}>{mnn?.state ?? "unknown"}</span>
+            <div>
+              <span className="section-kicker">Runtime</span>
+              <h2>MNN Server</h2>
+            </div>
+            <span className={`status-pill ${serverState}`}>
+              <span className="status-dot" />
+              {statusLabel(serverState)}
+            </span>
           </div>
           <dl>
+            <dt>Port</dt>
+            <dd>{mnn?.port ?? "not listening"}</dd>
             <dt>Active model</dt>
-            <dd>{mnn?.active_model_id ?? "none"}</dd>
+            <dd>{activeModelName ?? mnn?.active_model_id ?? "none"}</dd>
             <dt>Message</dt>
             <dd>{mnn?.message ?? "none"}</dd>
           </dl>
@@ -213,7 +294,10 @@ function App() {
 
         <article className="panel">
           <div className="panel-title">
-            <h2>Models</h2>
+            <div>
+              <span className="section-kicker">ModelScope</span>
+              <h2>Models</h2>
+            </div>
             <span className="count-pill">{models.length}</span>
           </div>
           <div className="list">
@@ -223,6 +307,7 @@ function App() {
               const downloading = isDownloading(model.id);
               const progress = status?.progress ?? (downloaded ? 100 : 0);
               const state = status?.state ?? (downloaded ? "downloaded" : "idle");
+              const sizeText = formatDownloadSize(status, downloaded);
 
               return (
                 <div className="model-card" key={model.id}>
@@ -230,10 +315,14 @@ function App() {
                     <div>
                       <div className="model-card-heading">
                         <strong>{model.name}</strong>
-                        <span className={`status-pill ${state}`}>{state}</span>
+                        <span className={`status-pill ${state}`}>{statusLabel(state)}</span>
                       </div>
                       <span className="model-id">{model.modelscope_id}</span>
                       <p>{status?.message || model.description}</p>
+                      <div className="download-meter">
+                        <span>{sizeText}</span>
+                        <strong>{progress}%</strong>
+                      </div>
                     </div>
                     <div className="row-actions">
                       <button disabled={downloading} onClick={() => void downloadModel(model.id)}>
@@ -258,9 +347,13 @@ function App() {
 
         <article className="panel">
           <div className="panel-title">
-            <h2>HarmonyOS Device</h2>
+            <div>
+              <span className="section-kicker">Bridge</span>
+              <h2>HarmonyOS Device</h2>
+            </div>
             <span className={`status-pill ${hdc?.available ? "running" : "error"}`}>
-              {hdc?.available ? "ready" : "missing"}
+              <span className="status-dot" />
+              {hdc?.available ? "Ready" : "Missing"}
             </span>
           </div>
           <dl>
@@ -271,6 +364,15 @@ function App() {
             <dt>Message</dt>
             <dd>{hdc?.message ?? "none"}</dd>
           </dl>
+          <div className="device-list">
+            {(hdc?.devices ?? []).map((device) => (
+              <div className="device-item" key={device.serial}>
+                <span>{device.serial}</span>
+                <strong>{device.state}</strong>
+              </div>
+            ))}
+            {hdc && hdc.devices.length === 0 ? <div className="empty-state">No devices connected.</div> : null}
+          </div>
           <div className="device-form">
             <input
               value={hdcTarget}
@@ -287,7 +389,10 @@ function App() {
 
       <section className="log-panel">
         <div className="log-header">
-          <h2>Logs</h2>
+          <div>
+            <span className="section-kicker">Output</span>
+            <h2>Logs</h2>
+          </div>
           <span>mnncli.log</span>
         </div>
         <pre>{logs || "No logs yet."}</pre>

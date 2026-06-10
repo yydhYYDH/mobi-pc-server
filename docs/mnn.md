@@ -13,6 +13,19 @@ Keep upstream source isolated. Project-specific wrappers should live in `backend
 
 The backend is designed to launch MNN's existing `mnncli serve` command.
 
+Build the runtime with:
+
+```bash
+./scripts/build-mnncli.sh
+```
+
+The script delegates to MNN's upstream `apps/mnncli/build.sh`, which performs the required two-stage build:
+
+1. Build the static MNN library in `3rdparty/MNN/build_mnn_static`.
+2. Build `mnncli` in `3rdparty/MNN/apps/mnncli/build_mnncli`.
+
+The backend checks `3rdparty/MNN/apps/mnncli/build_mnncli/mnncli` by default. If you build the binary somewhere else, set `MNNCLI_BIN`.
+
 Expected runtime command shape:
 
 ```bash

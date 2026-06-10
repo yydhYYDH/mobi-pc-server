@@ -61,6 +61,12 @@ After the submodule is present, try:
 ./scripts/build-mnncli.sh
 ```
 
+This runs MNN's two-stage `apps/mnncli/build.sh` flow: first building the static MNN library, then building `mnncli`. The expected binary is:
+
+```text
+3rdparty/MNN/apps/mnncli/build_mnncli/mnncli
+```
+
 If the binary is built elsewhere, set `MNNCLI_BIN=/absolute/path/to/mnncli` before starting the backend.
 
 ## Models

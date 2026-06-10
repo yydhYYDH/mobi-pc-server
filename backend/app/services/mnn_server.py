@@ -1,5 +1,6 @@
 import os
 import subprocess
+import time
 from pathlib import Path
 
 from app.core.paths import LOGS_DIR, REPO_ROOT
@@ -80,6 +81,18 @@ class MnnServerService:
             stderr=subprocess.STDOUT,
             text=True,
         )
+
+        time.sleep(0.6)
+        if self._process.poll() is not None:
+            self._status = MnnStatus(
+                state="error",
+                active_model_id=model_id,
+                port=port,
+                message=f"mnncli exited during startup with code {self._process.returncode}. Check logs/mnncli.log.",
+            )
+            self._process = None
+            return self._status
+
         self._status = MnnStatus(
             state="running",
             active_model_id=model_id,
@@ -95,6 +108,8 @@ class MnnServerService:
             return path if path.exists() else None
 
         candidates = [
+            REPO_ROOT / "3rdparty/MNN/apps/mnncli/build_mnncli/mnncli",
+            REPO_ROOT / "3rdparty/MNN/apps/mnncli/build_mnncli/mnncli.exe",
             REPO_ROOT / "3rdparty/MNN/apps/mnncli/build/mnncli",
             REPO_ROOT / "3rdparty/MNN/apps/mnncli/build/mnncli.exe",
             REPO_ROOT / "3rdparty/MNN/build/apps/mnncli/mnncli",

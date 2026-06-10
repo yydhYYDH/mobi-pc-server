@@ -29,4 +29,6 @@ class ModelDownloadStatus(BaseModel):
     model_id: str
     state: str
     progress: int
+    downloaded_bytes: int = 0
+    total_bytes: int | None = None
     message: str | None = None
