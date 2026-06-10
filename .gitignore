@@ -4,6 +4,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+*.egg-info/
 
 # Node
 node_modules/
@@ -31,4 +32,3 @@ cmake-build-*/
 Thumbs.db
 .idea/
 .vscode/
-
