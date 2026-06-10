@@ -1,6 +1,11 @@
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.models import LocalModel, ModelCatalogItem, ModelDownloadRequest
+from app.schemas.models import (
+    LocalModel,
+    ModelCatalogItem,
+    ModelDownloadRequest,
+    ModelDownloadStatus,
+)
 from app.services.modelscope import ModelScopeService
 
 
@@ -16,6 +21,11 @@ def catalog() -> list[ModelCatalogItem]:
 @router.get("/local", response_model=list[LocalModel])
 def local_models() -> list[LocalModel]:
     return service.list_local_models()
+
+
+@router.get("/downloads", response_model=list[ModelDownloadStatus])
+def downloads() -> list[ModelDownloadStatus]:
+    return service.download_statuses()
 
 
 @router.post("/download")

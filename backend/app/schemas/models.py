@@ -24,3 +24,9 @@ class LocalModel(BaseModel):
 class ModelDownloadRequest(BaseModel):
     model_id: str
 
+
+class ModelDownloadStatus(BaseModel):
+    model_id: str
+    state: str
+    progress: int
+    message: str | None = None

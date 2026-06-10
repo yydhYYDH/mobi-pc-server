@@ -10,6 +10,7 @@ __pycache__/
 node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/tsconfig.tsbuildinfo
 
 # Runtime data
 models/*
