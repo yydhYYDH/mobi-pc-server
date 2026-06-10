@@ -141,6 +141,15 @@ dd {
   padding-top: 12px;
 }
 
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.row-actions button {
+  padding: 0 10px;
+}
+
 .row span,
 .row p {
   display: block;

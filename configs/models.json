@@ -8,7 +8,6 @@
     "size": "unknown",
     "runtime": "mnn",
     "local_dir": "models/example-mnn-model",
-    "entry_file": "model.mnn"
+    "entry_file": "config.json"
   }
 ]
-

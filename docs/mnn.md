@@ -11,5 +11,12 @@ git submodule update --init --recursive
 
 Keep upstream source isolated. Project-specific wrappers should live in `backend/app/services/` or `scripts/`.
 
-The next implementation step is to decide the exact MNN server binary and build flags, then update `backend/app/services/mnn_server.py` to launch that binary with explicit argument arrays.
+The backend is designed to launch MNN's existing `mnncli serve` command.
 
+Expected runtime command shape:
+
+```bash
+mnncli serve <model-id> --config <models/model-id/config.json> --host 127.0.0.1 --port 8088
+```
+
+Set `MNNCLI_BIN=/absolute/path/to/mnncli` if the binary is not in one of the default build locations checked by `backend/app/services/mnn_server.py`.
