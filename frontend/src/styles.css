@@ -452,6 +452,43 @@ dd {
   margin-top: 16px;
 }
 
+.device-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border: 1px solid #d4dbe5;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #3d4858;
+  font-size: 13px;
+  line-height: 1.4;
+  margin-top: 14px;
+  padding: 8px 10px;
+}
+
+.device-notice.active {
+  border-color: #bfd4ec;
+  background: #edf4fb;
+  color: #245a9d;
+}
+
+.inline-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgb(36 90 157 / 24%);
+  border-top-color: #245a9d;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  animation: inline-spin 850ms linear infinite;
+}
+
+@keyframes inline-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .device-item,
 .empty-state {
   display: flex;

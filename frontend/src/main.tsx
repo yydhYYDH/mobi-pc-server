@@ -106,6 +106,8 @@ function App() {
   const [hdc, setHdc] = React.useState<HdcStatus | null>(null);
   const [logs, setLogs] = React.useState("");
   const [hdcTarget, setHdcTarget] = React.useState("");
+  const [deviceBusy, setDeviceBusy] = React.useState<"auto" | "connect" | "disconnect" | null>(null);
+  const [deviceNotice, setDeviceNotice] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [chatInput, setChatInput] = React.useState("你好，用五个字回复。");
   const [chatMessages, setChatMessages] = React.useState<ChatMessage[]>([]);
@@ -183,31 +185,79 @@ function App() {
 
   async function connectHdc() {
     if (!hdcTarget.trim()) {
+      setDeviceNotice("请输入设备序列号或 host:port。");
       return;
     }
-    await fetch(`${API_BASE}/api/devices/hdc/connect`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target: hdcTarget.trim() })
-    });
-    await load();
+    setDeviceBusy("connect");
+    setDeviceNotice(`正在连接 ${hdcTarget.trim()}...`);
+    try {
+      const response = await fetch(`${API_BASE}/api/devices/hdc/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: hdcTarget.trim() })
+      });
+      if (!response.ok) {
+        throw new Error(`连接失败：HTTP ${response.status}`);
+      }
+      const nextStatus = (await response.json()) as HdcStatus;
+      setHdc(nextStatus);
+      setDeviceNotice(nextStatus.message ?? "连接请求已完成。");
+      await load();
+    } catch (connectError) {
+      setDeviceNotice(connectError instanceof Error ? connectError.message : "连接失败。");
+    } finally {
+      setDeviceBusy(null);
+    }
   }
 
   async function autoConnectHdc() {
-    await fetch(`${API_BASE}/api/devices/hdc/auto-connect`, { method: "POST" });
-    await load();
+    setDeviceBusy("auto");
+    setDeviceNotice("正在自动搜索 HarmonyOS 设备，可能需要十几秒...");
+    try {
+      const response = await fetch(`${API_BASE}/api/devices/hdc/auto-connect`, { method: "POST" });
+      if (!response.ok) {
+        throw new Error(`自动搜索失败：HTTP ${response.status}`);
+      }
+      const nextStatus = (await response.json()) as HdcStatus;
+      setHdc(nextStatus);
+      if (nextStatus.devices.length > 0) {
+        setDeviceNotice(nextStatus.message ?? `已发现 ${nextStatus.devices.length} 台设备。`);
+      } else {
+        setDeviceNotice(nextStatus.message ?? "未发现可连接设备。");
+      }
+      await load();
+    } catch (autoConnectError) {
+      setDeviceNotice(autoConnectError instanceof Error ? autoConnectError.message : "自动搜索失败。");
+    } finally {
+      setDeviceBusy(null);
+    }
   }
 
   async function disconnectHdc() {
     if (!hdcTarget.trim()) {
+      setDeviceNotice("请输入要断开的设备序列号或 host:port。");
       return;
     }
-    await fetch(`${API_BASE}/api/devices/hdc/disconnect`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target: hdcTarget.trim() })
-    });
-    await load();
+    setDeviceBusy("disconnect");
+    setDeviceNotice(`正在断开 ${hdcTarget.trim()}...`);
+    try {
+      const response = await fetch(`${API_BASE}/api/devices/hdc/disconnect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: hdcTarget.trim() })
+      });
+      if (!response.ok) {
+        throw new Error(`断开失败：HTTP ${response.status}`);
+      }
+      const nextStatus = (await response.json()) as HdcStatus;
+      setHdc(nextStatus);
+      setDeviceNotice(nextStatus.message ?? "断开请求已完成。");
+      await load();
+    } catch (disconnectError) {
+      setDeviceNotice(disconnectError instanceof Error ? disconnectError.message : "断开失败。");
+    } finally {
+      setDeviceBusy(null);
+    }
   }
 
   async function downloadModel(modelId: string) {
@@ -474,8 +524,14 @@ function App() {
             <dt>设备数</dt>
             <dd>{hdc?.devices.length ?? 0}</dd>
             <dt>消息</dt>
-            <dd>{hdc?.message ?? "无"}</dd>
+            <dd>{deviceNotice ?? hdc?.message ?? "无"}</dd>
           </dl>
+          {deviceNotice ? (
+            <div className={`device-notice ${deviceBusy ? "active" : ""}`}>
+              {deviceBusy ? <span className="inline-spinner" /> : null}
+              <span>{deviceNotice}</span>
+            </div>
+          ) : null}
           <div className="device-list">
             {(hdc?.devices ?? []).map((device) => (
               <div className="device-item" key={device.serial}>
@@ -492,9 +548,15 @@ function App() {
               placeholder="设备序列号或 host:port"
             />
             <div className="actions">
-              <button onClick={() => void autoConnectHdc()}>自动搜索</button>
-              <button onClick={() => void connectHdc()}>连接</button>
-              <button onClick={() => void disconnectHdc()}>断开</button>
+              <button disabled={deviceBusy !== null} onClick={() => void autoConnectHdc()}>
+                {deviceBusy === "auto" ? "搜索中..." : "自动搜索"}
+              </button>
+              <button disabled={deviceBusy !== null} onClick={() => void connectHdc()}>
+                {deviceBusy === "connect" ? "连接中..." : "连接"}
+              </button>
+              <button disabled={deviceBusy !== null} onClick={() => void disconnectHdc()}>
+                {deviceBusy === "disconnect" ? "断开中..." : "断开"}
+              </button>
             </div>
           </div>
         </article>

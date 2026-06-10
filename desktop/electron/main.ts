@@ -1,13 +1,14 @@
-import { app, BrowserWindow, shell } from "electron";
+import { Menu, app, BrowserWindow, shell } from "electron";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
+import net from "node:net";
 import path from "node:path";
 
 const BACKEND_PORT = Number(process.env.PC_SERVER_BACKEND_PORT ?? "8000");
 const BACKEND_HOST = process.env.PC_SERVER_BACKEND_HOST ?? "127.0.0.1";
 const BACKEND_BASE_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
-const FRONTEND_DEV_URL = process.env.PC_SERVER_FRONTEND_URL ?? "http://127.0.0.1:5173";
+let frontendDevUrl = process.env.PC_SERVER_FRONTEND_URL ?? "http://127.0.0.1:5173";
 const SKIP_BACKEND = process.env.PC_SERVER_SKIP_BACKEND === "1";
 
 let backendProcess: ChildProcessWithoutNullStreams | undefined;
@@ -25,6 +26,51 @@ function backendExecutablePath(): string {
 
 function npmCommand(): string {
   return process.platform === "win32" ? "npm.cmd" : "npm";
+}
+
+function nodeCommand(): string {
+  return process.env.npm_node_execpath ?? (process.platform === "win32" ? "node.exe" : "node");
+}
+
+function frontendViteBin(): string {
+  return path.join(repoRoot(), "frontend", "node_modules", "vite", "bin", "vite.js");
+}
+
+function logBuffer(label: string, data: Buffer, error = false): void {
+  const text = data.toString("utf8").trimEnd();
+  if (!text) {
+    return;
+  }
+
+  if (error) {
+    console.error(`[${label}] ${text}`);
+  } else {
+    console.log(`[${label}] ${text}`);
+  }
+}
+
+function parsePort(url: string): number {
+  return Number(new URL(url).port);
+}
+
+function isPortFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+async function pickFrontendPort(startPort: number): Promise<number> {
+  for (let port = startPort; port < startPort + 20; port += 1) {
+    if (await isPortFree(port)) {
+      return port;
+    }
+  }
+  throw new Error(`No available frontend port found from ${startPort} to ${startPort + 19}`);
 }
 
 function devPythonCommand(): string {
@@ -47,11 +93,11 @@ function devPythonCommand(): string {
 
 function attachProcessLogging(label: string, processRef: ChildProcessWithoutNullStreams): void {
   processRef.stdout.on("data", (data: Buffer) => {
-    console.log(`[${label}] ${data.toString().trimEnd()}`);
+    logBuffer(label, data);
   });
 
   processRef.stderr.on("data", (data: Buffer) => {
-    console.error(`[${label}] ${data.toString().trimEnd()}`);
+    logBuffer(label, data, true);
   });
 
   processRef.on("error", (error) => {
@@ -77,7 +123,7 @@ function startBackend(): void {
   if (app.isPackaged) {
     backendProcess = spawn(backendExecutablePath(), [], {
       cwd: process.resourcesPath,
-      env: process.env,
+      env: childEnv(),
       windowsHide: true
     });
     attachProcessLogging("backend", backendProcess);
@@ -89,22 +135,49 @@ function startBackend(): void {
     ["-m", "uvicorn", "app.main:app", "--host", BACKEND_HOST, "--port", String(BACKEND_PORT)],
     {
       cwd: path.join(repoRoot(), "backend"),
-      env: process.env,
+      env: childEnv(),
       windowsHide: true
     }
   );
   attachProcessLogging("backend", backendProcess);
 }
 
-function startFrontendDevServer(): void {
+function childEnv(): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    FORCE_COLOR: "0",
+    PYTHONIOENCODING: "utf-8",
+    PYTHONUTF8: "1"
+  };
+}
+
+async function startFrontendDevServer(): Promise<void> {
   if (app.isPackaged || process.env.PC_SERVER_SKIP_FRONTEND === "1") {
     return;
   }
 
-  frontendProcess = spawn(npmCommand(), ["run", "dev"], {
+  if (await urlCheck(frontendDevUrl)) {
+    console.log(`[frontend] Reusing existing Vite server at ${frontendDevUrl}`);
+    return;
+  }
+
+  const viteBin = frontendViteBin();
+  if (!fs.existsSync(viteBin)) {
+    console.error(
+      `[frontend] Vite is not installed. Run "npm install" in ${path.join(repoRoot(), "frontend")} first.`
+    );
+    return;
+  }
+
+  if (!process.env.PC_SERVER_FRONTEND_URL) {
+    const port = await pickFrontendPort(parsePort(frontendDevUrl));
+    frontendDevUrl = `http://127.0.0.1:${port}`;
+  }
+
+  const frontendPort = String(parsePort(frontendDevUrl));
+  frontendProcess = spawn(nodeCommand(), [viteBin, "--host", "127.0.0.1", "--port", frontendPort, "--strictPort"], {
     cwd: path.join(repoRoot(), "frontend"),
-    env: process.env,
-    shell: process.platform === "win32",
+    env: childEnv(),
     windowsHide: true
   });
   attachProcessLogging("frontend", frontendProcess);
@@ -164,13 +237,13 @@ async function waitForFrontend(timeoutMs = 15000): Promise<void> {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
-    if (await urlCheck(FRONTEND_DEV_URL)) {
+    if (await urlCheck(frontendDevUrl)) {
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
 
-  throw new Error(`Frontend did not become available at ${FRONTEND_DEV_URL}`);
+  throw new Error(`Frontend did not become available at ${frontendDevUrl}`);
 }
 
 async function createWindow(): Promise<void> {
@@ -200,13 +273,71 @@ async function createWindow(): Promise<void> {
   if (app.isPackaged) {
     await mainWindow.loadFile(path.join(process.resourcesPath, "frontend", "index.html"));
   } else {
-    await mainWindow.loadURL(FRONTEND_DEV_URL);
+    try {
+      await mainWindow.loadURL(frontendDevUrl);
+    } catch (error) {
+      console.error(`[frontend] failed to load ${frontendDevUrl}`, error);
+      await mainWindow.loadURL(
+        `data:text/html;charset=utf-8,${encodeURIComponent(`
+          <!doctype html>
+          <html lang="zh-CN">
+            <head>
+              <meta charset="UTF-8" />
+              <title>Frontend unavailable</title>
+              <style>
+                body {
+                  margin: 0;
+                  padding: 32px;
+                  background: #eef1f4;
+                  color: #18202b;
+                  font-family: "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+                }
+                main {
+                  max-width: 760px;
+                  border: 1px solid #d8dee6;
+                  border-radius: 8px;
+                  background: #fff;
+                  padding: 24px;
+                }
+                code {
+                  display: block;
+                  margin-top: 10px;
+                  padding: 12px;
+                  border-radius: 6px;
+                  background: #111827;
+                  color: #eef2f7;
+                  white-space: pre-wrap;
+                }
+              </style>
+            </head>
+            <body>
+              <main>
+                <h1>前端开发服务未启动</h1>
+                <p>请在 Windows 环境重新安装前端依赖，然后重新运行桌面端。</p>
+                <code>cd E:\\WAIC\\pc_server\\frontend
+rd /s /q node_modules
+npm install
+
+cd ..\\desktop
+npm run dev</code>
+              </main>
+            </body>
+          </html>
+        `)}`
+      );
+    }
   }
 }
 
 app.whenReady().then(async () => {
-  startFrontendDevServer();
-  startBackend();
+  Menu.setApplicationMenu(null);
+  await startFrontendDevServer();
+
+  if (await healthCheck()) {
+    console.log(`[backend] Reusing existing backend at ${BACKEND_BASE_URL}`);
+  } else {
+    startBackend();
+  }
 
   try {
     await Promise.all([waitForBackend(), app.isPackaged ? Promise.resolve() : waitForFrontend()]);
