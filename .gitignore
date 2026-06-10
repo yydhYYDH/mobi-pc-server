@@ -11,6 +11,19 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/tsconfig.tsbuildinfo
+desktop/dist/
+desktop/node_modules/
+desktop/tsconfig.tsbuildinfo
+desktop/release/
+desktop/out/
+desktop/resources/frontend/*
+!desktop/resources/frontend/.gitkeep
+desktop/resources/backend/*
+!desktop/resources/backend/.gitkeep
+desktop/resources/mnn/*
+!desktop/resources/mnn/.gitkeep
+desktop/resources/hdc/*
+!desktop/resources/hdc/.gitkeep
 
 # Runtime data
 models/*
@@ -22,6 +35,9 @@ logs/*
 build/
 cmake-build-*/
 3rdparty/MNN/build*/
+backend/build/
+backend/dist/
+backend/*.spec
 
 # Local config
 .env

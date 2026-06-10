@@ -2,20 +2,29 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./styles.css";
 
-const API_BASE = "";
+declare global {
+  interface Window {
+    pcServerDesktop?: {
+      backendBaseUrl: string;
+      platform: string;
+    };
+  }
+}
+
+const API_BASE = window.pcServerDesktop?.backendBaseUrl ?? "";
 const STATUS_LABELS: Record<string, string> = {
-  stopped: "Stopped",
-  starting: "Starting",
-  running: "Running",
-  stopping: "Stopping",
-  error: "Error",
-  idle: "Idle",
-  queued: "Queued",
-  downloading: "Downloading",
-  verifying: "Verifying",
-  downloaded: "Downloaded",
-  failed: "Failed",
-  unknown: "Unknown"
+  stopped: "已停止",
+  starting: "启动中",
+  running: "运行中",
+  stopping: "停止中",
+  error: "异常",
+  idle: "未下载",
+  queued: "排队中",
+  downloading: "下载中",
+  verifying: "校验中",
+  downloaded: "已下载",
+  failed: "失败",
+  unknown: "未知"
 };
 
 type MnnStatus = {
@@ -53,8 +62,13 @@ type HdcStatus = {
   message: string | null;
 };
 
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 function statusLabel(status: string | undefined) {
-  return STATUS_LABELS[status ?? "unknown"] ?? status ?? "Unknown";
+  return STATUS_LABELS[status ?? "unknown"] ?? status ?? "未知";
 }
 
 function formatBytes(bytes: number | null | undefined) {
@@ -76,11 +90,11 @@ function formatBytes(bytes: number | null | undefined) {
 
 function formatDownloadSize(status: DownloadStatus | undefined, downloaded: boolean) {
   if (!status) {
-    return downloaded ? "Local copy ready" : "Not downloaded";
+    return downloaded ? "本地模型已就绪" : "尚未下载";
   }
 
   const current = formatBytes(status.downloaded_bytes);
-  const total = status.total_bytes ? formatBytes(status.total_bytes) : "unknown";
+  const total = status.total_bytes ? formatBytes(status.total_bytes) : "未知大小";
   return `${current} / ${total}`;
 }
 
@@ -93,6 +107,10 @@ function App() {
   const [logs, setLogs] = React.useState("");
   const [hdcTarget, setHdcTarget] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+  const [chatInput, setChatInput] = React.useState("你好，用五个字回复。");
+  const [chatMessages, setChatMessages] = React.useState<ChatMessage[]>([]);
+  const [chatBusy, setChatBusy] = React.useState(false);
+  const [chatError, setChatError] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setError(null);
@@ -214,6 +232,89 @@ function App() {
     await load();
   }
 
+  async function sendChat() {
+    const prompt = chatInput.trim();
+    if (!prompt || chatBusy) {
+      return;
+    }
+    if (!mnn?.port || !mnn.active_model_id) {
+      setChatError("请先加载模型并确认 MNN 服务正在运行。");
+      return;
+    }
+
+    const userMessage: ChatMessage = { role: "user", content: prompt };
+    const assistantMessage: ChatMessage = { role: "assistant", content: "" };
+    setChatMessages((current) => [...current, userMessage, assistantMessage]);
+    setChatInput("");
+    setChatBusy(true);
+    setChatError(null);
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${mnn.port}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: mnn.active_model_id,
+          messages: [{ role: "user", content: prompt }],
+          stream: true
+        })
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`请求失败：HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(/\r?\n/);
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) {
+            continue;
+          }
+
+          const event = trimmed.replace(/^data:\s*/, "");
+          if (event === "[DONE]") {
+            continue;
+          }
+
+          try {
+            const chunk = JSON.parse(event);
+            const token = chunk?.choices?.[0]?.delta?.content ?? "";
+            if (!token) {
+              continue;
+            }
+            setChatMessages((current) => {
+              const next = [...current];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") {
+                next[next.length - 1] = { ...last, content: last.content + token };
+              }
+              return next;
+            });
+          } catch {
+            // Ignore malformed event fragments; the next stream chunk may complete them.
+          }
+        }
+      }
+    } catch (chatRequestError) {
+      setChatError(chatRequestError instanceof Error ? chatRequestError.message : "请求失败");
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
   function isDownloaded(modelId: string) {
     return localModels.some((model) => model.id === modelId && model.downloaded);
   }
@@ -234,13 +335,19 @@ function App() {
     <main className="shell">
       <header className="topbar">
         <div className="brand-block">
-          <span className="eyebrow">Local developer console</span>
+          <span className="eyebrow">Local Console</span>
           <h1>PC MNN Server</h1>
-          <p>Manage ModelScope assets, MNN serving, runtime logs, and HarmonyOS device access.</p>
+          <p>127.0.0.1:{mnn?.port ?? 8000}</p>
         </div>
-        <button className="secondary-button" onClick={() => void load()}>
-          Refresh
-        </button>
+        <div className="topbar-actions">
+          <span className={`status-pill ${serverState}`}>
+            <span className="status-dot" />
+            {statusLabel(serverState)}
+          </span>
+          <button className="secondary-button" onClick={() => void load()}>
+            刷新
+          </button>
+        </div>
       </header>
 
       {error ? <div className="alert">{error}</div> : null}
@@ -251,17 +358,17 @@ function App() {
           <strong>{statusLabel(serverState)}</strong>
         </div>
         <div>
-          <span>Active model</span>
-          <strong>{activeModelName ?? mnn?.active_model_id ?? "None"}</strong>
+          <span>当前模型</span>
+          <strong>{activeModelName ?? mnn?.active_model_id ?? "无"}</strong>
         </div>
         <div>
-          <span>Models ready</span>
+          <span>模型就绪</span>
           <strong>
             {downloadedCount}/{models.length}
           </strong>
         </div>
         <div>
-          <span>HarmonyOS devices</span>
+          <span>HarmonyOS 设备</span>
           <strong>{hdc?.devices.length ?? 0}</strong>
         </div>
       </section>
@@ -270,8 +377,8 @@ function App() {
         <article className="panel server-panel">
           <div className="panel-title">
             <div>
-              <span className="section-kicker">Runtime</span>
-              <h2>MNN Server</h2>
+              <span className="section-kicker">运行时</span>
+              <h2>MNN 服务</h2>
             </div>
             <span className={`status-pill ${serverState}`}>
               <span className="status-dot" />
@@ -279,16 +386,16 @@ function App() {
             </span>
           </div>
           <dl>
-            <dt>Port</dt>
-            <dd>{mnn?.port ?? "not listening"}</dd>
-            <dt>Active model</dt>
-            <dd>{activeModelName ?? mnn?.active_model_id ?? "none"}</dd>
-            <dt>Message</dt>
-            <dd>{mnn?.message ?? "none"}</dd>
+            <dt>端口</dt>
+            <dd>{mnn?.port ?? "未监听"}</dd>
+            <dt>当前模型</dt>
+            <dd>{activeModelName ?? mnn?.active_model_id ?? "无"}</dd>
+            <dt>消息</dt>
+            <dd>{mnn?.message ?? "无"}</dd>
           </dl>
           <div className="actions">
-            <button onClick={() => void startMnn()}>Start</button>
-            <button onClick={() => void stopMnn()}>Stop</button>
+            <button onClick={() => void startMnn()}>启动</button>
+            <button onClick={() => void stopMnn()}>停止</button>
           </div>
         </article>
 
@@ -296,7 +403,7 @@ function App() {
           <div className="panel-title">
             <div>
               <span className="section-kicker">ModelScope</span>
-              <h2>Models</h2>
+              <h2>模型</h2>
             </div>
             <span className="count-pill">{models.length}</span>
           </div>
@@ -326,13 +433,13 @@ function App() {
                     </div>
                     <div className="row-actions">
                       <button disabled={downloading} onClick={() => void downloadModel(model.id)}>
-                        Download
+                        下载
                       </button>
                       <button disabled={!downloaded || downloading} onClick={() => void loadModel(model.id)}>
-                        Load
+                        加载
                       </button>
                       <button disabled={!downloaded || downloading} onClick={() => void deleteModel(model.id)}>
-                        Delete
+                        删除
                       </button>
                     </div>
                   </div>
@@ -348,21 +455,21 @@ function App() {
         <article className="panel">
           <div className="panel-title">
             <div>
-              <span className="section-kicker">Bridge</span>
-              <h2>HarmonyOS Device</h2>
+              <span className="section-kicker">设备桥接</span>
+              <h2>HarmonyOS 设备</h2>
             </div>
             <span className={`status-pill ${hdc?.available ? "running" : "error"}`}>
               <span className="status-dot" />
-              {hdc?.available ? "Ready" : "Missing"}
+              {hdc?.available ? "可用" : "未找到"}
             </span>
           </div>
           <dl>
             <dt>hdc</dt>
-            <dd>{hdc?.available ? hdc.path : "not found"}</dd>
-            <dt>Devices</dt>
+            <dd>{hdc?.available ? hdc.path : "未找到"}</dd>
+            <dt>设备数</dt>
             <dd>{hdc?.devices.length ?? 0}</dd>
-            <dt>Message</dt>
-            <dd>{hdc?.message ?? "none"}</dd>
+            <dt>消息</dt>
+            <dd>{hdc?.message ?? "无"}</dd>
           </dl>
           <div className="device-list">
             {(hdc?.devices ?? []).map((device) => (
@@ -371,31 +478,73 @@ function App() {
                 <strong>{device.state}</strong>
               </div>
             ))}
-            {hdc && hdc.devices.length === 0 ? <div className="empty-state">No devices connected.</div> : null}
+            {hdc && hdc.devices.length === 0 ? <div className="empty-state">暂无已连接设备</div> : null}
           </div>
           <div className="device-form">
             <input
               value={hdcTarget}
               onChange={(event) => setHdcTarget(event.target.value)}
-              placeholder="device serial or host:port"
+              placeholder="设备序列号或 host:port"
             />
             <div className="actions">
-              <button onClick={() => void connectHdc()}>Connect</button>
-              <button onClick={() => void disconnectHdc()}>Disconnect</button>
+              <button onClick={() => void connectHdc()}>连接</button>
+              <button onClick={() => void disconnectHdc()}>断开</button>
             </div>
           </div>
         </article>
       </section>
 
+      <section className="chat-panel">
+        <div className="panel-title">
+          <div>
+            <span className="section-kicker">对话测试</span>
+            <h2>聊天</h2>
+          </div>
+          <span className={`status-pill ${mnn?.state === "running" ? "running" : "stopped"}`}>
+            <span className="status-dot" />
+            {mnn?.port ? `:${mnn.port}` : "未连接"}
+          </span>
+        </div>
+        <div className="chat-window">
+          {chatMessages.length === 0 ? (
+            <div className="empty-state">暂无对话</div>
+          ) : (
+            chatMessages.map((message, index) => (
+              <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
+                <span>{message.role === "user" ? "用户" : "模型"}</span>
+                <p>{message.content || (chatBusy && index === chatMessages.length - 1 ? "生成中..." : "")}</p>
+              </div>
+            ))
+          )}
+        </div>
+        {chatError ? <div className="chat-error">{chatError}</div> : null}
+        <div className="chat-form">
+          <textarea
+            value={chatInput}
+            onChange={(event) => setChatInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                void sendChat();
+              }
+            }}
+            placeholder="输入消息，Ctrl/⌘ + Enter 发送"
+            rows={3}
+          />
+          <button disabled={chatBusy || !chatInput.trim()} onClick={() => void sendChat()}>
+            {chatBusy ? "生成中" : "发送"}
+          </button>
+        </div>
+      </section>
+
       <section className="log-panel">
         <div className="log-header">
           <div>
-            <span className="section-kicker">Output</span>
-            <h2>Logs</h2>
+            <span className="section-kicker">输出</span>
+            <h2>日志</h2>
           </div>
           <span>mnncli.log</span>
         </div>
-        <pre>{logs || "No logs yet."}</pre>
+        <pre>{logs || "暂无日志"}</pre>
       </section>
     </main>
   );

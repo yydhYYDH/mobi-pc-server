@@ -1,0 +1,34 @@
+appId: com.waic.pc-mnn-server
+productName: PC MNN Server
+directories:
+  output: release
+files:
+  - dist/**/*
+  - package.json
+asar: true
+extraResources:
+  - from: resources/frontend
+    to: frontend
+  - from: resources/backend
+    to: backend
+  - from: resources/mnn
+    to: mnn
+    filter:
+      - "**/*"
+  - from: resources/hdc
+    to: hdc
+    filter:
+      - "**/*"
+win:
+  target:
+    - nsis
+  artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+linux:
+  target:
+    - AppImage
+    - dir
+  artifactName: "${productName}-${version}-${os}-${arch}.${ext}"

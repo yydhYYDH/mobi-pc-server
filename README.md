@@ -6,6 +6,7 @@ PC-side control application for running an MNN server, downloading models from M
 
 - Frontend: React + Vite + TypeScript
 - Backend: FastAPI
+- Desktop shell: Electron
 - Native runtime: MNN under `3rdparty/MNN`
 - Model source: ModelScope
 - Device bridge: HarmonyOS `hdc`
@@ -15,6 +16,7 @@ PC-side control application for running an MNN server, downloading models from M
 ```text
 frontend/        Browser control panel
 backend/         Local API service and process wrappers
+desktop/         Electron shell for desktop launch
 configs/         Model catalog and static config
 models/          Downloaded model files, ignored by Git
 logs/            Runtime logs, ignored by Git
@@ -24,6 +26,13 @@ scripts/         Developer scripts
 ```
 
 ## Development
+
+Use Node.js 20 or newer:
+
+```bash
+nvm install 20
+nvm use 20
+```
 
 Backend:
 
@@ -44,6 +53,86 @@ npm run dev
 ```
 
 The frontend expects the backend at `http://127.0.0.1:8000`.
+
+Desktop shell:
+
+```bash
+cd desktop
+npm install
+npm run dev
+```
+
+In development, Electron starts both the Vite frontend and the FastAPI backend,
+waits for `http://127.0.0.1:5173` and `http://127.0.0.1:8000/api/health`, then
+opens the desktop window.
+
+If the backend is already running and should not be started by Electron:
+
+```bash
+PC_SERVER_SKIP_BACKEND=1 npm run dev
+```
+
+If the frontend is already running and should not be started by Electron:
+
+```bash
+PC_SERVER_SKIP_FRONTEND=1 npm run dev
+```
+
+Useful desktop environment variables:
+
+```text
+PC_SERVER_BACKEND_HOST=127.0.0.1
+PC_SERVER_BACKEND_PORT=8000
+PC_SERVER_FRONTEND_URL=http://127.0.0.1:5173
+PC_SERVER_SKIP_BACKEND=1
+PC_SERVER_SKIP_FRONTEND=1
+```
+
+## Packaging
+
+The desktop package uses Electron Builder. Runtime files are collected under:
+
+```text
+desktop/resources/
+  frontend/   Copied from frontend/dist
+  backend/    pc-server-backend or pc-server-backend.exe
+  mnn/        MNN runtime files, added later
+  hdc/        hdc runtime files, added later
+```
+
+Linux packaging from this environment:
+
+```bash
+./scripts/build-backend.sh
+cd desktop
+npm run package
+```
+
+This creates an unpacked app at:
+
+```text
+desktop/release/linux-unpacked/
+```
+
+Windows packaging should be done from a native Windows shell, not WSL:
+
+```powershell
+cd backend
+py -3.11 -m venv .venv
+.\.venv\Scripts\activate
+pip install -e .
+
+cd ..
+.\scripts\windows\build-backend.ps1
+
+cd desktop
+npm install
+npm run dist:win
+```
+
+The Windows package expects `desktop/resources/backend/pc-server-backend.exe`.
+Place Windows MNN and hdc binaries under `desktop/resources/mnn/` and
+`desktop/resources/hdc/` before running `npm run dist:win`.
 
 ## MNN
 

@@ -1,0 +1,27 @@
+{
+  "name": "pc-mnn-server-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "author": "WAIC",
+  "description": "Electron shell for the PC MNN Server developer console",
+  "main": "dist/main.js",
+  "scripts": {
+    "check-node": "node scripts/check-node.js",
+    "build": "npm run check-node && tsc -p tsconfig.json",
+    "dev": "npm run check-node && tsc -p tsconfig.json && electron .",
+    "prepare:resources": "npm run check-node && node scripts/prepare-resources.js",
+    "package": "npm run build && npm run prepare:resources && electron-builder --dir",
+    "dist:linux": "npm run build && npm run prepare:resources && electron-builder --linux",
+    "dist:win": "npm run build && npm run prepare:resources && electron-builder --win",
+    "start": "electron ."
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "electron": "^31.7.0",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.5.0"
+  }
+}
