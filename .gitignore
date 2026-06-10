@@ -1,0 +1,34 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Runtime data
+models/*
+!models/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# Native/build output
+build/
+cmake-build-*/
+3rdparty/MNN/build*/
+
+# Local config
+.env
+.env.*
+!.env.example
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+

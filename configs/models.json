@@ -1,0 +1,14 @@
+[
+  {
+    "id": "example-mnn-model",
+    "name": "Example MNN Model",
+    "modelscope_id": "namespace/model-name",
+    "revision": "master",
+    "description": "Placeholder entry. Replace with a real ModelScope model.",
+    "size": "unknown",
+    "runtime": "mnn",
+    "local_dir": "models/example-mnn-model",
+    "entry_file": "model.mnn"
+  }
+]
+
