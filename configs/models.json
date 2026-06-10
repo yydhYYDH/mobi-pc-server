@@ -9,5 +9,16 @@
     "runtime": "mnn",
     "local_dir": "models/example-mnn-model",
     "entry_file": "config.json"
+  },
+  {
+    "id": "mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-w8g128",
+    "name": "MAI-UI 2B 0422 Instruct RLv2",
+    "modelscope_id": "YYDH21/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100-w8g128",
+    "revision": "master",
+    "description": "YYDH21 MAI-UI 2B instruct model for MNN runtime experiments.",
+    "size": "unknown",
+    "runtime": "mnn",
+    "local_dir": "models/mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-w8g128",
+    "entry_file": "config.json"
   }
 ]
