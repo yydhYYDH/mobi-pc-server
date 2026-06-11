@@ -6,3 +6,5 @@ export { PanelTitle } from "./PanelTitle";
 export { ProgressBar } from "./ProgressBar";
 export { ActionButton } from "./ActionButton";
 export { DataState } from "./DataState";
+export { SidebarNav, type NavItem } from "./SidebarNav";
+export { WorkspaceHeader } from "./WorkspaceHeader";

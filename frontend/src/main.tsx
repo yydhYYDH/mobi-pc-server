@@ -12,7 +12,7 @@ import { useLogState } from "./hooks/useLogState";
 import { useModelActions } from "./hooks/useModelActions";
 import { useModelState } from "./hooks/useModelState";
 import { useRuntimeActions } from "./hooks/useRuntimeActions";
-import { DataState, StatusPill } from "./components";
+import { DataState, SidebarNav, WorkspaceHeader, type NavItem } from "./components";
 import { ChatView, DevicesView, LogsView, ModelsView, OverviewView, ServerView, SettingsView } from "./views";
 
 
@@ -87,7 +87,7 @@ function App() {
   const hdcAvailable = hdc?.available ?? false;
   const connectedDevices = hdc?.devices.length ?? 0;
   const systemReady = serverState === "running" && Boolean(mnn?.active_model_id);
-  const navItems: Array<{ id: ViewId; label: string; hint: string }> = [
+  const navItems: NavItem[] = [
     { id: "overview", label: "总览", hint: "状态与快捷操作" },
     { id: "models", label: "模型", hint: `${downloadedCount}/${models.length} 已就绪` },
     { id: "server", label: "推理服务", hint: `${backendLabel(selectedBackend)} · ${statusLabel(serverState)}` },
@@ -99,62 +99,29 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">M</div>
-          <div>
-            <strong>PC MNN Server</strong>
-            <span>Local Developer Console</span>
-          </div>
-        </div>
-        <nav className="nav-list" aria-label="主导航">
-          {navItems.map((item) => (
-            <button
-              className={`nav-item ${activeView === item.id ? "active" : ""}`}
-              key={item.id}
-              onClick={() => setActiveView(item.id)}
-            >
-              <span>{item.label}</span>
-              <small>{item.hint}</small>
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-footer">
-          <span className={`status-pill ${serverState}`}>
-            <span className="status-dot" />
-            {statusLabel(serverState)}
-          </span>
-          <span>{API_BASE || "Web mode"}</span>
-        </div>
-      </aside>
+      <SidebarNav
+        activeView={activeView}
+        apiBase={API_BASE}
+        items={navItems}
+        onViewChange={setActiveView}
+        serverState={serverState}
+        serverStatusLabel={statusLabel(serverState)}
+      />
 
       <main className="workspace">
-        <header className="workspace-header">
-          <div>
-            <span className="section-kicker">Control Center</span>
-            <h1>{navItems.find((item) => item.id === activeView)?.label}</h1>
-            <span className="refresh-meta">最后同步：{lastUpdatedText}</span>
-          </div>
-          <div className="header-actions">
-            <select
-              className="backend-select"
-              disabled={serverBusy !== null || serverState === "running"}
-              aria-label="选择推理后端"
-              value={selectedBackend}
-              onChange={(event) => setSelectedBackend(event.target.value as BackendId)}
-            >
-              {BACKEND_OPTIONS.map((backend) => (
-                <option key={backend.id} value={backend.id}>
-                  {backend.label}
-                </option>
-              ))}
-            </select>
-            <StatusPill dot tone={hdcAvailable ? "running" : "error"}>HDC {hdcAvailable ? "可用" : "未找到"}</StatusPill>
-            <button className="secondary-button" disabled={isRefreshing} onClick={() => void load()}>
-              {isRefreshing ? "刷新中..." : "刷新"}
-            </button>
-          </div>
-        </header>
+        <WorkspaceHeader
+          activeView={activeView}
+          backendOptions={BACKEND_OPTIONS}
+          hdcAvailable={hdcAvailable}
+          isRefreshing={isRefreshing}
+          lastUpdatedText={lastUpdatedText}
+          navItems={navItems}
+          onBackendChange={setSelectedBackend}
+          onRefresh={load}
+          selectedBackend={selectedBackend}
+          serverBusy={serverBusy}
+          serverState={serverState}
+        />
 
         <DataState error={error} loading={isRefreshing && !mnn && models.length === 0} loadingText="正在同步本地服务状态..." preserveContentOnError>
         {activeView === "overview" ? (
