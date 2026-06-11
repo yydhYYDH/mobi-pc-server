@@ -9,11 +9,12 @@ router = APIRouter()
 
 @router.get("/status", response_model=MnnStatus)
 def status() -> MnnStatus:
-    return runtime_service.status("mnn")
+    return runtime_service.status("llama_cpp")
 
 
 @router.post("/start", response_model=MnnStatus)
 def start() -> MnnStatus:
+    runtime_service.status("llama_cpp")
     return runtime_service.start()
 
 
@@ -25,7 +26,7 @@ def stop() -> MnnStatus:
 @router.post("/load-model", response_model=MnnStatus)
 def load_model(request: LoadModelRequest) -> MnnStatus:
     try:
-        return runtime_service.load_model(request.model_id, request.backend)
+        return runtime_service.load_model(request.model_id, "llama_cpp")
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except KeyError as exc:

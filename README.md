@@ -150,6 +150,8 @@ git submodule add --depth 1 https://github.com/ggml-org/llama.cpp.git 3rdparty/l
 LLAMA_SERVER_BIN=/absolute/path/to/llama-server
 ```
 
+CUDA 构建、模型下载和测试步骤见 [docs/llama-cpp.md](docs/llama-cpp.md)。
+
 ## 模型
 
 模型选项定义在 `configs/models.json`。下载后的模型文件放在 `models/<model-id>/`，不提交到 Git。

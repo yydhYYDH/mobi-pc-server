@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.core.paths import LOGS_DIR, REPO_ROOT
 from app.schemas.mnn import InferenceBackend, MnnStatus
+from app.services.llama_cpp_server import LlamaCppServerAdapter
 from app.services.modelscope import ModelScopeService
 
 
@@ -35,9 +36,12 @@ class MnnServerService:
     def __init__(self) -> None:
         self._status = MnnStatus(state="stopped", backend="mnn")
         self._process: subprocess.Popen[str] | None = None
+        self._llama_cpp = LlamaCppServerAdapter()
         self._models = ModelScopeService()
 
-    def status(self) -> MnnStatus:
+    def status(self, backend: InferenceBackend | None = None) -> MnnStatus:
+        if backend and not (self._process and self._process.poll() is None):
+            self._status.backend = backend
         if self._process and self._process.poll() is not None:
             backend = self._status.backend
             label = BACKEND_LABELS[backend]
@@ -213,15 +217,7 @@ class MnnServerService:
         port: int,
     ) -> list[str]:
         if backend == "llama_cpp":
-            return [
-                str(binary_path),
-                "--model",
-                str(entry_path),
-                "--host",
-                "127.0.0.1",
-                "--port",
-                str(port),
-            ]
+            return self._llama_cpp.build_command(binary_path, entry_path, port)
 
         return [
             str(binary_path),
@@ -242,7 +238,7 @@ class MnnServerService:
 
     def _find_backend_binary(self, backend: InferenceBackend) -> Path | None:
         if backend == "llama_cpp":
-            return self._find_llama_server()
+            return self._llama_cpp.find_binary()
         return self._find_mnncli()
 
     def _find_mnncli(self) -> Path | None:
@@ -264,31 +260,9 @@ class MnnServerService:
                 return path
         return None
 
-    def _find_llama_server(self) -> Path | None:
-        env_path = os.environ.get("LLAMA_SERVER_BIN")
-        if env_path:
-            path = Path(env_path).expanduser().resolve()
-            return path if path.exists() else None
-
-        candidates = [
-            REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server",
-            REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server.exe",
-            REPO_ROOT / "3rdparty/llama.cpp/build/bin/server",
-            REPO_ROOT / "3rdparty/llama.cpp/build/bin/server.exe",
-            REPO_ROOT / "3rdparty/llama.cpp/llama-server",
-            REPO_ROOT / "3rdparty/llama.cpp/llama-server.exe",
-        ]
-        for path in candidates:
-            if path.exists():
-                return path
-        return None
-
     def _missing_binary_message(self, backend: InferenceBackend) -> str:
         if backend == "llama_cpp":
-            return (
-                "llama.cpp server binary was not found. Set LLAMA_SERVER_BIN or build "
-                "3rdparty/llama.cpp with the llama-server target."
-            )
+            return self._llama_cpp.missing_binary_message()
         return (
             "mnncli binary was not found. Set MNNCLI_BIN or build "
             "3rdparty/MNN/apps/mnncli."
