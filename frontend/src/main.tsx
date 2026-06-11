@@ -2,14 +2,15 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./styles.css";
 
-import { API_BASE, LOG_LINES } from "./api/client";
+import { API_BASE } from "./api/client";
 import { completionText, sendChatCompletion } from "./api/chat";
-import { autoConnectHdcTarget, connectHdcTarget, disconnectHdcTarget, getHdcStatus, readHdcStatus } from "./api/devices";
-import { getRuntimeLogs, readRuntimeLogs } from "./api/logs";
-import { deleteModelById, downloadModelById, getLocalModels, getModelCatalog, getModelDownloads, readLocalModels, readModelCatalog, readModelDownloads } from "./api/models";
-import { getRuntimeStatus, loadRuntimeModel, readRuntimeStatus, startRuntime, stopRuntime } from "./api/runtime";
-import type { BackendId, CatalogModel, ChatMessage, DownloadStatus, HdcStatus, LocalModel, MnnStatus, ViewId } from "./api/types";
+import { autoConnectHdcTarget, connectHdcTarget, disconnectHdcTarget } from "./api/devices";
+import type { BackendId, ChatMessage, ViewId } from "./api/types";
 import { BACKEND_OPTIONS, backendLabel, formatDownloadSize, normalizeBackend, normalizePort, statusLabel } from "./domain/runtime";
+import { useDashboardData } from "./hooks/useDashboardData";
+import { useModelActions } from "./hooks/useModelActions";
+import { useModelState } from "./hooks/useModelState";
+import { useRuntimeActions } from "./hooks/useRuntimeActions";
 import { ChatView, DevicesView, LogsView, ModelsView, OverviewView, ServerView, SettingsView } from "./views";
 
 
@@ -18,26 +19,15 @@ function App() {
   const [selectedBackend, setSelectedBackend] = React.useState<BackendId>(
     () => normalizeBackend(window.localStorage.getItem("pc-server-backend"))
   );
-  const [mnn, setMnn] = React.useState<MnnStatus | null>(null);
-  const [models, setModels] = React.useState<CatalogModel[]>([]);
-  const [localModels, setLocalModels] = React.useState<LocalModel[]>([]);
-  const [downloads, setDownloads] = React.useState<DownloadStatus[]>([]);
-  const [hdc, setHdc] = React.useState<HdcStatus | null>(null);
-  const [logs, setLogs] = React.useState("");
   const [logFilter, setLogFilter] = React.useState("");
   const [autoScrollLogs, setAutoScrollLogs] = React.useState(true);
   const [hdcTarget, setHdcTarget] = React.useState("");
   const [hdcLlmPort, setHdcLlmPort] = React.useState(
     () => window.localStorage.getItem("pc-server-hdc-llm-port") ?? "8088"
   );
-  const [serverBusy, setServerBusy] = React.useState<"start" | "stop" | null>(null);
-  const [modelBusy, setModelBusy] = React.useState<string | null>(null);
   const [selectedLaunchModelId, setSelectedLaunchModelId] = React.useState("");
   const [deviceBusy, setDeviceBusy] = React.useState<"auto" | "connect" | "disconnect" | null>(null);
   const [deviceNotice, setDeviceNotice] = React.useState<string | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
-  const [lastUpdatedAt, setLastUpdatedAt] = React.useState<Date | null>(null);
   const [chatInput, setChatInput] = React.useState("你好，用五个字回复。");
   const [chatMessages, setChatMessages] = React.useState<ChatMessage[]>([]);
   const [chatBusy, setChatBusy] = React.useState(false);
@@ -45,77 +35,48 @@ function App() {
   const logRef = React.useRef<HTMLPreElement | null>(null);
   const autoHdcStartedRef = React.useRef(false);
 
-  const load = React.useCallback(async () => {
-    setError(null);
-    setIsRefreshing(true);
-    try {
-      const [
-        mnnResponse,
-        modelsResponse,
-        localModelsResponse,
-        downloadsResponse,
-        hdcResponse,
-        logsResponse
-      ] = await Promise.all([
-        getRuntimeStatus(selectedBackend),
-        getModelCatalog(),
-        getLocalModels(),
-        getModelDownloads(),
-        getHdcStatus(),
-        getRuntimeLogs(selectedBackend, LOG_LINES)
-      ]);
+  const {
+    downloads,
+    error,
+    hdc,
+    isRefreshing,
+    lastUpdatedText,
+    load,
+    localModels,
+    logs,
+    mnn,
+    models,
+    setError,
+    setHdc
+  } = useDashboardData({ activeView, autoScrollLogs, logFilter, logRef, selectedBackend });
 
-      const [nextMnn, nextModels, nextLocalModels, nextDownloads, nextHdc, nextLogs] = await Promise.all([
-        readRuntimeStatus(mnnResponse),
-        readModelCatalog(modelsResponse),
-        readLocalModels(localModelsResponse),
-        readModelDownloads(downloadsResponse),
-        readHdcStatus(hdcResponse),
-        readRuntimeLogs(logsResponse)
-      ]);
+  const { activeModelName, downloadedCount, downloadStatus, isDownloaded, isDownloading, launchableModels } =
+    useModelState({
+      downloads,
+      localModels,
+      mnn,
+      models,
+      selectedBackend,
+      selectedLaunchModelId,
+      setSelectedLaunchModelId
+    });
 
-      setMnn(nextMnn);
-      setModels(nextModels);
-      setLocalModels(nextLocalModels);
-      setDownloads(nextDownloads);
-      setHdc(nextHdc);
-      setLogs(nextLogs.content);
-      setLastUpdatedAt(new Date());
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unknown error");
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [selectedBackend]);
+  const { deleteModel, downloadModel, modelBusy, setModelBusy } = useModelActions({ load, mnn, models, setError });
 
-  React.useEffect(() => {
-    void load();
-  }, [load]);
+  const { loadModel, serverBusy, startMnn, stopMnn } = useRuntimeActions({
+    isDownloaded,
+    load,
+    mnn,
+    modelBusy,
+    selectedBackend,
+    setError,
+    setModelBusy
+  });
+
 
   React.useEffect(() => {
     window.localStorage.setItem("pc-server-backend", selectedBackend);
   }, [selectedBackend]);
-
-  const hasActiveDownload = downloads.some((download) =>
-    ["queued", "downloading", "verifying"].includes(download.state)
-  );
-
-  React.useEffect(() => {
-    if (!hasActiveDownload && activeView !== "logs") {
-      return;
-    }
-    const intervalId = window.setInterval(() => {
-      void load();
-    }, hasActiveDownload ? 1500 : 3000);
-    return () => window.clearInterval(intervalId);
-  }, [activeView, hasActiveDownload, load]);
-
-  React.useEffect(() => {
-    if (!autoScrollLogs || !logRef.current) {
-      return;
-    }
-    logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [autoScrollLogs, logs, logFilter]);
 
   React.useEffect(() => {
     window.localStorage.setItem("pc-server-hdc-llm-port", hdcLlmPort);
@@ -128,49 +89,6 @@ function App() {
     autoHdcStartedRef.current = true;
     void autoConnectHdc();
   }, [deviceBusy, hdc]);
-
-  React.useEffect(() => {
-    const launchableModels = models.filter((model) => normalizeBackend(model.runtime) === selectedBackend && isDownloaded(model.id));
-    if (launchableModels.length === 0) {
-      setSelectedLaunchModelId("");
-      return;
-    }
-    if (selectedLaunchModelId && launchableModels.some((model) => model.id === selectedLaunchModelId)) {
-      return;
-    }
-    const activeModel = launchableModels.find((model) => model.id === mnn?.active_model_id && mnn?.backend === selectedBackend);
-    setSelectedLaunchModelId(activeModel?.id ?? launchableModels[0].id);
-  }, [localModels, mnn?.active_model_id, mnn?.backend, models, selectedBackend, selectedLaunchModelId]);
-
-  async function startMnn() {
-    if (serverBusy !== null || mnn?.state === "running" || mnn?.state === "starting") {
-      return;
-    }
-    setServerBusy("start");
-    try {
-      await startRuntime(selectedBackend);
-      await load();
-    } catch (startError) {
-      setError(startError instanceof Error ? startError.message : "启动失败。");
-    } finally {
-      setServerBusy(null);
-    }
-  }
-
-  async function stopMnn() {
-    if (serverBusy !== null || mnn?.state === "stopped" || mnn?.state === "stopping") {
-      return;
-    }
-    setServerBusy("stop");
-    try {
-      await stopRuntime(selectedBackend);
-      await load();
-    } catch (stopError) {
-      setError(stopError instanceof Error ? stopError.message : "停止失败。");
-    } finally {
-      setServerBusy(null);
-    }
-  }
 
   async function connectHdc() {
     if (!hdcTarget.trim()) {
@@ -231,55 +149,6 @@ function App() {
     }
   }
 
-  async function downloadModel(modelId: string) {
-    setModelBusy(modelId);
-    try {
-      await downloadModelById(modelId);
-      await load();
-    } catch (downloadError) {
-      setError(downloadError instanceof Error ? downloadError.message : "下载失败。");
-    } finally {
-      setModelBusy(null);
-    }
-  }
-
-  async function deleteModel(modelId: string) {
-    const targetModel = models.find((model) => model.id === modelId);
-    if (mnn?.state === "running" && mnn.active_model_id === modelId) {
-      setError("当前模型正在运行，请先停止服务或切换模型后再删除。");
-      return;
-    }
-    if (!window.confirm(`确认删除本地模型 ${targetModel?.name ?? modelId}？`)) {
-      return;
-    }
-    setModelBusy(modelId);
-    try {
-      await deleteModelById(modelId);
-      await load();
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "删除失败。");
-    } finally {
-      setModelBusy(null);
-    }
-  }
-
-  async function loadModel(modelId: string) {
-    if (modelBusy || serverBusy || !isDownloaded(modelId)) {
-      return;
-    }
-    setModelBusy(modelId);
-    setServerBusy("start");
-    try {
-      await loadRuntimeModel(selectedBackend, modelId);
-      await load();
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "加载失败。");
-    } finally {
-      setModelBusy(null);
-      setServerBusy(null);
-    }
-  }
-
   async function sendChat() {
     const prompt = chatInput.trim();
     if (!prompt || chatBusy) {
@@ -315,21 +184,6 @@ function App() {
     }
   }
 
-  function isDownloaded(modelId: string) {
-    return localModels.some((model) => model.id === modelId && model.downloaded);
-  }
-
-  function downloadStatus(modelId: string) {
-    return downloads.find((download) => download.model_id === modelId);
-  }
-
-  function isDownloading(modelId: string) {
-    return ["queued", "downloading", "verifying"].includes(downloadStatus(modelId)?.state ?? "");
-  }
-
-  const downloadedCount = localModels.filter((model) => model.downloaded).length;
-  const launchableModels = models.filter((model) => normalizeBackend(model.runtime) === selectedBackend && isDownloaded(model.id));
-  const activeModelName = models.find((model) => model.id === mnn?.active_model_id)?.name;
   const serverState = mnn?.state ?? "unknown";
   const hdcAvailable = hdc?.available ?? false;
   const connectedDevices = hdc?.devices.length ?? 0;
@@ -341,13 +195,8 @@ function App() {
     }
     return lines.filter((line) => line.toLowerCase().includes(query));
   }, [logFilter, logs]);
-  const recentLogLines = visibleLogLines.slice(-80);
   const criticalLog = [...visibleLogLines].reverse().find((line) => /error|failed|exception|timeout/i.test(line));
   const systemReady = serverState === "running" && Boolean(mnn?.active_model_id);
-  const lastUpdatedText = lastUpdatedAt
-    ? lastUpdatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-    : "尚未同步";
-
   const navItems: Array<{ id: ViewId; label: string; hint: string }> = [
     { id: "overview", label: "总览", hint: "状态与快捷操作" },
     { id: "models", label: "模型", hint: `${downloadedCount}/${models.length} 已就绪` },
