@@ -76,7 +76,21 @@ function App() {
     setHdcTarget
   } = useHdcActions({ hdc, load, setHdc });
 
-  const { chatBusy, chatError, chatInput, chatMessages, clearChat, sendChat, setChatInput } = useChatTest(mnn);
+  const {
+    chatBusy,
+    chatError,
+    chatInput,
+    chatMessages,
+    clearChat,
+    exampleImageError,
+    exampleImages,
+    imageBusy,
+    selectedImage,
+    selectedImageId,
+    sendChat,
+    setChatInput,
+    setSelectedImageId
+  } = useChatTest(mnn, selectedBackend);
 
 
   React.useEffect(() => {
@@ -135,6 +149,9 @@ function App() {
           chatError={chatError}
           chatInput={chatInput}
           chatMessages={chatMessages}
+          exampleImageError={exampleImageError}
+          exampleImages={exampleImages}
+          imageBusy={imageBusy}
           clearChat={clearChat}
           connectedDevices={connectedDevices}
           connectHdc={connectHdc}
@@ -163,6 +180,8 @@ function App() {
           onOpenLogs={() => setActiveView("logs")}
           onOpenModels={() => setActiveView("models")}
           selectedBackend={selectedBackend}
+          selectedImage={selectedImage}
+          selectedImageId={selectedImageId}
           selectedLaunchModelId={selectedLaunchModelId}
           sendChat={sendChat}
           serverBusy={serverBusy}
@@ -173,6 +192,7 @@ function App() {
           setHdcTarget={setHdcTarget}
           setLogFilter={setLogFilter}
           setSelectedBackend={setSelectedBackend}
+          setSelectedImageId={setSelectedImageId}
           setSelectedLaunchModelId={setSelectedLaunchModelId}
           startMnn={startMnn}
           stopMnn={stopMnn}

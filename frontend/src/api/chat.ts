@@ -1,12 +1,14 @@
 import { API_BASE, apiErrorMessage } from "./client";
 
-export async function sendChatCompletion(model: string, prompt: string) {
+export type ChatCompletionContent = string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
+
+export async function sendChatCompletion(model: string, content: ChatCompletionContent) {
   const response = await fetch(`${API_BASE}/api/runtime/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content }],
       max_tokens: 256,
       stream: false
     })

@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 
-import type { BackendId, CatalogModel, ChatMessage, DeviceBusy, DownloadStatus, HdcStatus, MnnStatus, ServerBusy, ViewId } from "../api/types";
+import type { BackendId, CatalogModel, ChatMessage, DeviceBusy, DownloadStatus, ExampleImage, ExampleImageDetail, HdcStatus, MnnStatus, ServerBusy, ViewId } from "../api/types";
 import { ChatView } from "./ChatView";
 import { DevicesView } from "./DevicesView";
 import { LogsView } from "./LogsView";
@@ -20,6 +20,9 @@ export function ActiveViewRenderer(props: {
   chatError: string | null;
   chatInput: string;
   chatMessages: ChatMessage[];
+  exampleImageError: string | null;
+  exampleImages: ExampleImage[];
+  imageBusy: boolean;
   clearChat: () => void;
   connectedDevices: number;
   connectHdc: () => Promise<void>;
@@ -48,6 +51,8 @@ export function ActiveViewRenderer(props: {
   onOpenLogs: () => void;
   onOpenModels: () => void;
   selectedBackend: BackendId;
+  selectedImage: ExampleImageDetail | null;
+  selectedImageId: string;
   selectedLaunchModelId: string;
   sendChat: () => Promise<void>;
   serverBusy: ServerBusy;
@@ -58,6 +63,7 @@ export function ActiveViewRenderer(props: {
   setHdcTarget: (hdcTarget: string) => void;
   setLogFilter: (logFilter: string) => void;
   setSelectedBackend: (backend: BackendId) => void;
+  setSelectedImageId: (imageId: string) => void;
   setSelectedLaunchModelId: (modelId: string) => void;
   startMnn: () => Promise<void>;
   stopMnn: () => Promise<void>;
@@ -143,10 +149,16 @@ export function ActiveViewRenderer(props: {
           chatError={props.chatError}
           chatInput={props.chatInput}
           chatMessages={props.chatMessages}
+          exampleImageError={props.exampleImageError}
+          exampleImages={props.exampleImages}
+          imageBusy={props.imageBusy}
           mnn={props.mnn}
+          selectedImage={props.selectedImage}
+          selectedImageId={props.selectedImageId}
           onClearChat={props.clearChat}
           sendChat={props.sendChat}
           setChatInput={props.setChatInput}
+          setSelectedImageId={props.setSelectedImageId}
         />
       );
     case "logs":

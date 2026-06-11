@@ -1,18 +1,31 @@
 import React from "react";
 
-import type { ChatMessage, MnnStatus } from "../api/types";
+import type { ChatMessage, ExampleImage, ExampleImageDetail, MnnStatus } from "../api/types";
 import { EmptyState, PanelTitle, StatusPill } from "../components";
 import { serverOwnerLabel } from "../domain/runtime";
+
+function formatImageSize(bytes: number) {
+  if (bytes < 1024 * 1024) {
+    return `${Math.round(bytes / 1024)} KB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 export function ChatView(props: {
   chatBusy: boolean;
   chatError: string | null;
   chatInput: string;
   chatMessages: ChatMessage[];
+  exampleImageError: string | null;
+  exampleImages: ExampleImage[];
+  imageBusy: boolean;
   mnn: MnnStatus | null;
+  selectedImage: ExampleImageDetail | null;
+  selectedImageId: string;
   onClearChat: () => void;
   sendChat: () => Promise<void>;
   setChatInput: (value: string) => void;
+  setSelectedImageId: (value: string) => void;
 }) {
   const chatWindowRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -52,12 +65,40 @@ export function ChatView(props: {
           props.chatMessages.map((message, index) => (
             <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
               <span>{message.role === "user" ? "用户" : "模型"}</span>
+              {message.imageName ? <small className="chat-image-tag">图片：{message.imageName}</small> : null}
               <p>{message.content || (props.chatBusy && index === props.chatMessages.length - 1 ? "生成中..." : "")}</p>
             </div>
           ))
         )}
       </div>
       {props.chatError ? <div className="chat-error">{props.chatError}</div> : null}
+      {props.exampleImageError ? <div className="chat-error">{props.exampleImageError}</div> : null}
+      <div className="chat-image-row">
+        <label>
+          <span>示例图片</span>
+          <select
+            disabled={props.chatBusy || props.imageBusy || props.exampleImages.length === 0}
+            value={props.selectedImageId}
+            onChange={(event) => props.setSelectedImageId(event.target.value)}
+          >
+            <option value="">不带图片</option>
+            {props.exampleImages.map((image) => (
+              <option key={image.id} value={image.id}>
+                {image.name} · {formatImageSize(image.size_bytes)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {props.selectedImage ? (
+          <div className="chat-image-preview">
+            <img alt={props.selectedImage.name} src={props.selectedImage.data_uri} />
+            <div>
+              <strong>{props.selectedImage.name}</strong>
+              <small>{props.selectedImage.mime_type} · {formatImageSize(props.selectedImage.size_bytes)}</small>
+            </div>
+          </div>
+        ) : null}
+      </div>
       <div className="chat-form">
         <textarea
           value={props.chatInput}
@@ -70,8 +111,8 @@ export function ChatView(props: {
           placeholder="输入消息，Ctrl/⌘ + Enter 发送"
           rows={3}
         />
-        <button disabled={props.chatBusy || !props.chatInput.trim()} onClick={() => void props.sendChat()}>
-          {props.chatBusy ? "生成中" : "发送"}
+        <button disabled={props.chatBusy || props.imageBusy || !props.chatInput.trim()} onClick={() => void props.sendChat()}>
+          {props.chatBusy ? "生成中" : props.imageBusy ? "读图中" : "发送"}
         </button>
       </div>
     </section>

@@ -54,6 +54,19 @@ export type HdcStatus = {
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  imageName?: string;
+};
+
+export type ExampleImage = {
+  id: string;
+  name: string;
+  path: string;
+  mime_type: string;
+  size_bytes: number;
+};
+
+export type ExampleImageDetail = ExampleImage & {
+  data_uri: string;
 };
 
 export type ServerBusy = "start" | "stop" | null;
