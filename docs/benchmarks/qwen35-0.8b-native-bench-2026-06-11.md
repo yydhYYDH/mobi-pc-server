@@ -24,7 +24,7 @@ llama.cpp:
   -o json
 ```
 
-MNN:
+MNN stock binary, fallback diagnosis:
 
 ```bash
 3rdparty/MNN/build_mnn_static/llm_bench \
@@ -36,9 +36,21 @@ MNN:
   -j /tmp/mnn-llm-bench-cuda-p<prompt>-n<decode>.json
 ```
 
+MNN relinked CUDA probe, valid CUDA rerun:
+
+```bash
+/tmp/llm_bench_cuda_probe \
+  -m models/Qwen3.5-0.8B-MNN/config.json \
+  -a cuda \
+  -p <64|512|2048> \
+  -n <32|128|512> \
+  -rep 3 \
+  -j /tmp/mnn-cuda-rerun-p<prompt>-n<decode>.json
+```
+
 ## Important Caveat
 
-The MNN run was requested with `-a cuda`, but this build did not produce a confirmed NVIDIA CUDA backend run.
+The first MNN run used the stock `3rdparty/MNN/build_mnn_static/llm_bench` and was requested with `-a cuda`, but that executable did not produce a confirmed NVIDIA CUDA backend run.
 
 Observed logs:
 
@@ -57,6 +69,8 @@ Follow-up diagnosis found that CUDA was built but not loaded by the stock `llm_b
 - `ldd 3rdparty/MNN/build_mnn_static/llm_bench` did not show `libMNN_Cuda_Main.so`
 
 CUDA backend registration lives in `source/backend/cuda/Register.cpp`, so it only runs if `libMNN_Cuda_Main.so` is loaded. A temporary relink that forced `libMNN_Cuda_Main.so` into ELF `NEEDED` removed the fallback logs on a small `p16/n8` probe. See `docs/mnn.md` for the exact diagnosis and relink command.
+
+The MNN CUDA results below use that relinked probe binary. The rerun did not print `Don't support 2` or `Can't Find type=2 backend, use 0 instead`.
 
 OpenCL was also unavailable in this environment:
 
@@ -79,9 +93,27 @@ The llama.cpp run used the GGUF Q4_K_M model and offloaded supported layers with
 | tg128 | 224.99 |
 | tg512 | 221.04 |
 
-### MNN `-a cuda` Request, CPU Fallback Observed
+### MNN CUDA, Relinked Probe
 
-The MNN run used the MNN model package and repeated every prompt/decode combination independently.
+The MNN rerun used the MNN model package and a relinked `llm_bench` probe that forces `libMNN_Cuda_Main.so` into ELF `NEEDED`.
+
+Note: the JSON writer in this MNN revision still serializes CUDA as `"backend": "CPU"` because it only special-cases METAL and OPENCL. CUDA validity here is based on ELF `NEEDED` plus the absence of fallback logs.
+
+| Prompt tokens | Decode tokens | Prefill tokens/s | Decode tokens/s |
+| ---: | ---: | ---: | ---: |
+| 64 | 32 | 2490.15 +/- 174.84 | 95.73 +/- 7.30 |
+| 64 | 128 | 2119.25 +/- 18.90 | 83.75 +/- 4.63 |
+| 64 | 512 | 2203.82 +/- 234.15 | 82.55 +/- 4.66 |
+| 512 | 32 | 6336.43 +/- 54.85 | 92.70 +/- 11.36 |
+| 512 | 128 | 5866.25 +/- 791.91 | 93.62 +/- 2.72 |
+| 512 | 512 | 6440.12 +/- 28.96 | 75.77 +/- 5.77 |
+| 2048 | 32 | 3941.46 +/- 42.91 | 88.04 +/- 6.30 |
+| 2048 | 128 | 3934.93 +/- 39.37 | 83.65 +/- 3.70 |
+| 2048 | 512 | 3861.85 +/- 132.25 | 82.90 +/- 6.29 |
+
+### MNN Stock `-a cuda` Request, CPU Fallback Observed
+
+This was the earlier stock-binary run before fixing CUDA backend loading. Keep these values only as fallback diagnostics, not as MNN CUDA performance.
 
 | Prompt tokens | Decode tokens | Prefill tokens/s | Decode tokens/s |
 | ---: | ---: | ---: | ---: |
@@ -97,9 +129,9 @@ The MNN run used the MNN model package and repeated every prompt/decode combinat
 
 ## Takeaway
 
-For this run, llama.cpp CUDA is clearly faster than the observed MNN fallback path:
+After fixing MNN CUDA backend loading, llama.cpp CUDA is still faster on this benchmark:
 
-- Decode: llama.cpp CUDA was about 4.2x to 6.8x faster than the MNN fallback decode results.
-- Prefill: llama.cpp CUDA was tens of times faster than the MNN fallback prefill results.
+- Prefill: llama.cpp CUDA was about 1.7x faster at `pp512`, about 2.2x faster at `pp64`, and about 2.8x faster at `pp2048`.
+- Decode: llama.cpp CUDA was about 2.4x to 2.8x faster than MNN CUDA in this rerun.
 
-This is not yet a fair GPU-vs-GPU comparison. A valid MNN GPU comparison still requires a build/runtime where MNN `llm_bench` actually reports and uses a GPU backend instead of falling back to CPU.
+The earlier fallback result was caused by the stock `llm_bench` not loading `libMNN_Cuda_Main.so`; it should not be used for backend comparison.
