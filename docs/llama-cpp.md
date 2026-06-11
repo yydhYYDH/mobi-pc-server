@@ -93,10 +93,14 @@ LLAMA_CPP_CTX_SIZE=2048
 LLAMA_CPP_N_GPU_LAYERS=999
 LLAMA_CPP_MMPROJ=/absolute/path/to/mmproj.gguf
 LLAMA_CPP_MEDIA_PATH=/absolute/path/to/media-dir
+LLAMA_CPP_IMAGE_MIN_TOKENS=1024
+LLAMA_CPP_REASONING=off
 ```
 
 `LLAMA_CPP_N_GPU_LAYERS=999` is used to offload all supported layers to GPU.
 `LLAMA_CPP_MMPROJ` is required for backend-managed llama.cpp multimodal image input.
+`LLAMA_CPP_IMAGE_MIN_TOKENS=1024` avoids undersized image-token allocation for Qwen-VL style models.
+`LLAMA_CPP_REASONING=off` keeps Qwen thinking output out of `message.reasoning_content` for smoke-test style image descriptions.
 
 ## Test Model
 

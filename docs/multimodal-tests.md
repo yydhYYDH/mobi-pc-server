@@ -49,9 +49,18 @@ llama.cpp requires a vision-capable GGUF model plus its multimodal projector. Se
 
 ```bash
 export LLAMA_CPP_MMPROJ=/absolute/path/to/mmproj.gguf
+export LLAMA_CPP_CTX_SIZE=4096
+export LLAMA_CPP_IMAGE_MIN_TOKENS=1024
+export LLAMA_CPP_REASONING=off
 ```
 
 The current Qwen3.5 0.8B Q4_K_M catalog entry is text-only and does not include an mmproj. Use a vision-capable llama.cpp model entry for a real multimodal test.
+
+For `unsloth/Qwen3.5-0.8B-GGUF`, the tested projector is:
+
+```text
+models/qwen3.5-0.8b-q4-k-m/mmproj-F16.gguf
+```
 
 Run:
 

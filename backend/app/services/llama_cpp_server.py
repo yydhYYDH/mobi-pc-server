@@ -6,6 +6,7 @@ from app.core.paths import REPO_ROOT
 
 DEFAULT_LLAMA_CPP_CTX_SIZE = 2048
 DEFAULT_LLAMA_CPP_N_GPU_LAYERS = 999
+VALID_LLAMA_CPP_REASONING = {"on", "off", "auto"}
 
 
 class LlamaCppServerAdapter:
@@ -53,6 +54,20 @@ class LlamaCppServerAdapter:
         media_path = os.environ.get("LLAMA_CPP_MEDIA_PATH")
         if media_path:
             command.extend(["--media-path", str(Path(media_path).expanduser().resolve())])
+
+        image_min_tokens = os.environ.get("LLAMA_CPP_IMAGE_MIN_TOKENS")
+        if image_min_tokens:
+            command.extend(["--image-min-tokens", str(int(image_min_tokens))])
+
+        reasoning = os.environ.get("LLAMA_CPP_REASONING")
+        if reasoning:
+            normalized_reasoning = reasoning.lower()
+            if normalized_reasoning not in VALID_LLAMA_CPP_REASONING:
+                raise ValueError(
+                    "LLAMA_CPP_REASONING must be one of: "
+                    f"{', '.join(sorted(VALID_LLAMA_CPP_REASONING))}."
+                )
+            command.extend(["--reasoning", normalized_reasoning])
 
         return command
 
