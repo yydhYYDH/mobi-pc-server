@@ -1,0 +1,50 @@
+import type { BackendId, HdcStatus, MnnStatus } from "../api/types";
+import { backendLabel, serverOwnerLabel } from "../domain/runtime";
+
+export function SettingsView(props: {
+  apiBase: string;
+  hdc: HdcStatus | null;
+  hdcLlmPort: string;
+  mnn: MnnStatus | null;
+  selectedBackend: BackendId;
+  setHdcLlmPort: (value: string) => void;
+}) {
+  return (
+    <section className="detail-grid">
+      <article className="panel">
+        <div className="panel-title">
+          <div>
+            <span className="section-kicker">Runtime paths</span>
+            <h2>运行时信息</h2>
+          </div>
+        </div>
+        <dl>
+          <dt>前端 API</dt>
+          <dd>{props.apiBase || "同源代理"}</dd>
+          <dt>当前后端</dt>
+          <dd>{backendLabel(props.selectedBackend)}</dd>
+          <dt>后端端口</dt>
+          <dd>{props.mnn?.port ?? "未监听"}</dd>
+          <dt>进程来源</dt>
+          <dd>{serverOwnerLabel(props.mnn)}</dd>
+          <dt>hdc 路径</dt>
+          <dd>{props.hdc?.path ?? "未找到"}</dd>
+          <dt>LLM server 端口</dt>
+          <dd>
+            <input
+              max="65535"
+              min="1"
+              type="number"
+              value={props.hdcLlmPort}
+              onChange={(event) => props.setHdcLlmPort(event.target.value)}
+            />
+          </dd>
+          <dt>手机访问地址</dt>
+          <dd>{props.hdc?.phone_llm_url ?? "http://127.0.0.1:19000"}</dd>
+          <dt>桌面平台</dt>
+          <dd>{window.pcServerDesktop?.platform ?? "browser"}</dd>
+        </dl>
+      </article>
+    </section>
+  );
+}
