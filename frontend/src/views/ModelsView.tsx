@@ -1,5 +1,5 @@
 import type { BackendId, CatalogModel, DownloadStatus, ServerBusy } from "../api/types";
-import { CountPill, PanelTitle, ProgressBar, StatusPill } from "../components";
+import { ActionButton, CountPill, DataState, PanelTitle, ProgressBar, StatusPill } from "../components";
 import { backendLabel, normalizeBackend, statusLabel } from "../domain/runtime";
 
 export function ModelsView(props: {
@@ -20,6 +20,7 @@ export function ModelsView(props: {
   return (
     <section className="panel table-panel">
       <PanelTitle action={<CountPill>{props.models.length}</CountPill>} kicker="ModelScope" title="模型资产" />
+      <DataState empty={props.models.length === 0} emptyText="模型目录为空，请检查 configs/models.json。">
       <div className="model-table">
         <div className="table-row table-head">
           <span>模型</span>
@@ -56,20 +57,21 @@ export function ModelsView(props: {
                 <ProgressBar active={downloading} value={progress} />
               </div>
               <div className="row-actions">
-                <button disabled={downloading || anyBusy} onClick={() => void props.downloadModel(model.id)}>
-                  {busy && !downloaded ? "处理中..." : "下载"}
-                </button>
-                <button disabled={!backendMatches || !downloaded || downloading || anyBusy} onClick={() => void props.loadModel(model.id)}>
-                  {busy ? "加载中..." : "加载"}
-                </button>
-                <button disabled={!downloaded || downloading || anyBusy || runningThisModel} onClick={() => void props.deleteModel(model.id)}>
-                  {runningThisModel ? "运行中" : busy ? "处理中..." : "删除"}
-                </button>
+                <ActionButton busy={busy && !downloaded} disabled={downloading || anyBusy} onClick={() => void props.downloadModel(model.id)}>
+                  下载
+                </ActionButton>
+                <ActionButton busy={busy && downloaded} busyText="加载中..." disabled={!backendMatches || !downloaded || downloading || anyBusy} onClick={() => void props.loadModel(model.id)}>
+                  加载
+                </ActionButton>
+                <ActionButton busy={busy && downloaded} disabled={!downloaded || downloading || anyBusy || runningThisModel} onClick={() => void props.deleteModel(model.id)}>
+                  {runningThisModel ? "运行中" : "删除"}
+                </ActionButton>
               </div>
             </div>
           );
         })}
       </div>
+      </DataState>
     </section>
   );
 }

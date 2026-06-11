@@ -12,6 +12,7 @@ import { useLogState } from "./hooks/useLogState";
 import { useModelActions } from "./hooks/useModelActions";
 import { useModelState } from "./hooks/useModelState";
 import { useRuntimeActions } from "./hooks/useRuntimeActions";
+import { DataState, StatusPill } from "./components";
 import { ChatView, DevicesView, LogsView, ModelsView, OverviewView, ServerView, SettingsView } from "./views";
 
 
@@ -148,18 +149,14 @@ function App() {
                 </option>
               ))}
             </select>
-            <span className={`status-pill ${hdcAvailable ? "running" : "error"}`}>
-              <span className="status-dot" />
-              HDC {hdcAvailable ? "可用" : "未找到"}
-            </span>
+            <StatusPill dot tone={hdcAvailable ? "running" : "error"}>HDC {hdcAvailable ? "可用" : "未找到"}</StatusPill>
             <button className="secondary-button" disabled={isRefreshing} onClick={() => void load()}>
               {isRefreshing ? "刷新中..." : "刷新"}
             </button>
           </div>
         </header>
 
-        {error ? <div className="alert">{error}</div> : null}
-
+        <DataState error={error} loading={isRefreshing && !mnn && models.length === 0} loadingText="正在同步本地服务状态..." preserveContentOnError>
         {activeView === "overview" ? (
           <OverviewView
             activeModelName={activeModelName}
@@ -267,6 +264,7 @@ function App() {
             setHdcLlmPort={setHdcLlmPort}
           />
         ) : null}
+        </DataState>
       </main>
     </div>
   );
