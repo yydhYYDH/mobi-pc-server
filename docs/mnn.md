@@ -2,11 +2,21 @@
 
 MNN is expected to live at `3rdparty/MNN`.
 
+The submodule is pinned by this repository to the upstream MNN baseline commit:
+
+```text
+2106d00b967c95d35661623c52e26cab238812cf
+```
+
+Do not rely on a depth-1 fetch of the remote default branch for MNN. If upstream `master` moves, a shallow checkout of only the newest branch tip may not contain the pinned commit.
+
 Preferred setup:
 
 ```bash
-git submodule add https://github.com/alibaba/MNN.git 3rdparty/MNN
-git submodule update --init --recursive
+git submodule update --init 3rdparty/MNN
+git -C 3rdparty/MNN fetch origin 2106d00b967c95d35661623c52e26cab238812cf
+git -C 3rdparty/MNN checkout --detach 2106d00b967c95d35661623c52e26cab238812cf
+git submodule update --init --recursive 3rdparty/MNN
 ```
 
 Keep upstream source isolated. Project-specific wrappers should live in `backend/app/services/` or `scripts/`.
@@ -23,7 +33,9 @@ Current patches:
 Apply patches after initializing or resetting the submodule:
 
 ```bash
-git submodule update --init --recursive 3rdparty/MNN
+git submodule update --init 3rdparty/MNN
+git -C 3rdparty/MNN fetch origin 2106d00b967c95d35661623c52e26cab238812cf
+git -C 3rdparty/MNN checkout --detach 2106d00b967c95d35661623c52e26cab238812cf
 git -C 3rdparty/MNN apply ../../patches/MNN/0001-enable-cuda-backend-for-mnncli-serve.patch
 git -C 3rdparty/MNN apply ../../patches/MNN/0002-link-cuda-backend-for-llm-bench.patch
 ```
@@ -31,10 +43,9 @@ git -C 3rdparty/MNN apply ../../patches/MNN/0002-link-cuda-backend-for-llm-bench
 Useful checks:
 
 ```bash
-# 0001 is already present if the MNN submodule points at 44cbb9c0.
-git -C 3rdparty/MNN apply --check --reverse ../../patches/MNN/0001-enable-cuda-backend-for-mnncli-serve.patch
+# Both patches should apply cleanly to the pinned baseline before they are applied.
+git -C 3rdparty/MNN apply --check ../../patches/MNN/0001-enable-cuda-backend-for-mnncli-serve.patch
 
-# 0002 should apply cleanly to the current MNN HEAD before it is applied.
 git -C 3rdparty/MNN apply --check ../../patches/MNN/0002-link-cuda-backend-for-llm-bench.patch
 ```
 
