@@ -9,6 +9,7 @@ from app.services.runtime_state import runtime_service
 
 
 router = APIRouter()
+LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 @router.post("/chat/completions")
@@ -28,7 +29,7 @@ def chat_completions(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
+        with LOCAL_OPENER.open(request, timeout=120) as response:
             body = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")

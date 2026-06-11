@@ -33,7 +33,7 @@ class LlamaCppServerAdapter:
         return None
 
     def build_command(self, binary_path: Path, entry_path: Path, port: int) -> list[str]:
-        return [
+        command = [
             str(binary_path),
             "--model",
             str(entry_path),
@@ -46,6 +46,15 @@ class LlamaCppServerAdapter:
             "--n-gpu-layers",
             str(int(os.environ.get("LLAMA_CPP_N_GPU_LAYERS", DEFAULT_LLAMA_CPP_N_GPU_LAYERS))),
         ]
+        mmproj = os.environ.get("LLAMA_CPP_MMPROJ")
+        if mmproj:
+            command.extend(["--mmproj", str(Path(mmproj).expanduser().resolve())])
+
+        media_path = os.environ.get("LLAMA_CPP_MEDIA_PATH")
+        if media_path:
+            command.extend(["--media-path", str(Path(media_path).expanduser().resolve())])
+
+        return command
 
     def missing_binary_message(self) -> str:
         return (

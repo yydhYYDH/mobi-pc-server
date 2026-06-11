@@ -91,9 +91,12 @@ Runtime tuning:
 ```bash
 LLAMA_CPP_CTX_SIZE=2048
 LLAMA_CPP_N_GPU_LAYERS=999
+LLAMA_CPP_MMPROJ=/absolute/path/to/mmproj.gguf
+LLAMA_CPP_MEDIA_PATH=/absolute/path/to/media-dir
 ```
 
 `LLAMA_CPP_N_GPU_LAYERS=999` is used to offload all supported layers to GPU.
+`LLAMA_CPP_MMPROJ` is required for backend-managed llama.cpp multimodal image input.
 
 ## Test Model
 
