@@ -1,3 +1,4 @@
+export { ActiveViewRenderer } from "./ActiveViewRenderer";
 export { OverviewView } from "./OverviewView";
 export { ModelsView } from "./ModelsView";
 export { ServerView } from "./ServerView";

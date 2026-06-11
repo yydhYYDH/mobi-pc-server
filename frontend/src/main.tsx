@@ -13,7 +13,7 @@ import { useModelActions } from "./hooks/useModelActions";
 import { useModelState } from "./hooks/useModelState";
 import { useRuntimeActions } from "./hooks/useRuntimeActions";
 import { DataState, SidebarNav, WorkspaceHeader, type NavItem } from "./components";
-import { ChatView, DevicesView, LogsView, ModelsView, OverviewView, ServerView, SettingsView } from "./views";
+import { ActiveViewRenderer } from "./views";
 
 
 function App() {
@@ -124,113 +124,60 @@ function App() {
         />
 
         <DataState error={error} loading={isRefreshing && !mnn && models.length === 0} loadingText="正在同步本地服务状态..." preserveContentOnError>
-        {activeView === "overview" ? (
-          <OverviewView
-            activeModelName={activeModelName}
-            connectedDevices={connectedDevices}
-            criticalLog={criticalLog}
-            downloadedCount={downloadedCount}
-            hdc={hdc}
-            launchableModels={launchableModels}
-            modelBusy={modelBusy}
-            modelsCount={models.length}
-            mnn={mnn}
-            onAutoConnect={autoConnectHdc}
-            onLoadModel={loadModel}
-            onOpenDevices={() => setActiveView("devices")}
-            onOpenLogs={() => setActiveView("logs")}
-            onOpenModels={() => setActiveView("models")}
-            onStartMnn={startMnn}
-            onStopMnn={stopMnn}
-            selectedLaunchModelId={selectedLaunchModelId}
-            selectedBackend={selectedBackend}
-            serverState={serverState}
-            serverBusy={serverBusy}
-            setSelectedLaunchModelId={setSelectedLaunchModelId}
-          />
-        ) : null}
-
-        {activeView === "models" ? (
-          <ModelsView
-            activeModelId={mnn?.active_model_id ?? null}
-            downloadModel={downloadModel}
-            downloadStatus={downloadStatus}
-            formatDownloadSize={formatDownloadSize}
-            isDownloaded={isDownloaded}
-            isDownloading={isDownloading}
-            loadModel={loadModel}
-            modelBusy={modelBusy}
-            deleteModel={deleteModel}
-            models={models}
-            selectedBackend={selectedBackend}
-            serverState={serverState}
-            serverBusy={serverBusy}
-          />
-        ) : null}
-
-        {activeView === "server" ? (
-          <ServerView
-            activeModelName={activeModelName}
-            mnn={mnn}
-            onStartMnn={startMnn}
-            onStopMnn={stopMnn}
-            selectedBackend={selectedBackend}
-            setSelectedBackend={setSelectedBackend}
-            serverState={serverState}
-            serverBusy={serverBusy}
-          />
-        ) : null}
-
-        {activeView === "devices" ? (
-          <DevicesView
-            autoConnectHdc={autoConnectHdc}
-            connectHdc={connectHdc}
-            deviceBusy={deviceBusy}
-            deviceNotice={deviceNotice}
-            disconnectHdc={disconnectHdc}
-            hdc={hdc}
-            hdcLlmPort={hdcLlmPort}
-            hdcTarget={hdcTarget}
-            setHdcLlmPort={setHdcLlmPort}
-            setHdcTarget={setHdcTarget}
-          />
-        ) : null}
-
-        {activeView === "chat" ? (
-          <ChatView
-            chatBusy={chatBusy}
-            chatError={chatError}
-            chatInput={chatInput}
-            chatMessages={chatMessages}
-            mnn={mnn}
-            onClearChat={clearChat}
-            sendChat={sendChat}
-            setChatInput={setChatInput}
-          />
-        ) : null}
-
-        {activeView === "logs" ? (
-          <LogsView
-            autoScrollLogs={autoScrollLogs}
-            selectedBackend={selectedBackend}
-            logFilter={logFilter}
-            logRef={logRef}
-            setAutoScrollLogs={setAutoScrollLogs}
-            setLogFilter={setLogFilter}
-            visibleLogLines={visibleLogLines}
-          />
-        ) : null}
-
-        {activeView === "settings" ? (
-          <SettingsView
-            apiBase={API_BASE}
-            hdc={hdc}
-            hdcLlmPort={hdcLlmPort}
-            mnn={mnn}
-            selectedBackend={selectedBackend}
-            setHdcLlmPort={setHdcLlmPort}
-          />
-        ) : null}
+        <ActiveViewRenderer
+          activeModelId={mnn?.active_model_id ?? null}
+          activeModelName={activeModelName}
+          activeView={activeView}
+          apiBase={API_BASE}
+          autoConnectHdc={autoConnectHdc}
+          autoScrollLogs={autoScrollLogs}
+          chatBusy={chatBusy}
+          chatError={chatError}
+          chatInput={chatInput}
+          chatMessages={chatMessages}
+          clearChat={clearChat}
+          connectedDevices={connectedDevices}
+          connectHdc={connectHdc}
+          criticalLog={criticalLog}
+          deleteModel={deleteModel}
+          deviceBusy={deviceBusy}
+          deviceNotice={deviceNotice}
+          disconnectHdc={disconnectHdc}
+          downloadedCount={downloadedCount}
+          downloadModel={downloadModel}
+          downloadStatus={downloadStatus}
+          formatDownloadSize={formatDownloadSize}
+          hdc={hdc}
+          hdcLlmPort={hdcLlmPort}
+          hdcTarget={hdcTarget}
+          isDownloaded={isDownloaded}
+          isDownloading={isDownloading}
+          launchableModels={launchableModels}
+          loadModel={loadModel}
+          logFilter={logFilter}
+          logRef={logRef}
+          mnn={mnn}
+          modelBusy={modelBusy}
+          models={models}
+          onOpenDevices={() => setActiveView("devices")}
+          onOpenLogs={() => setActiveView("logs")}
+          onOpenModels={() => setActiveView("models")}
+          selectedBackend={selectedBackend}
+          selectedLaunchModelId={selectedLaunchModelId}
+          sendChat={sendChat}
+          serverBusy={serverBusy}
+          serverState={serverState}
+          setAutoScrollLogs={setAutoScrollLogs}
+          setChatInput={setChatInput}
+          setHdcLlmPort={setHdcLlmPort}
+          setHdcTarget={setHdcTarget}
+          setLogFilter={setLogFilter}
+          setSelectedBackend={setSelectedBackend}
+          setSelectedLaunchModelId={setSelectedLaunchModelId}
+          startMnn={startMnn}
+          stopMnn={stopMnn}
+          visibleLogLines={visibleLogLines}
+        />
         </DataState>
       </main>
     </div>
