@@ -185,3 +185,9 @@ QWEN35_BENCHMARK_REPEATS=3
 If both servers are already running, set `QWEN35_BENCHMARK_START_SERVERS=0` and point the ports to those services.
 
 The test prints a JSON summary for each backend and each prompt/decode case with average elapsed time, endpoint-reported prompt/completion tokens, endpoint-reported completion tokens per second, average response characters, and response characters per second. Keep the character metrics when token accounting differs between backends.
+
+Native binary benchmark notes are recorded in:
+
+```text
+docs/benchmarks/qwen35-0.8b-native-bench-2026-06-11.md
+```
