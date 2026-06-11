@@ -2,14 +2,16 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./styles.css";
 
-import { API_BASE, LOG_LINES, apiErrorMessage, readApiJson } from "./api/client";
-import type { BackendId, CatalogModel, ChatMessage, DeviceBusy, DownloadStatus, HdcStatus, LocalModel, MnnStatus, ServerBusy, ViewId } from "./api/types";
+import { API_BASE, LOG_LINES } from "./api/client";
+import { completionText, sendChatCompletion } from "./api/chat";
+import { autoConnectHdcTarget, connectHdcTarget, disconnectHdcTarget, getHdcStatus, readHdcStatus } from "./api/devices";
+import { getRuntimeLogs, readRuntimeLogs } from "./api/logs";
+import { deleteModelById, downloadModelById, getLocalModels, getModelCatalog, getModelDownloads, readLocalModels, readModelCatalog, readModelDownloads } from "./api/models";
+import { getRuntimeStatus, loadRuntimeModel, readRuntimeStatus, startRuntime, stopRuntime } from "./api/runtime";
+import type { BackendId, CatalogModel, ChatMessage, DownloadStatus, HdcStatus, LocalModel, MnnStatus, ViewId } from "./api/types";
 import { BACKEND_OPTIONS, backendLabel, formatDownloadSize, normalizeBackend, normalizePort, statusLabel } from "./domain/runtime";
 import { ChatView, DevicesView, LogsView, ModelsView, OverviewView, ServerView, SettingsView } from "./views";
 
-function runtimeApiPrefix(backend: BackendId) {
-  return backend === "llama_cpp" ? "/api/llama-cpp" : "/api/mnn";
-}
 
 function App() {
   const [activeView, setActiveView] = React.useState<ViewId>("overview");
@@ -55,21 +57,21 @@ function App() {
         hdcResponse,
         logsResponse
       ] = await Promise.all([
-        fetch(`${API_BASE}${runtimeApiPrefix(selectedBackend)}/status`),
-        fetch(`${API_BASE}/api/models/catalog`),
-        fetch(`${API_BASE}/api/models/local`),
-        fetch(`${API_BASE}/api/models/downloads`),
-        fetch(`${API_BASE}/api/devices/hdc`),
-        fetch(`${API_BASE}/api/logs/runtime?backend=${selectedBackend}&lines=${LOG_LINES}`)
+        getRuntimeStatus(selectedBackend),
+        getModelCatalog(),
+        getLocalModels(),
+        getModelDownloads(),
+        getHdcStatus(),
+        getRuntimeLogs(selectedBackend, LOG_LINES)
       ]);
 
       const [nextMnn, nextModels, nextLocalModels, nextDownloads, nextHdc, nextLogs] = await Promise.all([
-        readApiJson<MnnStatus>(mnnResponse, "推理服务状态"),
-        readApiJson<CatalogModel[]>(modelsResponse, "模型目录"),
-        readApiJson<LocalModel[]>(localModelsResponse, "本地模型"),
-        readApiJson<DownloadStatus[]>(downloadsResponse, "下载状态"),
-        readApiJson<HdcStatus>(hdcResponse, "HDC 状态"),
-        readApiJson<{ content: string }>(logsResponse, "运行日志")
+        readRuntimeStatus(mnnResponse),
+        readModelCatalog(modelsResponse),
+        readLocalModels(localModelsResponse),
+        readModelDownloads(downloadsResponse),
+        readHdcStatus(hdcResponse),
+        readRuntimeLogs(logsResponse)
       ]);
 
       setMnn(nextMnn);
@@ -146,10 +148,7 @@ function App() {
     }
     setServerBusy("start");
     try {
-      const response = await fetch(`${API_BASE}${runtimeApiPrefix(selectedBackend)}/start`, { method: "POST" });
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response, "启动失败"));
-      }
+      await startRuntime(selectedBackend);
       await load();
     } catch (startError) {
       setError(startError instanceof Error ? startError.message : "启动失败。");
@@ -164,10 +163,7 @@ function App() {
     }
     setServerBusy("stop");
     try {
-      const response = await fetch(`${API_BASE}${runtimeApiPrefix(selectedBackend)}/stop`, { method: "POST" });
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response, "停止失败"));
-      }
+      await stopRuntime(selectedBackend);
       await load();
     } catch (stopError) {
       setError(stopError instanceof Error ? stopError.message : "停止失败。");
@@ -185,15 +181,7 @@ function App() {
     setDeviceBusy("connect");
     setDeviceNotice(`正在连接 ${hdcTarget.trim()}...`);
     try {
-      const response = await fetch(`${API_BASE}/api/devices/hdc/connect`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target: hdcTarget.trim(), llm_port: llmPort })
-      });
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response, "连接失败"));
-      }
-      const nextStatus = (await response.json()) as HdcStatus;
+      const nextStatus = await connectHdcTarget(hdcTarget.trim(), llmPort);
       setHdc(nextStatus);
       setDeviceNotice(nextStatus.message ?? "连接请求已完成。");
       await load();
@@ -209,15 +197,7 @@ function App() {
     setDeviceBusy("auto");
     setDeviceNotice("正在自动搜索 HarmonyOS 设备，可能需要十几秒...");
     try {
-      const response = await fetch(`${API_BASE}/api/devices/hdc/auto-connect`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ llm_port: llmPort })
-      });
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response, "自动搜索失败"));
-      }
-      const nextStatus = (await response.json()) as HdcStatus;
+      const nextStatus = await autoConnectHdcTarget(llmPort);
       setHdc(nextStatus);
       if (nextStatus.devices.length > 0) {
         setDeviceNotice(nextStatus.message ?? `已发现 ${nextStatus.devices.length} 台设备。`);
@@ -240,15 +220,7 @@ function App() {
     setDeviceBusy("disconnect");
     setDeviceNotice(`正在断开 ${hdcTarget.trim()}...`);
     try {
-      const response = await fetch(`${API_BASE}/api/devices/hdc/disconnect`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target: hdcTarget.trim() })
-      });
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response, "断开失败"));
-      }
-      const nextStatus = (await response.json()) as HdcStatus;
+      const nextStatus = await disconnectHdcTarget(hdcTarget.trim());
       setHdc(nextStatus);
       setDeviceNotice(nextStatus.message ?? "断开请求已完成。");
       await load();
@@ -262,14 +234,7 @@ function App() {
   async function downloadModel(modelId: string) {
     setModelBusy(modelId);
     try {
-      const response = await fetch(`${API_BASE}/api/models/download`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model_id: modelId })
-      });
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response, "下载失败"));
-      }
+      await downloadModelById(modelId);
       await load();
     } catch (downloadError) {
       setError(downloadError instanceof Error ? downloadError.message : "下载失败。");
@@ -289,14 +254,7 @@ function App() {
     }
     setModelBusy(modelId);
     try {
-      const response = await fetch(`${API_BASE}/api/models/delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model_id: modelId })
-      });
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response, "删除失败"));
-      }
+      await deleteModelById(modelId);
       await load();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "删除失败。");
@@ -312,14 +270,7 @@ function App() {
     setModelBusy(modelId);
     setServerBusy("start");
     try {
-      const response = await fetch(`${API_BASE}${runtimeApiPrefix(selectedBackend)}/load-model`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model_id: modelId, backend: selectedBackend })
-      });
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response, "加载失败"));
-      }
+      await loadRuntimeModel(selectedBackend, modelId);
       await load();
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "加载失败。");
@@ -347,23 +298,8 @@ function App() {
     setChatError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/runtime/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: mnn.active_model_id ?? "default",
-          messages: [{ role: "user", content: prompt }],
-          max_tokens: 256,
-          stream: false
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(await apiErrorMessage(response, "请求失败"));
-      }
-      const completion = await response.json();
-      const message = completion?.choices?.[0]?.message;
-      const content = message?.content || message?.reasoning_content || "";
+      const completion = await sendChatCompletion(mnn.active_model_id ?? "default", prompt);
+      const content = completionText(completion);
       setChatMessages((current) => {
         const next = [...current];
         const last = next[next.length - 1];
