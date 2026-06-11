@@ -111,6 +111,14 @@ git submodule add --depth 1 https://github.com/alibaba/MNN.git 3rdparty/MNN
 
 MNN 的构建步骤和本地二进制配置应记录在 [docs/mnn.md](docs/mnn.md)。
 
+MNN 本地补丁存放在 `patches/MNN/`，用于记录本项目需要但不直接提交到上游源码的改动。初始化或重置 MNN submodule 后，按顺序应用：
+
+```bash
+git -C 3rdparty/MNN apply ../../patches/MNN/0001-enable-cuda-backend-for-mnncli-serve.patch
+git -C 3rdparty/MNN apply ../../patches/MNN/0002-link-cuda-backend-for-llm-bench.patch
+```
+
+
 submodule 准备好后，可以尝试：
 
 ```bash

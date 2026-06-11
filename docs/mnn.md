@@ -11,6 +11,35 @@ git submodule update --init --recursive
 
 Keep upstream source isolated. Project-specific wrappers should live in `backend/app/services/` or `scripts/`.
 
+## Local Patches
+
+Project-owned MNN changes are stored as patch files under `patches/MNN/` instead of being left as ad hoc edits inside `3rdparty/MNN`.
+
+Current patches:
+
+- `0001-enable-cuda-backend-for-mnncli-serve.patch`: exported from MNN commit `44cbb9c0aff26877367290e6b7e81ec0f384bc46`. It enables CUDA for the Linux `mnncli` build, links `libMNN_Cuda_Main.so` with `--no-as-needed`, adds CUDA include paths and RPATH, and passes the served model name through `/v1/models`.
+- `0002-link-cuda-backend-for-llm-bench.patch`: links `llm_bench` against `libMNN_Cuda_Main.so` when `MNN_CUDA=ON`, so `llm_bench -a cuda` loads CUDA backend registration instead of silently falling back to CPU.
+
+Apply patches after initializing or resetting the submodule:
+
+```bash
+git submodule update --init --recursive 3rdparty/MNN
+git -C 3rdparty/MNN apply ../../patches/MNN/0001-enable-cuda-backend-for-mnncli-serve.patch
+git -C 3rdparty/MNN apply ../../patches/MNN/0002-link-cuda-backend-for-llm-bench.patch
+```
+
+Useful checks:
+
+```bash
+# 0001 is already present if the MNN submodule points at 44cbb9c0.
+git -C 3rdparty/MNN apply --check --reverse ../../patches/MNN/0001-enable-cuda-backend-for-mnncli-serve.patch
+
+# 0002 should apply cleanly to the current MNN HEAD before it is applied.
+git -C 3rdparty/MNN apply --check ../../patches/MNN/0002-link-cuda-backend-for-llm-bench.patch
+```
+
+Do not commit downloaded third-party source drops such as `3rdparty/MNN/3rd_party/cutlass/` into this repository. Keep those as submodule/upstream setup steps unless a small, reviewable patch is needed.
+
 The backend is designed to launch MNN's existing `mnncli serve` command.
 
 Build the runtime with:
