@@ -148,6 +148,20 @@ class MnnServerService:
         self.stop()
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
         port = BACKEND_PORTS[backend]
+        if self._is_port_open(port):
+            self._status = MnnStatus(
+                state="error",
+                backend=backend,
+                active_model_id=model_id,
+                port=port,
+                message=(
+                    f"Port {port} is already in use. Stop the existing "
+                    f"{BACKEND_LABELS[backend]} service before loading a new model."
+                ),
+            )
+            self._append_log(backend, self._status.message)
+            return self._status
+
         command = self._build_command(backend, binary_path, model_id, entry_path, port)
         log_file = (LOGS_DIR / BACKEND_LOG_FILES[backend]).open("a", encoding="utf-8")
         self._append_log(

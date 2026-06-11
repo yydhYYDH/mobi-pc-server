@@ -7,6 +7,10 @@ import type { BackendId, CatalogModel, ChatMessage, DeviceBusy, DownloadStatus, 
 import { BACKEND_OPTIONS, backendLabel, formatDownloadSize, normalizeBackend, normalizePort, statusLabel } from "./domain/runtime";
 import { ChatView, DevicesView, LogsView, ModelsView, OverviewView, ServerView, SettingsView } from "./views";
 
+function runtimeApiPrefix(backend: BackendId) {
+  return backend === "llama_cpp" ? "/api/llama-cpp" : "/api/mnn";
+}
+
 function App() {
   const [activeView, setActiveView] = React.useState<ViewId>("overview");
   const [selectedBackend, setSelectedBackend] = React.useState<BackendId>(
@@ -51,7 +55,7 @@ function App() {
         hdcResponse,
         logsResponse
       ] = await Promise.all([
-        fetch(`${API_BASE}/api/mnn/status`),
+        fetch(`${API_BASE}${runtimeApiPrefix(selectedBackend)}/status`),
         fetch(`${API_BASE}/api/models/catalog`),
         fetch(`${API_BASE}/api/models/local`),
         fetch(`${API_BASE}/api/models/downloads`),
@@ -142,7 +146,7 @@ function App() {
     }
     setServerBusy("start");
     try {
-      const response = await fetch(`${API_BASE}/api/mnn/start`, { method: "POST" });
+      const response = await fetch(`${API_BASE}${runtimeApiPrefix(selectedBackend)}/start`, { method: "POST" });
       if (!response.ok) {
         throw new Error(await apiErrorMessage(response, "启动失败"));
       }
@@ -160,7 +164,7 @@ function App() {
     }
     setServerBusy("stop");
     try {
-      const response = await fetch(`${API_BASE}/api/mnn/stop`, { method: "POST" });
+      const response = await fetch(`${API_BASE}${runtimeApiPrefix(selectedBackend)}/stop`, { method: "POST" });
       if (!response.ok) {
         throw new Error(await apiErrorMessage(response, "停止失败"));
       }
@@ -308,7 +312,7 @@ function App() {
     setModelBusy(modelId);
     setServerBusy("start");
     try {
-      const response = await fetch(`${API_BASE}/api/mnn/load-model`, {
+      const response = await fetch(`${API_BASE}${runtimeApiPrefix(selectedBackend)}/load-model`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_id: modelId, backend: selectedBackend })
@@ -343,64 +347,31 @@ function App() {
     setChatError(null);
 
     try {
-      const response = await fetch(`http://127.0.0.1:${mnn.port}/v1/chat/completions`, {
+      const response = await fetch(`${API_BASE}/api/runtime/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: mnn.active_model_id ?? "default",
           messages: [{ role: "user", content: prompt }],
-          stream: true
+          max_tokens: 256,
+          stream: false
         })
       });
 
-      if (!response.ok || !response.body) {
+      if (!response.ok) {
         throw new Error(await apiErrorMessage(response, "请求失败"));
       }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
+      const completion = await response.json();
+      const message = completion?.choices?.[0]?.message;
+      const content = message?.content || message?.reasoning_content || "";
+      setChatMessages((current) => {
+        const next = [...current];
+        const last = next[next.length - 1];
+        if (last?.role === "assistant") {
+          next[next.length - 1] = { ...last, content: content || "模型没有返回文本。" };
         }
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) {
-            continue;
-          }
-
-          const event = trimmed.replace(/^data:\s*/, "");
-          if (event === "[DONE]") {
-            continue;
-          }
-
-          try {
-            const chunk = JSON.parse(event);
-            const token = chunk?.choices?.[0]?.delta?.content ?? "";
-            if (!token) {
-              continue;
-            }
-            setChatMessages((current) => {
-              const next = [...current];
-              const last = next[next.length - 1];
-              if (last?.role === "assistant") {
-                next[next.length - 1] = { ...last, content: last.content + token };
-              }
-              return next;
-            });
-          } catch {
-            // Ignore malformed event fragments; the next stream chunk may complete them.
-          }
-        }
-      }
+        return next;
+      });
     } catch (chatRequestError) {
       setChatError(chatRequestError instanceof Error ? chatRequestError.message : "请求失败");
     } finally {
