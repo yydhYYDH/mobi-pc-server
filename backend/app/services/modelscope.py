@@ -184,6 +184,9 @@ class ModelScopeService:
             raise FileNotFoundError(f"Model entry file does not exist: {entry_path}")
         return entry_path
 
+    def runtime(self, model_id: str) -> str:
+        return self._find_model(model_id).runtime
+
     def _find_model(self, model_id: str) -> ModelCatalogItem:
         for item in self.read_catalog():
             if item.id == model_id:

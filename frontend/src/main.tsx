@@ -30,9 +30,21 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 type ViewId = "overview" | "models" | "server" | "devices" | "chat" | "logs" | "settings";
+type BackendId = "mnn" | "llama_cpp";
+
+const BACKEND_LABELS: Record<BackendId, string> = {
+  mnn: "MNN",
+  llama_cpp: "llama.cpp"
+};
+
+const BACKEND_OPTIONS: Array<{ id: BackendId; label: string }> = [
+  { id: "mnn", label: BACKEND_LABELS.mnn },
+  { id: "llama_cpp", label: BACKEND_LABELS.llama_cpp }
+];
 
 type MnnStatus = {
   state: string;
+  backend?: BackendId;
   active_model_id: string | null;
   port: number | null;
   message: string | null;
@@ -96,6 +108,17 @@ function serverOwnerLabel(mnn: MnnStatus | null) {
   return mnn.managed_by_backend ? "后端托管" : "外部进程";
 }
 
+function normalizeBackend(runtime: string | null | undefined): BackendId {
+  if (runtime === "llama_cpp" || runtime === "llama.cpp") {
+    return "llama_cpp";
+  }
+  return "mnn";
+}
+
+function backendLabel(backend: BackendId | string | null | undefined) {
+  return BACKEND_LABELS[normalizeBackend(backend)];
+}
+
 function formatBytes(bytes: number | null | undefined) {
   if (!bytes || bytes <= 0) {
     return "0 B";
@@ -125,6 +148,9 @@ function formatDownloadSize(status: DownloadStatus | undefined, downloaded: bool
 
 function App() {
   const [activeView, setActiveView] = React.useState<ViewId>("overview");
+  const [selectedBackend, setSelectedBackend] = React.useState<BackendId>(
+    () => normalizeBackend(window.localStorage.getItem("pc-server-backend"))
+  );
   const [mnn, setMnn] = React.useState<MnnStatus | null>(null);
   const [models, setModels] = React.useState<CatalogModel[]>([]);
   const [localModels, setLocalModels] = React.useState<LocalModel[]>([]);
@@ -166,7 +192,7 @@ function App() {
         fetch(`${API_BASE}/api/models/local`),
         fetch(`${API_BASE}/api/models/downloads`),
         fetch(`${API_BASE}/api/devices/hdc`),
-        fetch(`${API_BASE}/api/logs/mnncli?lines=${LOG_LINES}`)
+        fetch(`${API_BASE}/api/logs/runtime?backend=${selectedBackend}&lines=${LOG_LINES}`)
       ]);
 
       if (
@@ -189,11 +215,15 @@ function App() {
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unknown error");
     }
-  }, []);
+  }, [selectedBackend]);
 
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  React.useEffect(() => {
+    window.localStorage.setItem("pc-server-backend", selectedBackend);
+  }, [selectedBackend]);
 
   const hasActiveDownload = downloads.some((download) =>
     ["queued", "downloading", "verifying"].includes(download.state)
@@ -229,7 +259,7 @@ function App() {
   }, [deviceBusy, hdc]);
 
   React.useEffect(() => {
-    const launchableModels = models.filter((model) => model.runtime === "mnn" && isDownloaded(model.id));
+    const launchableModels = models.filter((model) => normalizeBackend(model.runtime) === selectedBackend && isDownloaded(model.id));
     if (launchableModels.length === 0) {
       setSelectedLaunchModelId("");
       return;
@@ -237,9 +267,9 @@ function App() {
     if (selectedLaunchModelId && launchableModels.some((model) => model.id === selectedLaunchModelId)) {
       return;
     }
-    const activeModel = launchableModels.find((model) => model.id === mnn?.active_model_id);
+    const activeModel = launchableModels.find((model) => model.id === mnn?.active_model_id && mnn?.backend === selectedBackend);
     setSelectedLaunchModelId(activeModel?.id ?? launchableModels[0].id);
-  }, [localModels, mnn?.active_model_id, models, selectedLaunchModelId]);
+  }, [localModels, mnn?.active_model_id, mnn?.backend, models, selectedBackend, selectedLaunchModelId]);
 
   async function startMnn() {
     if (serverBusy !== null || mnn?.state === "running" || mnn?.state === "starting") {
@@ -406,7 +436,7 @@ function App() {
       const response = await fetch(`${API_BASE}/api/mnn/load-model`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model_id: modelId })
+        body: JSON.stringify({ model_id: modelId, backend: selectedBackend })
       });
       if (!response.ok) {
         throw new Error(`加载失败：HTTP ${response.status}`);
@@ -426,7 +456,7 @@ function App() {
       return;
     }
     if (mnn?.state !== "running" || !mnn.port) {
-      setChatError("请确认 MNN 服务正在运行。");
+      setChatError("请确认推理服务正在运行。");
       return;
     }
 
@@ -516,7 +546,7 @@ function App() {
   }
 
   const downloadedCount = localModels.filter((model) => model.downloaded).length;
-  const launchableModels = models.filter((model) => model.runtime === "mnn" && isDownloaded(model.id));
+  const launchableModels = models.filter((model) => normalizeBackend(model.runtime) === selectedBackend && isDownloaded(model.id));
   const activeModelName = models.find((model) => model.id === mnn?.active_model_id)?.name;
   const serverState = mnn?.state ?? "unknown";
   const hdcAvailable = hdc?.available ?? false;
@@ -536,7 +566,7 @@ function App() {
   const navItems: Array<{ id: ViewId; label: string; hint: string }> = [
     { id: "overview", label: "总览", hint: "状态与快捷操作" },
     { id: "models", label: "模型", hint: `${downloadedCount}/${models.length} 已就绪` },
-    { id: "server", label: "MNN 服务", hint: statusLabel(serverState) },
+    { id: "server", label: "推理服务", hint: `${backendLabel(selectedBackend)} · ${statusLabel(serverState)}` },
     { id: "devices", label: "设备", hint: connectedDevices ? `${connectedDevices} 台在线` : "未连接" },
     { id: "chat", label: "对话测试", hint: systemReady ? "可用" : "待加载模型" },
     { id: "logs", label: "日志", hint: `${visibleLogLines.length} 行` },
@@ -581,6 +611,19 @@ function App() {
             <h1>{navItems.find((item) => item.id === activeView)?.label}</h1>
           </div>
           <div className="header-actions">
+            <select
+              className="backend-select"
+              disabled={serverBusy !== null || serverState === "running"}
+              aria-label="选择推理后端"
+              value={selectedBackend}
+              onChange={(event) => setSelectedBackend(event.target.value as BackendId)}
+            >
+              {BACKEND_OPTIONS.map((backend) => (
+                <option key={backend.id} value={backend.id}>
+                  {backend.label}
+                </option>
+              ))}
+            </select>
             <span className={`status-pill ${hdcAvailable ? "running" : "error"}`}>
               <span className="status-dot" />
               HDC {hdcAvailable ? "可用" : "未找到"}
@@ -612,6 +655,7 @@ function App() {
             onStartMnn={startMnn}
             onStopMnn={stopMnn}
             selectedLaunchModelId={selectedLaunchModelId}
+            selectedBackend={selectedBackend}
             serverState={serverState}
             serverBusy={serverBusy}
             setSelectedLaunchModelId={setSelectedLaunchModelId}
@@ -629,6 +673,7 @@ function App() {
             modelBusy={modelBusy}
             deleteModel={deleteModel}
             models={models}
+            selectedBackend={selectedBackend}
             serverBusy={serverBusy}
           />
         ) : null}
@@ -639,6 +684,8 @@ function App() {
             mnn={mnn}
             onStartMnn={startMnn}
             onStopMnn={stopMnn}
+            selectedBackend={selectedBackend}
+            setSelectedBackend={setSelectedBackend}
             serverState={serverState}
             serverBusy={serverBusy}
           />
@@ -674,6 +721,7 @@ function App() {
         {activeView === "logs" ? (
           <LogsView
             autoScrollLogs={autoScrollLogs}
+            selectedBackend={selectedBackend}
             logFilter={logFilter}
             logRef={logRef}
             setAutoScrollLogs={setAutoScrollLogs}
@@ -688,6 +736,7 @@ function App() {
             hdc={hdc}
             hdcLlmPort={hdcLlmPort}
             mnn={mnn}
+            selectedBackend={selectedBackend}
             setHdcLlmPort={setHdcLlmPort}
           />
         ) : null}
@@ -714,6 +763,7 @@ function OverviewView(props: {
   onStartMnn: () => Promise<void>;
   onStopMnn: () => Promise<void>;
   selectedLaunchModelId: string;
+  selectedBackend: BackendId;
   serverState: string;
   serverBusy: "start" | "stop" | null;
   setSelectedLaunchModelId: (modelId: string) => void;
@@ -735,7 +785,7 @@ function OverviewView(props: {
           <span className="section-kicker">当前工作区</span>
           <h2>{props.activeModelName ?? props.mnn?.active_model_id ?? "尚未加载模型"}</h2>
           <p>
-            MNN 服务{statusLabel(props.serverState)}，HDC
+            {backendLabel(props.selectedBackend)} 服务{statusLabel(props.serverState)}，HDC
             {props.hdc?.available ? " 已就绪" : " 未找到"}，{props.connectedDevices} 台设备在线。
           </p>
         </div>
@@ -762,11 +812,11 @@ function OverviewView(props: {
             <span className="section-kicker">Launch</span>
             <h2>选择可启动模型</h2>
           </div>
-          <span className="count-pill">{props.launchableModels.length} 个可用</span>
+          <span className="count-pill">{backendLabel(props.selectedBackend)} · {props.launchableModels.length} 个可用</span>
         </div>
         <div className="launch-row">
           <label>
-            <span>本地 MNN 模型</span>
+            <span>本地 {backendLabel(props.selectedBackend)} 模型</span>
             <select
               disabled={props.launchableModels.length === 0 || props.serverBusy !== null || props.modelBusy !== null}
               value={props.selectedLaunchModelId}
@@ -806,9 +856,9 @@ function OverviewView(props: {
 
       <section className="metric-grid">
         <Metric
-          title="MNN 服务"
+          title="推理服务"
           value={statusLabel(props.serverState)}
-          detail={`端口 ${props.mnn?.port ?? "未监听"} · ${serverOwnerLabel(props.mnn)}`}
+          detail={`${backendLabel(props.mnn?.backend ?? props.selectedBackend)} · 端口 ${props.mnn?.port ?? "未监听"} · ${serverOwnerLabel(props.mnn)}`}
           tone={props.serverState}
         />
         <Metric title="当前模型" value={props.activeModelName ?? props.mnn?.active_model_id ?? "无"} detail={props.mnn?.message ?? "无运行消息"} />
@@ -868,6 +918,7 @@ function ModelsView(props: {
   loadModel: (modelId: string) => Promise<void>;
   modelBusy: string | null;
   models: CatalogModel[];
+  selectedBackend: BackendId;
   serverBusy: "start" | "stop" | null;
 }) {
   return (
@@ -882,6 +933,7 @@ function ModelsView(props: {
       <div className="model-table">
         <div className="table-row table-head">
           <span>模型</span>
+          <span>后端</span>
           <span>状态</span>
           <span>进度</span>
           <span>操作</span>
@@ -892,6 +944,7 @@ function ModelsView(props: {
           const downloading = props.isDownloading(model.id);
           const busy = props.modelBusy === model.id;
           const anyBusy = props.modelBusy !== null || props.serverBusy !== null;
+          const backendMatches = normalizeBackend(model.runtime) === props.selectedBackend;
           const progress = status?.progress ?? (downloaded ? 100 : 0);
           const state = status?.state ?? (downloaded ? "downloaded" : "idle");
 
@@ -902,6 +955,9 @@ function ModelsView(props: {
                 <small>{model.modelscope_id}</small>
                 <p>{status?.message || model.description}</p>
               </div>
+              <span className={`status-pill ${backendMatches ? "running" : "stopped"}`}>
+                {backendLabel(model.runtime)}
+              </span>
               <span className={`status-pill ${state}`}>{statusLabel(state)}</span>
               <div>
                 <div className="download-meter">
@@ -916,7 +972,7 @@ function ModelsView(props: {
                 <button disabled={downloading || anyBusy} onClick={() => void props.downloadModel(model.id)}>
                   {busy && !downloaded ? "处理中..." : "下载"}
                 </button>
-                <button disabled={!downloaded || downloading || anyBusy} onClick={() => void props.loadModel(model.id)}>
+                <button disabled={!backendMatches || !downloaded || downloading || anyBusy} onClick={() => void props.loadModel(model.id)}>
                   {busy ? "加载中..." : "加载"}
                 </button>
                 <button disabled={!downloaded || downloading || anyBusy} onClick={() => void props.deleteModel(model.id)}>
@@ -936,6 +992,8 @@ function ServerView(props: {
   mnn: MnnStatus | null;
   onStartMnn: () => Promise<void>;
   onStopMnn: () => Promise<void>;
+  selectedBackend: BackendId;
+  setSelectedBackend: (backend: BackendId) => void;
   serverState: string;
   serverBusy: "start" | "stop" | null;
 }) {
@@ -945,7 +1003,7 @@ function ServerView(props: {
         <div className="panel-title">
           <div>
             <span className="section-kicker">Runtime</span>
-            <h2>MNN 服务</h2>
+            <h2>推理服务</h2>
           </div>
           <span className={`status-pill ${props.serverState}`}>
             <span className="status-dot" />
@@ -953,6 +1011,20 @@ function ServerView(props: {
           </span>
         </div>
         <dl>
+          <dt>后端</dt>
+          <dd>
+            <select
+              disabled={props.serverBusy !== null || props.serverState === "running"}
+              value={props.selectedBackend}
+              onChange={(event) => props.setSelectedBackend(event.target.value as BackendId)}
+            >
+              {BACKEND_OPTIONS.map((backend) => (
+                <option key={backend.id} value={backend.id}>
+                  {backend.label}
+                </option>
+              ))}
+            </select>
+          </dd>
           <dt>端口</dt>
           <dd>{props.mnn?.port ?? "未监听"}</dd>
           <dt>托管方式</dt>
@@ -1135,6 +1207,7 @@ function ChatView(props: {
 
 function LogsView(props: {
   autoScrollLogs: boolean;
+  selectedBackend: BackendId;
   logFilter: string;
   logRef: React.RefObject<HTMLPreElement | null>;
   setAutoScrollLogs: (value: boolean) => void;
@@ -1146,7 +1219,7 @@ function LogsView(props: {
     <section className="panel log-panel">
       <div className="log-toolbar">
         <div>
-          <span className="section-kicker">mnncli.log</span>
+          <span className="section-kicker">{props.selectedBackend === "mnn" ? "mnncli.log" : "llama-server.log"}</span>
           <h2>运行日志</h2>
         </div>
         <div className="log-tools">
@@ -1178,6 +1251,7 @@ function SettingsView(props: {
   hdc: HdcStatus | null;
   hdcLlmPort: string;
   mnn: MnnStatus | null;
+  selectedBackend: BackendId;
   setHdcLlmPort: (value: string) => void;
 }) {
   return (
@@ -1192,9 +1266,11 @@ function SettingsView(props: {
         <dl>
           <dt>前端 API</dt>
           <dd>{props.apiBase || "同源代理"}</dd>
+          <dt>当前后端</dt>
+          <dd>{backendLabel(props.selectedBackend)}</dd>
           <dt>后端端口</dt>
           <dd>{props.mnn?.port ?? "未监听"}</dd>
-          <dt>MNN 来源</dt>
+          <dt>进程来源</dt>
           <dd>{serverOwnerLabel(props.mnn)}</dd>
           <dt>hdc 路径</dt>
           <dd>{props.hdc?.path ?? "未找到"}</dd>

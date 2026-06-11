@@ -9,7 +9,7 @@ PC 侧控制台应用，用于启动和管理本地 MNN server、从 ModelScope 
 - 前端：React + Vite + TypeScript
 - 后端：FastAPI
 - 桌面壳：Electron
-- 原生运行时：`3rdparty/MNN` 下的 MNN
+- 原生运行时：`3rdparty/MNN` 下的 MNN，`3rdparty/llama.cpp` 下的 llama.cpp
 - 模型来源：ModelScope
 - 设备桥接：HarmonyOS `hdc`
 
@@ -23,6 +23,7 @@ configs/         模型目录和静态配置
 models/          下载后的模型文件，不提交到 Git
 logs/            运行日志，不提交到 Git
 3rdparty/MNN     作为 Git submodule 引入的 MNN 上游源码
+3rdparty/llama.cpp 作为 Git submodule 引入的 llama.cpp 上游源码
 docs/            项目文档
 scripts/         开发脚本
 ```
@@ -105,7 +106,7 @@ PC_SERVER_SKIP_FRONTEND=1
 MNN 应添加到：
 
 ```bash
-git submodule add https://github.com/alibaba/MNN.git 3rdparty/MNN
+git submodule add --depth 1 https://github.com/alibaba/MNN.git 3rdparty/MNN
 ```
 
 MNN 的构建步骤和本地二进制配置应记录在 [docs/mnn.md](docs/mnn.md)。
@@ -126,6 +127,27 @@ submodule 准备好后，可以尝试：
 
 ```bash
 MNNCLI_BIN=/absolute/path/to/mnncli
+```
+
+## llama.cpp
+
+llama.cpp 应以浅克隆 submodule 添加到：
+
+```bash
+git submodule add --depth 1 https://github.com/ggml-org/llama.cpp.git 3rdparty/llama.cpp
+```
+
+前端默认选择 MNN，可在推理服务页或页面顶部切换到 llama.cpp。后端默认查找：
+
+```text
+3rdparty/llama.cpp/build/bin/llama-server
+3rdparty/llama.cpp/build/bin/server
+```
+
+如果二进制在其他位置，启动后端前设置：
+
+```bash
+LLAMA_SERVER_BIN=/absolute/path/to/llama-server
 ```
 
 ## 模型

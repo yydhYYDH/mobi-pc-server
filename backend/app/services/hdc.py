@@ -13,7 +13,7 @@ from app.schemas.devices import HdcDevice, HdcStatus
 
 
 DEFAULT_LLM_PORT = 8088
-PHONE_LLM_PORT = 19000
+PHONE_LLM_PORT = 15000
 PHONE_LLM_URL = f"http://127.0.0.1:{PHONE_LLM_PORT}"
 HDC_AUTO_CACHE = Path(os.getenv("HDC_AUTO_CACHE", REPO_ROOT / ".hdc-auto-cache" / "targets.json"))
 HDC_AUTO_CONNECT_TIMEOUT = float(os.getenv("HDC_AUTO_CONNECT_TIMEOUT", "0.25"))
