@@ -25,6 +25,34 @@ The older `/api/mnn/*` API is kept for compatibility. The shared runtime manager
 For the current RTX 4060 Laptop GPU, build with CUDA arch `89`:
 
 ```bash
+./scripts/build-llama-cpp.sh
+```
+
+The script defaults to:
+
+```text
+LLAMA_CPP_BUILD_MODE=cuda
+LLAMA_CPP_CUDA_ARCH=89
+LLAMA_CPP_BUILD_DIR=3rdparty/llama.cpp/build-cuda-native
+LLAMA_CPP_BUILD_JOBS=8
+LLAMA_CPP_TARGET=llama-server
+```
+
+To override the CUDA architecture or job count:
+
+```bash
+LLAMA_CPP_CUDA_ARCH=86 LLAMA_CPP_BUILD_JOBS=16 ./scripts/build-llama-cpp.sh
+```
+
+For a CPU-only build:
+
+```bash
+LLAMA_CPP_BUILD_MODE=cpu ./scripts/build-llama-cpp.sh
+```
+
+Equivalent manual CUDA commands:
+
+```bash
 cmake -S 3rdparty/llama.cpp \
   -B 3rdparty/llama.cpp/build-cuda-native \
   -DGGML_CUDA=ON \

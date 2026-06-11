@@ -152,6 +152,18 @@ LLAMA_SERVER_BIN=/absolute/path/to/llama-server
 
 CUDA 构建、模型下载和测试步骤见 [docs/llama-cpp.md](docs/llama-cpp.md)。
 
+默认 CUDA 构建可直接执行：
+
+```bash
+./scripts/build-llama-cpp.sh
+```
+
+默认产物路径是：
+
+```text
+3rdparty/llama.cpp/build-cuda-native/bin/llama-server
+```
+
 ## 模型
 
 模型选项定义在 `configs/models.json`。下载后的模型文件放在 `models/<model-id>/`，不提交到 Git。
