@@ -12,6 +12,8 @@ declare global {
 }
 
 const API_BASE = window.pcServerDesktop?.backendBaseUrl ?? "";
+const LOG_LINES = 500;
+
 const STATUS_LABELS: Record<string, string> = {
   stopped: "已停止",
   starting: "启动中",
@@ -27,11 +29,14 @@ const STATUS_LABELS: Record<string, string> = {
   unknown: "未知"
 };
 
+type ViewId = "overview" | "models" | "server" | "devices" | "chat" | "logs" | "settings";
+
 type MnnStatus = {
   state: string;
   active_model_id: string | null;
   port: number | null;
   message: string | null;
+  managed_by_backend?: boolean;
 };
 
 type CatalogModel = {
@@ -39,6 +44,10 @@ type CatalogModel = {
   name: string;
   description: string;
   modelscope_id: string;
+  size: string;
+  runtime: string;
+  local_dir: string;
+  entry_file: string;
 };
 
 type LocalModel = {
@@ -58,8 +67,17 @@ type DownloadStatus = {
 type HdcStatus = {
   available: boolean;
   path: string | null;
-  devices: Array<{ serial: string; state: string }>;
+  devices: Array<{
+    serial: string;
+    state: string;
+    host: string | null;
+    port: number | null;
+    connection_type: string;
+  }>;
   message: string | null;
+  llm_port: number;
+  phone_llm_url: string;
+  llm_rport_ready: boolean;
 };
 
 type ChatMessage = {
@@ -69,6 +87,13 @@ type ChatMessage = {
 
 function statusLabel(status: string | undefined) {
   return STATUS_LABELS[status ?? "unknown"] ?? status ?? "未知";
+}
+
+function serverOwnerLabel(mnn: MnnStatus | null) {
+  if (mnn?.state !== "running") {
+    return "未运行";
+  }
+  return mnn.managed_by_backend ? "后端托管" : "外部进程";
 }
 
 function formatBytes(bytes: number | null | undefined) {
@@ -99,13 +124,22 @@ function formatDownloadSize(status: DownloadStatus | undefined, downloaded: bool
 }
 
 function App() {
+  const [activeView, setActiveView] = React.useState<ViewId>("overview");
   const [mnn, setMnn] = React.useState<MnnStatus | null>(null);
   const [models, setModels] = React.useState<CatalogModel[]>([]);
   const [localModels, setLocalModels] = React.useState<LocalModel[]>([]);
   const [downloads, setDownloads] = React.useState<DownloadStatus[]>([]);
   const [hdc, setHdc] = React.useState<HdcStatus | null>(null);
   const [logs, setLogs] = React.useState("");
+  const [logFilter, setLogFilter] = React.useState("");
+  const [autoScrollLogs, setAutoScrollLogs] = React.useState(true);
   const [hdcTarget, setHdcTarget] = React.useState("");
+  const [hdcLlmPort, setHdcLlmPort] = React.useState(
+    () => window.localStorage.getItem("pc-server-hdc-llm-port") ?? "8088"
+  );
+  const [serverBusy, setServerBusy] = React.useState<"start" | "stop" | null>(null);
+  const [modelBusy, setModelBusy] = React.useState<string | null>(null);
+  const [selectedLaunchModelId, setSelectedLaunchModelId] = React.useState("");
   const [deviceBusy, setDeviceBusy] = React.useState<"auto" | "connect" | "disconnect" | null>(null);
   const [deviceNotice, setDeviceNotice] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -113,6 +147,8 @@ function App() {
   const [chatMessages, setChatMessages] = React.useState<ChatMessage[]>([]);
   const [chatBusy, setChatBusy] = React.useState(false);
   const [chatError, setChatError] = React.useState<string | null>(null);
+  const logRef = React.useRef<HTMLPreElement | null>(null);
+  const autoHdcStartedRef = React.useRef(false);
 
   const load = React.useCallback(async () => {
     setError(null);
@@ -125,12 +161,12 @@ function App() {
         hdcResponse,
         logsResponse
       ] = await Promise.all([
-          fetch(`${API_BASE}/api/mnn/status`),
-          fetch(`${API_BASE}/api/models/catalog`),
-          fetch(`${API_BASE}/api/models/local`),
-          fetch(`${API_BASE}/api/models/downloads`),
-          fetch(`${API_BASE}/api/devices/hdc`),
-          fetch(`${API_BASE}/api/logs/mnncli`)
+        fetch(`${API_BASE}/api/mnn/status`),
+        fetch(`${API_BASE}/api/models/catalog`),
+        fetch(`${API_BASE}/api/models/local`),
+        fetch(`${API_BASE}/api/models/downloads`),
+        fetch(`${API_BASE}/api/devices/hdc`),
+        fetch(`${API_BASE}/api/logs/mnncli?lines=${LOG_LINES}`)
       ]);
 
       if (
@@ -164,23 +200,81 @@ function App() {
   );
 
   React.useEffect(() => {
-    if (!hasActiveDownload) {
+    if (!hasActiveDownload && activeView !== "logs") {
       return;
     }
     const intervalId = window.setInterval(() => {
       void load();
-    }, 1500);
+    }, hasActiveDownload ? 1500 : 3000);
     return () => window.clearInterval(intervalId);
-  }, [hasActiveDownload, load]);
+  }, [activeView, hasActiveDownload, load]);
+
+  React.useEffect(() => {
+    if (!autoScrollLogs || !logRef.current) {
+      return;
+    }
+    logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [autoScrollLogs, logs, logFilter]);
+
+  React.useEffect(() => {
+    window.localStorage.setItem("pc-server-hdc-llm-port", hdcLlmPort);
+  }, [hdcLlmPort]);
+
+  React.useEffect(() => {
+    if (autoHdcStartedRef.current || hdc === null || deviceBusy !== null) {
+      return;
+    }
+    autoHdcStartedRef.current = true;
+    void autoConnectHdc();
+  }, [deviceBusy, hdc]);
+
+  React.useEffect(() => {
+    const launchableModels = models.filter((model) => model.runtime === "mnn" && isDownloaded(model.id));
+    if (launchableModels.length === 0) {
+      setSelectedLaunchModelId("");
+      return;
+    }
+    if (selectedLaunchModelId && launchableModels.some((model) => model.id === selectedLaunchModelId)) {
+      return;
+    }
+    const activeModel = launchableModels.find((model) => model.id === mnn?.active_model_id);
+    setSelectedLaunchModelId(activeModel?.id ?? launchableModels[0].id);
+  }, [localModels, mnn?.active_model_id, models, selectedLaunchModelId]);
 
   async function startMnn() {
-    await fetch(`${API_BASE}/api/mnn/start`, { method: "POST" });
-    await load();
+    if (serverBusy !== null || mnn?.state === "running" || mnn?.state === "starting") {
+      return;
+    }
+    setServerBusy("start");
+    try {
+      const response = await fetch(`${API_BASE}/api/mnn/start`, { method: "POST" });
+      if (!response.ok) {
+        throw new Error(`启动失败：HTTP ${response.status}`);
+      }
+      await load();
+    } catch (startError) {
+      setError(startError instanceof Error ? startError.message : "启动失败。");
+    } finally {
+      setServerBusy(null);
+    }
   }
 
   async function stopMnn() {
-    await fetch(`${API_BASE}/api/mnn/stop`, { method: "POST" });
-    await load();
+    if (serverBusy !== null || mnn?.state === "stopped" || mnn?.state === "stopping") {
+      return;
+    }
+    setServerBusy("stop");
+    try {
+      const response = await fetch(`${API_BASE}/api/mnn/stop`, { method: "POST" });
+      if (!response.ok) {
+        throw new Error(`停止失败：HTTP ${response.status}`);
+      }
+      await load();
+    } catch (stopError) {
+      setError(stopError instanceof Error ? stopError.message : "停止失败。");
+    } finally {
+      setServerBusy(null);
+    }
   }
 
   async function connectHdc() {
@@ -194,7 +288,7 @@ function App() {
       const response = await fetch(`${API_BASE}/api/devices/hdc/connect`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target: hdcTarget.trim() })
+        body: JSON.stringify({ target: hdcTarget.trim(), llm_port: Number(hdcLlmPort) || 8088 })
       });
       if (!response.ok) {
         throw new Error(`连接失败：HTTP ${response.status}`);
@@ -214,7 +308,11 @@ function App() {
     setDeviceBusy("auto");
     setDeviceNotice("正在自动搜索 HarmonyOS 设备，可能需要十几秒...");
     try {
-      const response = await fetch(`${API_BASE}/api/devices/hdc/auto-connect`, { method: "POST" });
+      const response = await fetch(`${API_BASE}/api/devices/hdc/auto-connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ llm_port: Number(hdcLlmPort) || 8088 })
+      });
       if (!response.ok) {
         throw new Error(`自动搜索失败：HTTP ${response.status}`);
       }
@@ -261,30 +359,65 @@ function App() {
   }
 
   async function downloadModel(modelId: string) {
-    await fetch(`${API_BASE}/api/models/download`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model_id: modelId })
-    });
-    await load();
+    setModelBusy(modelId);
+    try {
+      const response = await fetch(`${API_BASE}/api/models/download`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model_id: modelId })
+      });
+      if (!response.ok) {
+        throw new Error(`下载失败：HTTP ${response.status}`);
+      }
+      await load();
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "下载失败。");
+    } finally {
+      setModelBusy(null);
+    }
   }
 
   async function deleteModel(modelId: string) {
-    await fetch(`${API_BASE}/api/models/delete`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model_id: modelId })
-    });
-    await load();
+    setModelBusy(modelId);
+    try {
+      const response = await fetch(`${API_BASE}/api/models/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model_id: modelId })
+      });
+      if (!response.ok) {
+        throw new Error(`删除失败：HTTP ${response.status}`);
+      }
+      await load();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "删除失败。");
+    } finally {
+      setModelBusy(null);
+    }
   }
 
   async function loadModel(modelId: string) {
-    await fetch(`${API_BASE}/api/mnn/load-model`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model_id: modelId })
-    });
-    await load();
+    if (modelBusy || serverBusy || !isDownloaded(modelId)) {
+      return;
+    }
+    setModelBusy(modelId);
+    setServerBusy("start");
+    try {
+      const response = await fetch(`${API_BASE}/api/mnn/load-model`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model_id: modelId })
+      });
+      if (!response.ok) {
+        throw new Error(`加载失败：HTTP ${response.status}`);
+      }
+      await load();
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "加载失败。");
+    } finally {
+      setModelBusy(null);
+      setServerBusy(null);
+    }
   }
 
   async function sendChat() {
@@ -292,8 +425,8 @@ function App() {
     if (!prompt || chatBusy) {
       return;
     }
-    if (!mnn?.port || !mnn.active_model_id) {
-      setChatError("请先加载模型并确认 MNN 服务正在运行。");
+    if (mnn?.state !== "running" || !mnn.port) {
+      setChatError("请确认 MNN 服务正在运行。");
       return;
     }
 
@@ -309,7 +442,7 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: mnn.active_model_id,
+          model: mnn.active_model_id ?? "default",
           messages: [{ role: "user", content: prompt }],
           stream: true
         })
@@ -383,238 +516,705 @@ function App() {
   }
 
   const downloadedCount = localModels.filter((model) => model.downloaded).length;
+  const launchableModels = models.filter((model) => model.runtime === "mnn" && isDownloaded(model.id));
   const activeModelName = models.find((model) => model.id === mnn?.active_model_id)?.name;
   const serverState = mnn?.state ?? "unknown";
+  const hdcAvailable = hdc?.available ?? false;
+  const connectedDevices = hdc?.devices.length ?? 0;
+  const visibleLogLines = React.useMemo(() => {
+    const lines = logs.split(/\r?\n/).filter((line) => line.length > 0);
+    const query = logFilter.trim().toLowerCase();
+    if (!query) {
+      return lines;
+    }
+    return lines.filter((line) => line.toLowerCase().includes(query));
+  }, [logFilter, logs]);
+  const recentLogLines = visibleLogLines.slice(-80);
+  const criticalLog = [...visibleLogLines].reverse().find((line) => /error|failed|exception|timeout/i.test(line));
+  const systemReady = serverState === "running" && Boolean(mnn?.active_model_id);
+
+  const navItems: Array<{ id: ViewId; label: string; hint: string }> = [
+    { id: "overview", label: "总览", hint: "状态与快捷操作" },
+    { id: "models", label: "模型", hint: `${downloadedCount}/${models.length} 已就绪` },
+    { id: "server", label: "MNN 服务", hint: statusLabel(serverState) },
+    { id: "devices", label: "设备", hint: connectedDevices ? `${connectedDevices} 台在线` : "未连接" },
+    { id: "chat", label: "对话测试", hint: systemReady ? "可用" : "待加载模型" },
+    { id: "logs", label: "日志", hint: `${visibleLogLines.length} 行` },
+    { id: "settings", label: "设置", hint: "路径与运行时" }
+  ];
 
   return (
-    <main className="shell">
-      <header className="topbar">
-        <div className="brand-block">
-          <span className="eyebrow">Local Console</span>
-          <h1>PC MNN Server</h1>
-          <p>127.0.0.1:{mnn?.port ?? 8000}</p>
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">M</div>
+          <div>
+            <strong>PC MNN Server</strong>
+            <span>Local Developer Console</span>
+          </div>
         </div>
-        <div className="topbar-actions">
+        <nav className="nav-list" aria-label="主导航">
+          {navItems.map((item) => (
+            <button
+              className={`nav-item ${activeView === item.id ? "active" : ""}`}
+              key={item.id}
+              onClick={() => setActiveView(item.id)}
+            >
+              <span>{item.label}</span>
+              <small>{item.hint}</small>
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
           <span className={`status-pill ${serverState}`}>
             <span className="status-dot" />
             {statusLabel(serverState)}
           </span>
-          <button className="secondary-button" onClick={() => void load()}>
-            刷新
+          <span>{API_BASE || "Web mode"}</span>
+        </div>
+      </aside>
+
+      <main className="workspace">
+        <header className="workspace-header">
+          <div>
+            <span className="section-kicker">Control Center</span>
+            <h1>{navItems.find((item) => item.id === activeView)?.label}</h1>
+          </div>
+          <div className="header-actions">
+            <span className={`status-pill ${hdcAvailable ? "running" : "error"}`}>
+              <span className="status-dot" />
+              HDC {hdcAvailable ? "可用" : "未找到"}
+            </span>
+            <button className="secondary-button" onClick={() => void load()}>
+              刷新
+            </button>
+          </div>
+        </header>
+
+        {error ? <div className="alert">{error}</div> : null}
+
+        {activeView === "overview" ? (
+          <OverviewView
+            activeModelName={activeModelName}
+            connectedDevices={connectedDevices}
+            criticalLog={criticalLog}
+            downloadedCount={downloadedCount}
+            hdc={hdc}
+            launchableModels={launchableModels}
+            modelBusy={modelBusy}
+            modelsCount={models.length}
+            mnn={mnn}
+            onAutoConnect={autoConnectHdc}
+            onLoadModel={loadModel}
+            onOpenDevices={() => setActiveView("devices")}
+            onOpenLogs={() => setActiveView("logs")}
+            onOpenModels={() => setActiveView("models")}
+            onStartMnn={startMnn}
+            onStopMnn={stopMnn}
+            selectedLaunchModelId={selectedLaunchModelId}
+            serverState={serverState}
+            serverBusy={serverBusy}
+            setSelectedLaunchModelId={setSelectedLaunchModelId}
+          />
+        ) : null}
+
+        {activeView === "models" ? (
+          <ModelsView
+            downloadModel={downloadModel}
+            downloadStatus={downloadStatus}
+            formatDownloadSize={formatDownloadSize}
+            isDownloaded={isDownloaded}
+            isDownloading={isDownloading}
+            loadModel={loadModel}
+            modelBusy={modelBusy}
+            deleteModel={deleteModel}
+            models={models}
+            serverBusy={serverBusy}
+          />
+        ) : null}
+
+        {activeView === "server" ? (
+          <ServerView
+            activeModelName={activeModelName}
+            mnn={mnn}
+            onStartMnn={startMnn}
+            onStopMnn={stopMnn}
+            serverState={serverState}
+            serverBusy={serverBusy}
+          />
+        ) : null}
+
+        {activeView === "devices" ? (
+          <DevicesView
+            autoConnectHdc={autoConnectHdc}
+            connectHdc={connectHdc}
+            deviceBusy={deviceBusy}
+            deviceNotice={deviceNotice}
+            disconnectHdc={disconnectHdc}
+            hdc={hdc}
+            hdcLlmPort={hdcLlmPort}
+            hdcTarget={hdcTarget}
+            setHdcLlmPort={setHdcLlmPort}
+            setHdcTarget={setHdcTarget}
+          />
+        ) : null}
+
+        {activeView === "chat" ? (
+          <ChatView
+            chatBusy={chatBusy}
+            chatError={chatError}
+            chatInput={chatInput}
+            chatMessages={chatMessages}
+            mnn={mnn}
+            sendChat={sendChat}
+            setChatInput={setChatInput}
+          />
+        ) : null}
+
+        {activeView === "logs" ? (
+          <LogsView
+            autoScrollLogs={autoScrollLogs}
+            logFilter={logFilter}
+            logRef={logRef}
+            setAutoScrollLogs={setAutoScrollLogs}
+            setLogFilter={setLogFilter}
+            visibleLogLines={visibleLogLines}
+          />
+        ) : null}
+
+        {activeView === "settings" ? (
+          <SettingsView
+            apiBase={API_BASE}
+            hdc={hdc}
+            hdcLlmPort={hdcLlmPort}
+            mnn={mnn}
+            setHdcLlmPort={setHdcLlmPort}
+          />
+        ) : null}
+      </main>
+    </div>
+  );
+}
+
+function OverviewView(props: {
+  activeModelName: string | undefined;
+  connectedDevices: number;
+  criticalLog: string | undefined;
+  downloadedCount: number;
+  hdc: HdcStatus | null;
+  launchableModels: CatalogModel[];
+  modelBusy: string | null;
+  modelsCount: number;
+  mnn: MnnStatus | null;
+  onAutoConnect: () => Promise<void>;
+  onLoadModel: (modelId: string) => Promise<void>;
+  onOpenDevices: () => void;
+  onOpenLogs: () => void;
+  onOpenModels: () => void;
+  onStartMnn: () => Promise<void>;
+  onStopMnn: () => Promise<void>;
+  selectedLaunchModelId: string;
+  serverState: string;
+  serverBusy: "start" | "stop" | null;
+  setSelectedLaunchModelId: (modelId: string) => void;
+}) {
+  const selectedModel = props.launchableModels.find((model) => model.id === props.selectedLaunchModelId);
+  const selectedModelRunning = props.serverState === "running" && props.mnn?.active_model_id === selectedModel?.id;
+  const canLaunchSelected =
+    Boolean(selectedModel) &&
+    !selectedModelRunning &&
+    props.serverBusy === null &&
+    props.modelBusy === null &&
+    !["starting", "stopping"].includes(props.serverState);
+  const serviceRunning = props.serverState === "running";
+
+  return (
+    <div className="view-stack">
+      <section className="hero-band">
+        <div>
+          <span className="section-kicker">当前工作区</span>
+          <h2>{props.activeModelName ?? props.mnn?.active_model_id ?? "尚未加载模型"}</h2>
+          <p>
+            MNN 服务{statusLabel(props.serverState)}，HDC
+            {props.hdc?.available ? " 已就绪" : " 未找到"}，{props.connectedDevices} 台设备在线。
+          </p>
+        </div>
+        <div className="hero-actions">
+          <button disabled={serviceRunning || props.serverBusy !== null} onClick={() => void props.onStartMnn()}>
+            {props.serverBusy === "start" ? "启动中..." : serviceRunning ? "服务运行中" : "启动服务"}
+          </button>
+          <button
+            className="secondary-button"
+            disabled={props.serverBusy !== null || props.serverState === "stopped"}
+            onClick={() => void props.onStopMnn()}
+          >
+            {props.serverBusy === "stop" ? "停止中..." : "停止服务"}
+          </button>
+          <button className="secondary-button" onClick={props.onOpenModels}>
+            管理模型
           </button>
         </div>
-      </header>
-
-      {error ? <div className="alert">{error}</div> : null}
-
-      <section className="summary-strip">
-        <div>
-          <span>MNN</span>
-          <strong>{statusLabel(serverState)}</strong>
-        </div>
-        <div>
-          <span>当前模型</span>
-          <strong>{activeModelName ?? mnn?.active_model_id ?? "无"}</strong>
-        </div>
-        <div>
-          <span>模型就绪</span>
-          <strong>
-            {downloadedCount}/{models.length}
-          </strong>
-        </div>
-        <div>
-          <span>HarmonyOS 设备</span>
-          <strong>{hdc?.devices.length ?? 0}</strong>
-        </div>
       </section>
 
-      <section className="grid">
-        <article className="panel server-panel">
-          <div className="panel-title">
-            <div>
-              <span className="section-kicker">运行时</span>
-              <h2>MNN 服务</h2>
-            </div>
-            <span className={`status-pill ${serverState}`}>
-              <span className="status-dot" />
-              {statusLabel(serverState)}
-            </span>
-          </div>
-          <dl>
-            <dt>端口</dt>
-            <dd>{mnn?.port ?? "未监听"}</dd>
-            <dt>当前模型</dt>
-            <dd>{activeModelName ?? mnn?.active_model_id ?? "无"}</dd>
-            <dt>消息</dt>
-            <dd>{mnn?.message ?? "无"}</dd>
-          </dl>
-          <div className="actions">
-            <button onClick={() => void startMnn()}>启动</button>
-            <button onClick={() => void stopMnn()}>停止</button>
-          </div>
-        </article>
-
-        <article className="panel">
-          <div className="panel-title">
-            <div>
-              <span className="section-kicker">ModelScope</span>
-              <h2>模型</h2>
-            </div>
-            <span className="count-pill">{models.length}</span>
-          </div>
-          <div className="list">
-            {models.map((model) => {
-              const status = downloadStatus(model.id);
-              const downloaded = isDownloaded(model.id);
-              const downloading = isDownloading(model.id);
-              const progress = status?.progress ?? (downloaded ? 100 : 0);
-              const state = status?.state ?? (downloaded ? "downloaded" : "idle");
-              const sizeText = formatDownloadSize(status, downloaded);
-
-              return (
-                <div className="model-card" key={model.id}>
-                  <div className="model-card-main">
-                    <div>
-                      <div className="model-card-heading">
-                        <strong>{model.name}</strong>
-                        <span className={`status-pill ${state}`}>{statusLabel(state)}</span>
-                      </div>
-                      <span className="model-id">{model.modelscope_id}</span>
-                      <p>{status?.message || model.description}</p>
-                      <div className="download-meter">
-                        <span>{sizeText}</span>
-                        <strong>{progress}%</strong>
-                      </div>
-                    </div>
-                    <div className="row-actions">
-                      <button disabled={downloading} onClick={() => void downloadModel(model.id)}>
-                        下载
-                      </button>
-                      <button disabled={!downloaded || downloading} onClick={() => void loadModel(model.id)}>
-                        加载
-                      </button>
-                      <button disabled={!downloaded || downloading} onClick={() => void deleteModel(model.id)}>
-                        删除
-                      </button>
-                    </div>
-                  </div>
-                  <div className={`progress-track ${downloading ? "active" : ""}`}>
-                    <div className="progress-value" style={{ width: `${progress}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </article>
-
-        <article className="panel">
-          <div className="panel-title">
-            <div>
-              <span className="section-kicker">设备桥接</span>
-              <h2>HarmonyOS 设备</h2>
-            </div>
-            <span className={`status-pill ${hdc?.available ? "running" : "error"}`}>
-              <span className="status-dot" />
-              {hdc?.available ? "可用" : "未找到"}
-            </span>
-          </div>
-          <dl>
-            <dt>hdc</dt>
-            <dd>{hdc?.available ? hdc.path : "未找到"}</dd>
-            <dt>设备数</dt>
-            <dd>{hdc?.devices.length ?? 0}</dd>
-            <dt>消息</dt>
-            <dd>{deviceNotice ?? hdc?.message ?? "无"}</dd>
-          </dl>
-          {deviceNotice ? (
-            <div className={`device-notice ${deviceBusy ? "active" : ""}`}>
-              {deviceBusy ? <span className="inline-spinner" /> : null}
-              <span>{deviceNotice}</span>
-            </div>
-          ) : null}
-          <div className="device-list">
-            {(hdc?.devices ?? []).map((device) => (
-              <div className="device-item" key={device.serial}>
-                <span>{device.serial}</span>
-                <strong>{device.state}</strong>
-              </div>
-            ))}
-            {hdc && hdc.devices.length === 0 ? <div className="empty-state">暂无已连接设备</div> : null}
-          </div>
-          <div className="device-form">
-            <input
-              value={hdcTarget}
-              onChange={(event) => setHdcTarget(event.target.value)}
-              placeholder="设备序列号或 host:port"
-            />
-            <div className="actions">
-              <button disabled={deviceBusy !== null} onClick={() => void autoConnectHdc()}>
-                {deviceBusy === "auto" ? "搜索中..." : "自动搜索"}
-              </button>
-              <button disabled={deviceBusy !== null} onClick={() => void connectHdc()}>
-                {deviceBusy === "connect" ? "连接中..." : "连接"}
-              </button>
-              <button disabled={deviceBusy !== null} onClick={() => void disconnectHdc()}>
-                {deviceBusy === "disconnect" ? "断开中..." : "断开"}
-              </button>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section className="chat-panel">
+      <section className="panel launch-panel">
         <div className="panel-title">
           <div>
-            <span className="section-kicker">对话测试</span>
-            <h2>聊天</h2>
+            <span className="section-kicker">Launch</span>
+            <h2>选择可启动模型</h2>
           </div>
-          <span className={`status-pill ${mnn?.state === "running" ? "running" : "stopped"}`}>
-            <span className="status-dot" />
-            {mnn?.port ? `:${mnn.port}` : "未连接"}
-          </span>
+          <span className="count-pill">{props.launchableModels.length} 个可用</span>
         </div>
-        <div className="chat-window">
-          {chatMessages.length === 0 ? (
-            <div className="empty-state">暂无对话</div>
-          ) : (
-            chatMessages.map((message, index) => (
-              <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
-                <span>{message.role === "user" ? "用户" : "模型"}</span>
-                <p>{message.content || (chatBusy && index === chatMessages.length - 1 ? "生成中..." : "")}</p>
-              </div>
-            ))
-          )}
-        </div>
-        {chatError ? <div className="chat-error">{chatError}</div> : null}
-        <div className="chat-form">
-          <textarea
-            value={chatInput}
-            onChange={(event) => setChatInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                void sendChat();
+        <div className="launch-row">
+          <label>
+            <span>本地 MNN 模型</span>
+            <select
+              disabled={props.launchableModels.length === 0 || props.serverBusy !== null || props.modelBusy !== null}
+              value={props.selectedLaunchModelId}
+              onChange={(event) => props.setSelectedLaunchModelId(event.target.value)}
+            >
+              {props.launchableModels.length === 0 ? <option value="">没有已下载模型</option> : null}
+              {props.launchableModels.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name} · {model.entry_file}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            disabled={!canLaunchSelected}
+            onClick={() => {
+              if (selectedModel) {
+                void props.onLoadModel(selectedModel.id);
               }
             }}
-            placeholder="输入消息，Ctrl/⌘ + Enter 发送"
-            rows={3}
-          />
-          <button disabled={chatBusy || !chatInput.trim()} onClick={() => void sendChat()}>
-            {chatBusy ? "生成中" : "发送"}
+          >
+            {props.serverBusy === "start"
+              ? "加载中..."
+              : selectedModelRunning
+                ? "当前模型运行中"
+                : serviceRunning
+                  ? "切换并重启"
+                  : "加载并启动"}
           </button>
         </div>
+        <p className="launch-hint">
+          {selectedModel
+            ? `${selectedModel.modelscope_id} · ${selectedModel.size || "unknown"}`
+            : "请先在模型页下载模型，下载完成后会出现在这里。"}
+        </p>
       </section>
 
-      <section className="log-panel">
-        <div className="log-header">
-          <div>
-            <span className="section-kicker">输出</span>
-            <h2>日志</h2>
-          </div>
-          <span>mnncli.log</span>
-        </div>
-        <pre>{logs || "暂无日志"}</pre>
+      <section className="metric-grid">
+        <Metric
+          title="MNN 服务"
+          value={statusLabel(props.serverState)}
+          detail={`端口 ${props.mnn?.port ?? "未监听"} · ${serverOwnerLabel(props.mnn)}`}
+          tone={props.serverState}
+        />
+        <Metric title="当前模型" value={props.activeModelName ?? props.mnn?.active_model_id ?? "无"} detail={props.mnn?.message ?? "无运行消息"} />
+        <Metric title="本地模型" value={`${props.downloadedCount}/${props.modelsCount}`} detail="已下载 / 模型目录" />
+        <Metric title="HarmonyOS 设备" value={`${props.connectedDevices}`} detail={props.hdc?.path ?? "hdc 未找到"} tone={props.connectedDevices > 0 ? "running" : "stopped"} />
       </section>
-    </main>
+
+      <section className="overview-layout">
+        <article className="panel command-panel">
+          <div className="panel-title">
+            <div>
+              <span className="section-kicker">快捷操作</span>
+              <h2>常用任务</h2>
+            </div>
+          </div>
+          <div className="command-list">
+            <button onClick={props.onOpenModels}>选择或下载模型</button>
+            <button onClick={() => void props.onAutoConnect()}>自动搜索设备</button>
+            <button onClick={props.onOpenDevices}>查看 HDC 状态</button>
+            <button onClick={props.onOpenLogs}>打开完整日志</button>
+          </div>
+        </article>
+
+        <article className="panel issue-panel">
+          <div className="panel-title">
+            <div>
+              <span className="section-kicker">最近风险</span>
+              <h2>需要关注</h2>
+            </div>
+          </div>
+          <p className={props.criticalLog ? "issue-text" : "muted-text"}>
+            {props.criticalLog ?? "暂无错误日志。"}
+          </p>
+        </article>
+      </section>
+    </div>
+  );
+}
+
+function Metric(props: { title: string; value: string; detail: string; tone?: string }) {
+  return (
+    <div className="metric-card">
+      <span>{props.title}</span>
+      <strong>{props.value}</strong>
+      <small className={props.tone ? `metric-tone ${props.tone}` : ""}>{props.detail}</small>
+    </div>
+  );
+}
+
+function ModelsView(props: {
+  deleteModel: (modelId: string) => Promise<void>;
+  downloadModel: (modelId: string) => Promise<void>;
+  downloadStatus: (modelId: string) => DownloadStatus | undefined;
+  formatDownloadSize: (status: DownloadStatus | undefined, downloaded: boolean) => string;
+  isDownloaded: (modelId: string) => boolean;
+  isDownloading: (modelId: string) => boolean;
+  loadModel: (modelId: string) => Promise<void>;
+  modelBusy: string | null;
+  models: CatalogModel[];
+  serverBusy: "start" | "stop" | null;
+}) {
+  return (
+    <section className="panel table-panel">
+      <div className="panel-title">
+        <div>
+          <span className="section-kicker">ModelScope</span>
+          <h2>模型资产</h2>
+        </div>
+        <span className="count-pill">{props.models.length}</span>
+      </div>
+      <div className="model-table">
+        <div className="table-row table-head">
+          <span>模型</span>
+          <span>状态</span>
+          <span>进度</span>
+          <span>操作</span>
+        </div>
+        {props.models.map((model) => {
+          const status = props.downloadStatus(model.id);
+          const downloaded = props.isDownloaded(model.id);
+          const downloading = props.isDownloading(model.id);
+          const busy = props.modelBusy === model.id;
+          const anyBusy = props.modelBusy !== null || props.serverBusy !== null;
+          const progress = status?.progress ?? (downloaded ? 100 : 0);
+          const state = status?.state ?? (downloaded ? "downloaded" : "idle");
+
+          return (
+            <div className="table-row" key={model.id}>
+              <div className="model-cell">
+                <strong>{model.name}</strong>
+                <small>{model.modelscope_id}</small>
+                <p>{status?.message || model.description}</p>
+              </div>
+              <span className={`status-pill ${state}`}>{statusLabel(state)}</span>
+              <div>
+                <div className="download-meter">
+                  <span>{props.formatDownloadSize(status, downloaded)}</span>
+                  <strong>{progress}%</strong>
+                </div>
+                <div className={`progress-track ${downloading ? "active" : ""}`}>
+                  <div className="progress-value" style={{ width: `${progress}%` }} />
+                </div>
+              </div>
+              <div className="row-actions">
+                <button disabled={downloading || anyBusy} onClick={() => void props.downloadModel(model.id)}>
+                  {busy && !downloaded ? "处理中..." : "下载"}
+                </button>
+                <button disabled={!downloaded || downloading || anyBusy} onClick={() => void props.loadModel(model.id)}>
+                  {busy ? "加载中..." : "加载"}
+                </button>
+                <button disabled={!downloaded || downloading || anyBusy} onClick={() => void props.deleteModel(model.id)}>
+                  {busy ? "处理中..." : "删除"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ServerView(props: {
+  activeModelName: string | undefined;
+  mnn: MnnStatus | null;
+  onStartMnn: () => Promise<void>;
+  onStopMnn: () => Promise<void>;
+  serverState: string;
+  serverBusy: "start" | "stop" | null;
+}) {
+  return (
+    <section className="detail-grid">
+      <article className="panel">
+        <div className="panel-title">
+          <div>
+            <span className="section-kicker">Runtime</span>
+            <h2>MNN 服务</h2>
+          </div>
+          <span className={`status-pill ${props.serverState}`}>
+            <span className="status-dot" />
+            {statusLabel(props.serverState)}
+          </span>
+        </div>
+        <dl>
+          <dt>端口</dt>
+          <dd>{props.mnn?.port ?? "未监听"}</dd>
+          <dt>托管方式</dt>
+          <dd>{serverOwnerLabel(props.mnn)}</dd>
+          <dt>当前模型</dt>
+          <dd>{props.activeModelName ?? props.mnn?.active_model_id ?? "无"}</dd>
+          <dt>消息</dt>
+          <dd>{props.mnn?.message ?? "无"}</dd>
+        </dl>
+        <div className="actions">
+          <button
+            disabled={props.serverBusy !== null || props.serverState === "running"}
+            onClick={() => void props.onStartMnn()}
+          >
+            {props.serverBusy === "start" ? "启动中..." : "启动"}
+          </button>
+          <button
+            disabled={props.serverBusy !== null || props.serverState === "stopped"}
+            onClick={() => void props.onStopMnn()}
+          >
+            {props.serverBusy === "stop" ? "停止中..." : "停止"}
+          </button>
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function DevicesView(props: {
+  autoConnectHdc: () => Promise<void>;
+  connectHdc: () => Promise<void>;
+  deviceBusy: "auto" | "connect" | "disconnect" | null;
+  deviceNotice: string | null;
+  disconnectHdc: () => Promise<void>;
+  hdc: HdcStatus | null;
+  hdcLlmPort: string;
+  hdcTarget: string;
+  setHdcLlmPort: (value: string) => void;
+  setHdcTarget: (value: string) => void;
+}) {
+  return (
+    <section className="detail-grid">
+      <article className="panel">
+        <div className="panel-title">
+          <div>
+            <span className="section-kicker">Device Bridge</span>
+            <h2>HarmonyOS 设备</h2>
+          </div>
+          <span className={`status-pill ${props.hdc?.available ? "running" : "error"}`}>
+            <span className="status-dot" />
+            {props.hdc?.available ? "可用" : "未找到"}
+          </span>
+        </div>
+        <dl>
+          <dt>hdc</dt>
+          <dd>{props.hdc?.available ? props.hdc.path : "未找到"}</dd>
+          <dt>设备数</dt>
+          <dd>{props.hdc?.devices.length ?? 0}</dd>
+          <dt>消息</dt>
+          <dd>{props.deviceNotice ?? props.hdc?.message ?? "无"}</dd>
+          <dt>手机 LLM URL</dt>
+          <dd>{props.hdc?.phone_llm_url ?? "http://127.0.0.1:19000"}</dd>
+          <dt>LLM 转发</dt>
+          <dd>{props.hdc?.llm_rport_ready ? `已映射到本机 :${props.hdc.llm_port}` : "未建立"}</dd>
+        </dl>
+        {props.deviceNotice ? (
+          <div className={`device-notice ${props.deviceBusy ? "active" : ""}`}>
+            {props.deviceBusy ? <span className="inline-spinner" /> : null}
+            <span>{props.deviceNotice}</span>
+          </div>
+        ) : null}
+        <div className="device-list">
+          {(props.hdc?.devices ?? []).map((device) => (
+            <div className="device-item" key={device.serial}>
+              <div>
+                <span>{device.connection_type === "network" ? "网络设备" : "USB/本地设备"}</span>
+                <strong>{device.host ? `${device.host}:${device.port ?? ""}` : device.serial}</strong>
+                <small>Serial: {device.serial}</small>
+              </div>
+              <strong>{device.state}</strong>
+            </div>
+          ))}
+          {props.hdc && props.hdc.devices.length === 0 ? <div className="empty-state">暂无已连接设备</div> : null}
+        </div>
+      </article>
+
+      <article className="panel">
+        <div className="panel-title">
+          <div>
+            <span className="section-kicker">Connect</span>
+            <h2>连接方式</h2>
+          </div>
+        </div>
+        <div className="device-form">
+          <input
+            value={props.hdcTarget}
+            onChange={(event) => props.setHdcTarget(event.target.value)}
+            placeholder="设备序列号或 host:port"
+          />
+          <input
+            max="65535"
+            min="1"
+            type="number"
+            value={props.hdcLlmPort}
+            onChange={(event) => props.setHdcLlmPort(event.target.value)}
+            placeholder="LLM server port"
+          />
+          <div className="actions">
+            <button disabled={props.deviceBusy !== null} onClick={() => void props.autoConnectHdc()}>
+              {props.deviceBusy === "auto" ? "搜索中..." : "自动搜索"}
+            </button>
+            <button disabled={props.deviceBusy !== null} onClick={() => void props.connectHdc()}>
+              {props.deviceBusy === "connect" ? "连接中..." : "连接"}
+            </button>
+            <button disabled={props.deviceBusy !== null} onClick={() => void props.disconnectHdc()}>
+              {props.deviceBusy === "disconnect" ? "断开中..." : "断开"}
+            </button>
+          </div>
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function ChatView(props: {
+  chatBusy: boolean;
+  chatError: string | null;
+  chatInput: string;
+  chatMessages: ChatMessage[];
+  mnn: MnnStatus | null;
+  sendChat: () => Promise<void>;
+  setChatInput: (value: string) => void;
+}) {
+  return (
+    <section className="panel chat-panel">
+      <div className="panel-title">
+        <div>
+          <span className="section-kicker">OpenAI-compatible endpoint</span>
+          <h2>对话测试</h2>
+        </div>
+        <span className={`status-pill ${props.mnn?.state === "running" ? "running" : "stopped"}`}>
+          <span className="status-dot" />
+          {props.mnn?.state === "running" && props.mnn.port
+            ? `:${props.mnn.port} · ${serverOwnerLabel(props.mnn)}`
+            : "未连接"}
+        </span>
+      </div>
+      <div className="chat-window">
+        {props.chatMessages.length === 0 ? (
+          <div className="empty-state">暂无对话</div>
+        ) : (
+          props.chatMessages.map((message, index) => (
+            <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
+              <span>{message.role === "user" ? "用户" : "模型"}</span>
+              <p>{message.content || (props.chatBusy && index === props.chatMessages.length - 1 ? "生成中..." : "")}</p>
+            </div>
+          ))
+        )}
+      </div>
+      {props.chatError ? <div className="chat-error">{props.chatError}</div> : null}
+      <div className="chat-form">
+        <textarea
+          value={props.chatInput}
+          onChange={(event) => props.setChatInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              void props.sendChat();
+            }
+          }}
+          placeholder="输入消息，Ctrl/⌘ + Enter 发送"
+          rows={3}
+        />
+        <button disabled={props.chatBusy || !props.chatInput.trim()} onClick={() => void props.sendChat()}>
+          {props.chatBusy ? "生成中" : "发送"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function LogsView(props: {
+  autoScrollLogs: boolean;
+  logFilter: string;
+  logRef: React.RefObject<HTMLPreElement | null>;
+  setAutoScrollLogs: (value: boolean) => void;
+  setLogFilter: (value: string) => void;
+  visibleLogLines: string[];
+}) {
+  const content = props.visibleLogLines.join("\n");
+  return (
+    <section className="panel log-panel">
+      <div className="log-toolbar">
+        <div>
+          <span className="section-kicker">mnncli.log</span>
+          <h2>运行日志</h2>
+        </div>
+        <div className="log-tools">
+          <input
+            value={props.logFilter}
+            onChange={(event) => props.setLogFilter(event.target.value)}
+            placeholder="过滤日志"
+          />
+          <label className="check-control">
+            <input
+              checked={props.autoScrollLogs}
+              onChange={(event) => props.setAutoScrollLogs(event.target.checked)}
+              type="checkbox"
+            />
+            自动滚动
+          </label>
+          <button className="secondary-button" onClick={() => void navigator.clipboard?.writeText(content)}>
+            复制
+          </button>
+        </div>
+      </div>
+      <pre ref={props.logRef}>{content || "暂无日志"}</pre>
+    </section>
+  );
+}
+
+function SettingsView(props: {
+  apiBase: string;
+  hdc: HdcStatus | null;
+  hdcLlmPort: string;
+  mnn: MnnStatus | null;
+  setHdcLlmPort: (value: string) => void;
+}) {
+  return (
+    <section className="detail-grid">
+      <article className="panel">
+        <div className="panel-title">
+          <div>
+            <span className="section-kicker">Runtime paths</span>
+            <h2>运行时信息</h2>
+          </div>
+        </div>
+        <dl>
+          <dt>前端 API</dt>
+          <dd>{props.apiBase || "同源代理"}</dd>
+          <dt>后端端口</dt>
+          <dd>{props.mnn?.port ?? "未监听"}</dd>
+          <dt>MNN 来源</dt>
+          <dd>{serverOwnerLabel(props.mnn)}</dd>
+          <dt>hdc 路径</dt>
+          <dd>{props.hdc?.path ?? "未找到"}</dd>
+          <dt>LLM server 端口</dt>
+          <dd>
+            <input
+              max="65535"
+              min="1"
+              type="number"
+              value={props.hdcLlmPort}
+              onChange={(event) => props.setHdcLlmPort(event.target.value)}
+            />
+          </dd>
+          <dt>手机访问地址</dt>
+          <dd>{props.hdc?.phone_llm_url ?? "http://127.0.0.1:19000"}</dd>
+          <dt>桌面平台</dt>
+          <dd>{window.pcServerDesktop?.platform ?? "browser"}</dd>
+        </dl>
+      </article>
+    </section>
   );
 }
 
