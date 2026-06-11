@@ -27,6 +27,14 @@ The auto-connect flow tries, in order:
 
 Default scanned ports are `8710`, `10178`, and `5555`. Extra ports can be added with `HDC_AUTO_PORTS`.
 
+After a device connects, the backend also prepares an LLM reverse port:
+
+```text
+phone http://127.0.0.1:19000 -> PC http://127.0.0.1:<LLM server port>
+```
+
+The default LLM server port is `8088`. The frontend settings page and device page can override it before connecting. The phone should use `http://127.0.0.1:19000` as the LLM server base URL.
+
 Useful tuning variables:
 
 ```text

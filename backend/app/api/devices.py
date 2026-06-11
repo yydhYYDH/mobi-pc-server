@@ -1,6 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Body
 
-from app.schemas.devices import HdcConnectRequest, HdcStatus
+from app.schemas.devices import HdcAutoConnectRequest, HdcConnectRequest, HdcStatus
 from app.services.hdc import HdcService
 
 
@@ -15,12 +15,14 @@ def hdc_status() -> HdcStatus:
 
 @router.post("/hdc/connect", response_model=HdcStatus)
 def hdc_connect(request: HdcConnectRequest) -> HdcStatus:
-    return service.connect(request.target)
+    return service.connect(request.target, llm_port=request.llm_port)
 
 
 @router.post("/hdc/auto-connect", response_model=HdcStatus)
-def hdc_auto_connect() -> HdcStatus:
-    return service.auto_connect()
+def hdc_auto_connect(
+    request: HdcAutoConnectRequest = Body(default_factory=HdcAutoConnectRequest),
+) -> HdcStatus:
+    return service.auto_connect(llm_port=request.llm_port)
 
 
 @router.post("/hdc/disconnect", response_model=HdcStatus)

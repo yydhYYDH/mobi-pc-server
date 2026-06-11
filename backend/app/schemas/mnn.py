@@ -11,8 +11,8 @@ class MnnStatus(BaseModel):
     active_model_id: str | None = None
     port: int | None = None
     message: str | None = None
+    managed_by_backend: bool = False
 
 
 class LoadModelRequest(BaseModel):
     model_id: str
-

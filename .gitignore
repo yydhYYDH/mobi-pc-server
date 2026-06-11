@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+.hdc-auto-cache
 
 # Node
 node_modules/

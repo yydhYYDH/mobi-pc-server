@@ -12,6 +12,9 @@ from app.core.paths import REPO_ROOT
 from app.schemas.devices import HdcDevice, HdcStatus
 
 
+DEFAULT_LLM_PORT = 8088
+PHONE_LLM_PORT = 19000
+PHONE_LLM_URL = f"http://127.0.0.1:{PHONE_LLM_PORT}"
 HDC_AUTO_CACHE = Path(os.getenv("HDC_AUTO_CACHE", REPO_ROOT / ".hdc-auto-cache" / "targets.json"))
 HDC_AUTO_CONNECT_TIMEOUT = float(os.getenv("HDC_AUTO_CONNECT_TIMEOUT", "0.25"))
 HDC_AUTO_TCONN_TIMEOUT = int(float(os.getenv("HDC_AUTO_TCONN_TIMEOUT", "6")))
@@ -23,84 +26,94 @@ HDC_AUTO_DEFAULT_PORTS = (8710, 10178, 5555)
 
 
 class HdcService:
+    def __init__(self) -> None:
+        self._last_llm_port = DEFAULT_LLM_PORT
+
     def status(self) -> HdcStatus:
         hdc_path = self._hdc_path()
         if not hdc_path:
-            return HdcStatus(available=False, message="hdc was not found on PATH.")
+            return self._status_response(available=False, message="hdc was not found on PATH.")
 
         result = self._run([hdc_path, "list", "targets"], timeout=5)
         if result is None:
-            return HdcStatus(available=True, path=hdc_path, message="hdc list targets timed out.")
+            return self._status_response(
+                available=True,
+                path=hdc_path,
+                message="hdc list targets timed out.",
+            )
 
         if result.returncode != 0:
-            return HdcStatus(
+            return self._status_response(
                 available=True,
                 path=hdc_path,
                 message=result.stderr.strip() or "hdc list targets failed.",
             )
 
-        devices = [
-            HdcDevice(serial=target, state="connected")
-            for target in self._parse_targets(result.stdout)
-        ]
-        return HdcStatus(available=True, path=hdc_path, devices=devices)
+        devices = [self._device_from_target(target) for target in self._parse_targets(result.stdout)]
+        return self._status_response(available=True, path=hdc_path, devices=devices)
 
-    def connect(self, target: str) -> HdcStatus:
+    def connect(self, target: str, llm_port: int = DEFAULT_LLM_PORT) -> HdcStatus:
+        llm_port = self._normalize_port(llm_port)
         if not target.strip():
-            return self.auto_connect()
+            return self.auto_connect(llm_port=llm_port)
 
         hdc_path = self._hdc_path()
         if not hdc_path:
-            return HdcStatus(available=False, message="hdc was not found on PATH.")
+            return self._status_response(available=False, message="hdc was not found on PATH.")
 
         result = self._run([hdc_path, "tconn", target.strip()], timeout=10)
         if result is None:
-            return HdcStatus(available=True, path=hdc_path, message="hdc connect timed out.")
+            return self._status_response(
+                available=True,
+                path=hdc_path,
+                message="hdc connect timed out.",
+            )
         if result.returncode != 0:
-            return HdcStatus(
+            return self._status_response(
                 available=True,
                 path=hdc_path,
                 message=result.stderr.strip() or result.stdout.strip() or "hdc connect failed.",
             )
         current = self.status()
         self._cache_target(target.strip())
-        current.message = result.stdout.strip() or f"Connected to {target.strip()}."
-        return current
+        message = result.stdout.strip() or f"Connected to {target.strip()}."
+        return self._with_llm_rport(current, target.strip(), llm_port, message)
 
-    def auto_connect(self) -> HdcStatus:
+    def auto_connect(self, llm_port: int = DEFAULT_LLM_PORT) -> HdcStatus:
+        llm_port = self._normalize_port(llm_port)
         hdc_path = self._hdc_path()
         if not hdc_path:
-            return HdcStatus(available=False, message="hdc was not found on PATH.")
+            return self._status_response(available=False, message="hdc was not found on PATH.")
 
         current = self.status()
         if current.devices:
-            current.message = "Using existing HDC target."
-            return current
+            target = current.devices[0].serial
+            return self._with_llm_rport(current, target, llm_port, "Using existing HDC target.")
 
         candidates = self._discover_candidates(hdc_path)
         if not candidates:
             candidates = self._scan_lan_targets()
 
         errors: list[str] = []
-        connected = self._connect_first_candidate(hdc_path, candidates, errors)
+        connected = self._connect_first_candidate(hdc_path, candidates, errors, llm_port)
         if connected:
             return connected
 
         scan_candidates = [
             target for target in self._scan_lan_targets() if target not in candidates
         ]
-        connected = self._connect_first_candidate(hdc_path, scan_candidates, errors)
+        connected = self._connect_first_candidate(hdc_path, scan_candidates, errors, llm_port)
         if connected:
             return connected
 
         if not candidates and not scan_candidates:
-            return HdcStatus(
+            return self._status_response(
                 available=True,
                 path=hdc_path,
                 message="No HDC target discovered from cache, hdc discover, or LAN scan.",
             )
 
-        return HdcStatus(
+        return self._status_response(
             available=True,
             path=hdc_path,
             message="Auto discovery found candidates but none connected. " + "; ".join(errors[:3]),
@@ -109,13 +122,17 @@ class HdcService:
     def disconnect(self, target: str) -> HdcStatus:
         hdc_path = self._hdc_path()
         if not hdc_path:
-            return HdcStatus(available=False, message="hdc was not found on PATH.")
+            return self._status_response(available=False, message="hdc was not found on PATH.")
 
         result = self._run([hdc_path, "tdisconn", target], timeout=10)
         if result is None:
-            return HdcStatus(available=True, path=hdc_path, message="hdc disconnect timed out.")
+            return self._status_response(
+                available=True,
+                path=hdc_path,
+                message="hdc disconnect timed out.",
+            )
         if result.returncode != 0:
-            return HdcStatus(
+            return self._status_response(
                 available=True,
                 path=hdc_path,
                 message=result.stderr.strip() or result.stdout.strip() or "hdc disconnect failed.",
@@ -139,6 +156,72 @@ class HdcService:
         except subprocess.TimeoutExpired:
             return None
 
+    def _status_response(
+        self,
+        available: bool,
+        path: str | None = None,
+        devices: list[HdcDevice] | None = None,
+        message: str | None = None,
+        llm_rport_ready: bool = False,
+    ) -> HdcStatus:
+        return HdcStatus(
+            available=available,
+            path=path,
+            devices=devices or [],
+            message=message,
+            llm_port=self._last_llm_port,
+            phone_llm_url=PHONE_LLM_URL,
+            llm_rport_ready=llm_rport_ready,
+        )
+
+    def _with_llm_rport(
+        self,
+        status: HdcStatus,
+        target: str,
+        llm_port: int,
+        message: str,
+    ) -> HdcStatus:
+        self._last_llm_port = llm_port
+        ready, rport_message = self._ensure_llm_rport(target, llm_port)
+        status.llm_port = llm_port
+        status.phone_llm_url = PHONE_LLM_URL
+        status.llm_rport_ready = ready
+        status.message = f"{message} {rport_message}".strip()
+        return status
+
+    def _ensure_llm_rport(self, target: str, llm_port: int) -> tuple[bool, str]:
+        hdc_path = self._hdc_path()
+        if not hdc_path:
+            return False, "LLM rport skipped: hdc was not found."
+
+        args_prefix = [hdc_path]
+        if target:
+            args_prefix.extend(["-t", target])
+
+        self._run(
+            args_prefix + ["rport", "rm", f"tcp:{PHONE_LLM_PORT}", f"tcp:{llm_port}"],
+            timeout=5,
+        )
+        result = self._run(
+            args_prefix + ["rport", f"tcp:{PHONE_LLM_PORT}", f"tcp:{llm_port}"],
+            timeout=8,
+        )
+        if result is None:
+            return False, "LLM rport timed out."
+        if result.returncode != 0:
+            message = result.stderr.strip() or result.stdout.strip() or "LLM rport failed."
+            return False, message
+        return True, f"Phone LLM URL: {PHONE_LLM_URL} -> PC 127.0.0.1:{llm_port}."
+
+    def _normalize_port(self, port: int) -> int:
+        try:
+            value = int(port)
+        except (TypeError, ValueError):
+            return DEFAULT_LLM_PORT
+        if 1 <= value <= 65535:
+            return value
+        return DEFAULT_LLM_PORT
+
     def _parse_targets(self, output: str) -> list[str]:
         targets: list[str] = []
         for line in output.splitlines():
@@ -152,6 +235,19 @@ class HdcService:
             if target and target not in targets:
                 targets.append(target)
         return targets
+
+    def _device_from_target(self, target: str) -> HdcDevice:
+        parsed = self._parse_wireless_target(target)
+        if parsed:
+            host, port = parsed.rsplit(":", 1)
+            return HdcDevice(
+                serial=target,
+                state="connected",
+                host=host,
+                port=int(port),
+                connection_type="network",
+            )
+        return HdcDevice(serial=target, state="connected", connection_type="usb")
 
     def _discover_candidates(self, hdc_path: str) -> list[str]:
         candidates: list[str] = []
@@ -181,6 +277,7 @@ class HdcService:
         hdc_path: str,
         candidates: list[str],
         errors: list[str],
+        llm_port: int,
     ) -> HdcStatus | None:
         for target in candidates:
             result = self._run([hdc_path, "tconn", target], timeout=HDC_AUTO_TCONN_TIMEOUT)
@@ -190,8 +287,8 @@ class HdcService:
             if result.returncode == 0:
                 self._cache_target(target)
                 connected = self.status()
-                connected.message = result.stdout.strip() or f"Auto-connected to {target}."
-                return connected
+                message = result.stdout.strip() or f"Auto-connected to {target}."
+                return self._with_llm_rport(connected, target, llm_port, message)
             errors.append(f"{target}: {result.stderr.strip() or result.stdout.strip()}")
         return None
 
