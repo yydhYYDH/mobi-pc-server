@@ -257,6 +257,14 @@ h2 {
   width: 132px;
 }
 
+.refresh-meta {
+  display: block;
+  color: #687386;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
 .section-kicker {
   display: block;
   color: #687386;
@@ -380,6 +388,14 @@ h2 {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.chat-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .command-list {
@@ -812,6 +828,17 @@ dd {
   min-height: 42px;
 }
 
+.inline-notice {
+  border: 1px solid #d4dbe5;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #3d4858;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: -4px 0 12px;
+  padding: 8px 10px;
+}
+
 .chat-error {
   border: 1px solid #efc0bd;
   border-radius: 6px;
@@ -930,6 +957,7 @@ pre {
 
   .hero-actions,
   .header-actions,
+  .chat-title-actions,
   .actions,
   .row-actions {
     width: 100%;

@@ -146,6 +146,33 @@ function formatDownloadSize(status: DownloadStatus | undefined, downloaded: bool
   return `${current} / ${total}`;
 }
 
+async function apiErrorMessage(response: Response, fallback: string) {
+  try {
+    const body = await response.json();
+    if (typeof body?.detail === "string") {
+      return body.detail;
+    }
+    if (Array.isArray(body?.detail)) {
+      return body.detail.map((item: { msg?: string } | string) => (typeof item === "string" ? item : item.msg ?? String(item))).join("；");
+    }
+  } catch {
+    // Fall back to the caller-provided action message when the response is not JSON.
+  }
+  return `${fallback}：HTTP ${response.status}`;
+}
+
+async function readApiJson<T>(response: Response, label: string): Promise<T> {
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response, `${label}加载失败`));
+  }
+  return response.json() as Promise<T>;
+}
+
+function normalizePort(value: string, fallback = 8088) {
+  const port = Number(value);
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : fallback;
+}
+
 function App() {
   const [activeView, setActiveView] = React.useState<ViewId>("overview");
   const [selectedBackend, setSelectedBackend] = React.useState<BackendId>(
@@ -169,6 +196,8 @@ function App() {
   const [deviceBusy, setDeviceBusy] = React.useState<"auto" | "connect" | "disconnect" | null>(null);
   const [deviceNotice, setDeviceNotice] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = React.useState<Date | null>(null);
   const [chatInput, setChatInput] = React.useState("你好，用五个字回复。");
   const [chatMessages, setChatMessages] = React.useState<ChatMessage[]>([]);
   const [chatBusy, setChatBusy] = React.useState(false);
@@ -178,6 +207,7 @@ function App() {
 
   const load = React.useCallback(async () => {
     setError(null);
+    setIsRefreshing(true);
     try {
       const [
         mnnResponse,
@@ -195,25 +225,26 @@ function App() {
         fetch(`${API_BASE}/api/logs/runtime?backend=${selectedBackend}&lines=${LOG_LINES}`)
       ]);
 
-      if (
-        !mnnResponse.ok ||
-        !modelsResponse.ok ||
-        !localModelsResponse.ok ||
-        !downloadsResponse.ok ||
-        !hdcResponse.ok ||
-        !logsResponse.ok
-      ) {
-        throw new Error("API request failed");
-      }
+      const [nextMnn, nextModels, nextLocalModels, nextDownloads, nextHdc, nextLogs] = await Promise.all([
+        readApiJson<MnnStatus>(mnnResponse, "推理服务状态"),
+        readApiJson<CatalogModel[]>(modelsResponse, "模型目录"),
+        readApiJson<LocalModel[]>(localModelsResponse, "本地模型"),
+        readApiJson<DownloadStatus[]>(downloadsResponse, "下载状态"),
+        readApiJson<HdcStatus>(hdcResponse, "HDC 状态"),
+        readApiJson<{ content: string }>(logsResponse, "运行日志")
+      ]);
 
-      setMnn(await mnnResponse.json());
-      setModels(await modelsResponse.json());
-      setLocalModels(await localModelsResponse.json());
-      setDownloads(await downloadsResponse.json());
-      setHdc(await hdcResponse.json());
-      setLogs((await logsResponse.json()).content);
+      setMnn(nextMnn);
+      setModels(nextModels);
+      setLocalModels(nextLocalModels);
+      setDownloads(nextDownloads);
+      setHdc(nextHdc);
+      setLogs(nextLogs.content);
+      setLastUpdatedAt(new Date());
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unknown error");
+    } finally {
+      setIsRefreshing(false);
     }
   }, [selectedBackend]);
 
@@ -279,7 +310,7 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/api/mnn/start`, { method: "POST" });
       if (!response.ok) {
-        throw new Error(`启动失败：HTTP ${response.status}`);
+        throw new Error(await apiErrorMessage(response, "启动失败"));
       }
       await load();
     } catch (startError) {
@@ -297,7 +328,7 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/api/mnn/stop`, { method: "POST" });
       if (!response.ok) {
-        throw new Error(`停止失败：HTTP ${response.status}`);
+        throw new Error(await apiErrorMessage(response, "停止失败"));
       }
       await load();
     } catch (stopError) {
@@ -312,16 +343,17 @@ function App() {
       setDeviceNotice("请输入设备序列号或 host:port。");
       return;
     }
+    const llmPort = normalizePort(hdcLlmPort);
     setDeviceBusy("connect");
     setDeviceNotice(`正在连接 ${hdcTarget.trim()}...`);
     try {
       const response = await fetch(`${API_BASE}/api/devices/hdc/connect`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target: hdcTarget.trim(), llm_port: Number(hdcLlmPort) || 8088 })
+        body: JSON.stringify({ target: hdcTarget.trim(), llm_port: llmPort })
       });
       if (!response.ok) {
-        throw new Error(`连接失败：HTTP ${response.status}`);
+        throw new Error(await apiErrorMessage(response, "连接失败"));
       }
       const nextStatus = (await response.json()) as HdcStatus;
       setHdc(nextStatus);
@@ -335,16 +367,17 @@ function App() {
   }
 
   async function autoConnectHdc() {
+    const llmPort = normalizePort(hdcLlmPort);
     setDeviceBusy("auto");
     setDeviceNotice("正在自动搜索 HarmonyOS 设备，可能需要十几秒...");
     try {
       const response = await fetch(`${API_BASE}/api/devices/hdc/auto-connect`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ llm_port: Number(hdcLlmPort) || 8088 })
+        body: JSON.stringify({ llm_port: llmPort })
       });
       if (!response.ok) {
-        throw new Error(`自动搜索失败：HTTP ${response.status}`);
+        throw new Error(await apiErrorMessage(response, "自动搜索失败"));
       }
       const nextStatus = (await response.json()) as HdcStatus;
       setHdc(nextStatus);
@@ -375,7 +408,7 @@ function App() {
         body: JSON.stringify({ target: hdcTarget.trim() })
       });
       if (!response.ok) {
-        throw new Error(`断开失败：HTTP ${response.status}`);
+        throw new Error(await apiErrorMessage(response, "断开失败"));
       }
       const nextStatus = (await response.json()) as HdcStatus;
       setHdc(nextStatus);
@@ -397,7 +430,7 @@ function App() {
         body: JSON.stringify({ model_id: modelId })
       });
       if (!response.ok) {
-        throw new Error(`下载失败：HTTP ${response.status}`);
+        throw new Error(await apiErrorMessage(response, "下载失败"));
       }
       await load();
     } catch (downloadError) {
@@ -408,6 +441,14 @@ function App() {
   }
 
   async function deleteModel(modelId: string) {
+    const targetModel = models.find((model) => model.id === modelId);
+    if (mnn?.state === "running" && mnn.active_model_id === modelId) {
+      setError("当前模型正在运行，请先停止服务或切换模型后再删除。");
+      return;
+    }
+    if (!window.confirm(`确认删除本地模型 ${targetModel?.name ?? modelId}？`)) {
+      return;
+    }
     setModelBusy(modelId);
     try {
       const response = await fetch(`${API_BASE}/api/models/delete`, {
@@ -416,7 +457,7 @@ function App() {
         body: JSON.stringify({ model_id: modelId })
       });
       if (!response.ok) {
-        throw new Error(`删除失败：HTTP ${response.status}`);
+        throw new Error(await apiErrorMessage(response, "删除失败"));
       }
       await load();
     } catch (deleteError) {
@@ -439,7 +480,7 @@ function App() {
         body: JSON.stringify({ model_id: modelId, backend: selectedBackend })
       });
       if (!response.ok) {
-        throw new Error(`加载失败：HTTP ${response.status}`);
+        throw new Error(await apiErrorMessage(response, "加载失败"));
       }
       await load();
     } catch (loadError) {
@@ -479,7 +520,7 @@ function App() {
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`请求失败：HTTP ${response.status}`);
+        throw new Error(await apiErrorMessage(response, "请求失败"));
       }
 
       const reader = response.body.getReader();
@@ -562,6 +603,9 @@ function App() {
   const recentLogLines = visibleLogLines.slice(-80);
   const criticalLog = [...visibleLogLines].reverse().find((line) => /error|failed|exception|timeout/i.test(line));
   const systemReady = serverState === "running" && Boolean(mnn?.active_model_id);
+  const lastUpdatedText = lastUpdatedAt
+    ? lastUpdatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    : "尚未同步";
 
   const navItems: Array<{ id: ViewId; label: string; hint: string }> = [
     { id: "overview", label: "总览", hint: "状态与快捷操作" },
@@ -609,6 +653,7 @@ function App() {
           <div>
             <span className="section-kicker">Control Center</span>
             <h1>{navItems.find((item) => item.id === activeView)?.label}</h1>
+            <span className="refresh-meta">最后同步：{lastUpdatedText}</span>
           </div>
           <div className="header-actions">
             <select
@@ -628,8 +673,8 @@ function App() {
               <span className="status-dot" />
               HDC {hdcAvailable ? "可用" : "未找到"}
             </span>
-            <button className="secondary-button" onClick={() => void load()}>
-              刷新
+            <button className="secondary-button" disabled={isRefreshing} onClick={() => void load()}>
+              {isRefreshing ? "刷新中..." : "刷新"}
             </button>
           </div>
         </header>
@@ -664,6 +709,7 @@ function App() {
 
         {activeView === "models" ? (
           <ModelsView
+            activeModelId={mnn?.active_model_id ?? null}
             downloadModel={downloadModel}
             downloadStatus={downloadStatus}
             formatDownloadSize={formatDownloadSize}
@@ -674,6 +720,7 @@ function App() {
             deleteModel={deleteModel}
             models={models}
             selectedBackend={selectedBackend}
+            serverState={serverState}
             serverBusy={serverBusy}
           />
         ) : null}
@@ -713,6 +760,10 @@ function App() {
             chatInput={chatInput}
             chatMessages={chatMessages}
             mnn={mnn}
+            onClearChat={() => {
+              setChatMessages([]);
+              setChatError(null);
+            }}
             sendChat={sendChat}
             setChatInput={setChatInput}
           />
@@ -909,6 +960,7 @@ function Metric(props: { title: string; value: string; detail: string; tone?: st
 }
 
 function ModelsView(props: {
+  activeModelId: string | null;
   deleteModel: (modelId: string) => Promise<void>;
   downloadModel: (modelId: string) => Promise<void>;
   downloadStatus: (modelId: string) => DownloadStatus | undefined;
@@ -919,6 +971,7 @@ function ModelsView(props: {
   modelBusy: string | null;
   models: CatalogModel[];
   selectedBackend: BackendId;
+  serverState: string;
   serverBusy: "start" | "stop" | null;
 }) {
   return (
@@ -945,6 +998,7 @@ function ModelsView(props: {
           const busy = props.modelBusy === model.id;
           const anyBusy = props.modelBusy !== null || props.serverBusy !== null;
           const backendMatches = normalizeBackend(model.runtime) === props.selectedBackend;
+          const runningThisModel = props.serverState === "running" && props.activeModelId === model.id;
           const progress = status?.progress ?? (downloaded ? 100 : 0);
           const state = status?.state ?? (downloaded ? "downloaded" : "idle");
 
@@ -975,8 +1029,8 @@ function ModelsView(props: {
                 <button disabled={!backendMatches || !downloaded || downloading || anyBusy} onClick={() => void props.loadModel(model.id)}>
                   {busy ? "加载中..." : "加载"}
                 </button>
-                <button disabled={!downloaded || downloading || anyBusy} onClick={() => void props.deleteModel(model.id)}>
-                  {busy ? "处理中..." : "删除"}
+                <button disabled={!downloaded || downloading || anyBusy || runningThisModel} onClick={() => void props.deleteModel(model.id)}>
+                  {runningThisModel ? "运行中" : busy ? "处理中..." : "删除"}
                 </button>
               </div>
             </div>
@@ -1155,9 +1209,19 @@ function ChatView(props: {
   chatInput: string;
   chatMessages: ChatMessage[];
   mnn: MnnStatus | null;
+  onClearChat: () => void;
   sendChat: () => Promise<void>;
   setChatInput: (value: string) => void;
 }) {
+  const chatWindowRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (!chatWindowRef.current) {
+      return;
+    }
+    chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
+  }, [props.chatBusy, props.chatMessages]);
+
   return (
     <section className="panel chat-panel">
       <div className="panel-title">
@@ -1165,14 +1229,23 @@ function ChatView(props: {
           <span className="section-kicker">OpenAI-compatible endpoint</span>
           <h2>对话测试</h2>
         </div>
-        <span className={`status-pill ${props.mnn?.state === "running" ? "running" : "stopped"}`}>
-          <span className="status-dot" />
-          {props.mnn?.state === "running" && props.mnn.port
-            ? `:${props.mnn.port} · ${serverOwnerLabel(props.mnn)}`
-            : "未连接"}
-        </span>
+        <div className="chat-title-actions">
+          <span className={`status-pill ${props.mnn?.state === "running" ? "running" : "stopped"}`}>
+            <span className="status-dot" />
+            {props.mnn?.state === "running" && props.mnn.port
+              ? `:${props.mnn.port} · ${serverOwnerLabel(props.mnn)}`
+              : "未连接"}
+          </span>
+          <button
+            className="secondary-button"
+            disabled={props.chatBusy || props.chatMessages.length === 0}
+            onClick={props.onClearChat}
+          >
+            清空
+          </button>
+        </div>
       </div>
-      <div className="chat-window">
+      <div className="chat-window" ref={chatWindowRef}>
         {props.chatMessages.length === 0 ? (
           <div className="empty-state">暂无对话</div>
         ) : (
@@ -1214,7 +1287,30 @@ function LogsView(props: {
   setLogFilter: (value: string) => void;
   visibleLogLines: string[];
 }) {
+  const [copyNotice, setCopyNotice] = React.useState<string | null>(null);
   const content = props.visibleLogLines.join("\n");
+
+  React.useEffect(() => {
+    if (!copyNotice) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => setCopyNotice(null), 2200);
+    return () => window.clearTimeout(timeoutId);
+  }, [copyNotice]);
+
+  async function copyLogs() {
+    if (!navigator.clipboard) {
+      setCopyNotice("当前环境不支持剪贴板。");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopyNotice("已复制当前日志。");
+    } catch {
+      setCopyNotice("复制失败。");
+    }
+  }
+
   return (
     <section className="panel log-panel">
       <div className="log-toolbar">
@@ -1236,11 +1332,12 @@ function LogsView(props: {
             />
             自动滚动
           </label>
-          <button className="secondary-button" onClick={() => void navigator.clipboard?.writeText(content)}>
+          <button className="secondary-button" onClick={() => void copyLogs()}>
             复制
           </button>
         </div>
       </div>
+      {copyNotice ? <div className="inline-notice">{copyNotice}</div> : null}
       <pre ref={props.logRef}>{content || "暂无日志"}</pre>
     </section>
   );
