@@ -9,12 +9,9 @@ import type { BackendId, CatalogModel, DownloadStatus, HdcStatus, LocalModel, Mn
 
 export function useDashboardData(params: {
   activeView: ViewId;
-  autoScrollLogs: boolean;
-  logFilter: string;
-  logRef: React.RefObject<HTMLPreElement | null>;
   selectedBackend: BackendId;
 }) {
-  const { activeView, autoScrollLogs, logFilter, logRef, selectedBackend } = params;
+  const { activeView, selectedBackend } = params;
   const [mnn, setMnn] = React.useState<MnnStatus | null>(null);
   const [models, setModels] = React.useState<CatalogModel[]>([]);
   const [localModels, setLocalModels] = React.useState<LocalModel[]>([]);
@@ -80,12 +77,6 @@ export function useDashboardData(params: {
     return () => window.clearInterval(intervalId);
   }, [activeView, hasActiveDownload, load]);
 
-  React.useEffect(() => {
-    if (!autoScrollLogs || !logRef.current) {
-      return;
-    }
-    logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [autoScrollLogs, logFilter, logRef, logs]);
 
   const lastUpdatedText = lastUpdatedAt
     ? lastUpdatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })

@@ -3,11 +3,12 @@ import ReactDOM from "react-dom/client";
 import "./styles.css";
 
 import { API_BASE } from "./api/client";
-import { completionText, sendChatCompletion } from "./api/chat";
-import { autoConnectHdcTarget, connectHdcTarget, disconnectHdcTarget } from "./api/devices";
-import type { BackendId, ChatMessage, ViewId } from "./api/types";
-import { BACKEND_OPTIONS, backendLabel, formatDownloadSize, normalizeBackend, normalizePort, statusLabel } from "./domain/runtime";
+import type { BackendId, ViewId } from "./api/types";
+import { BACKEND_OPTIONS, backendLabel, formatDownloadSize, normalizeBackend, statusLabel } from "./domain/runtime";
+import { useChatTest } from "./hooks/useChatTest";
 import { useDashboardData } from "./hooks/useDashboardData";
+import { useHdcActions } from "./hooks/useHdcActions";
+import { useLogState } from "./hooks/useLogState";
 import { useModelActions } from "./hooks/useModelActions";
 import { useModelState } from "./hooks/useModelState";
 import { useRuntimeActions } from "./hooks/useRuntimeActions";
@@ -19,21 +20,8 @@ function App() {
   const [selectedBackend, setSelectedBackend] = React.useState<BackendId>(
     () => normalizeBackend(window.localStorage.getItem("pc-server-backend"))
   );
-  const [logFilter, setLogFilter] = React.useState("");
-  const [autoScrollLogs, setAutoScrollLogs] = React.useState(true);
-  const [hdcTarget, setHdcTarget] = React.useState("");
-  const [hdcLlmPort, setHdcLlmPort] = React.useState(
-    () => window.localStorage.getItem("pc-server-hdc-llm-port") ?? "8088"
-  );
   const [selectedLaunchModelId, setSelectedLaunchModelId] = React.useState("");
-  const [deviceBusy, setDeviceBusy] = React.useState<"auto" | "connect" | "disconnect" | null>(null);
-  const [deviceNotice, setDeviceNotice] = React.useState<string | null>(null);
-  const [chatInput, setChatInput] = React.useState("你好，用五个字回复。");
-  const [chatMessages, setChatMessages] = React.useState<ChatMessage[]>([]);
-  const [chatBusy, setChatBusy] = React.useState(false);
-  const [chatError, setChatError] = React.useState<string | null>(null);
   const logRef = React.useRef<HTMLPreElement | null>(null);
-  const autoHdcStartedRef = React.useRef(false);
 
   const {
     downloads,
@@ -48,7 +36,9 @@ function App() {
     models,
     setError,
     setHdc
-  } = useDashboardData({ activeView, autoScrollLogs, logFilter, logRef, selectedBackend });
+  } = useDashboardData({ activeView, selectedBackend });
+
+  const { autoScrollLogs, criticalLog, logFilter, setAutoScrollLogs, setLogFilter, visibleLogLines } = useLogState(logs, logRef);
 
   const { activeModelName, downloadedCount, downloadStatus, isDownloaded, isDownloading, launchableModels } =
     useModelState({
@@ -73,129 +63,28 @@ function App() {
     setModelBusy
   });
 
+  const {
+    autoConnectHdc,
+    connectHdc,
+    deviceBusy,
+    deviceNotice,
+    disconnectHdc,
+    hdcLlmPort,
+    hdcTarget,
+    setHdcLlmPort,
+    setHdcTarget
+  } = useHdcActions({ hdc, load, setHdc });
+
+  const { chatBusy, chatError, chatInput, chatMessages, clearChat, sendChat, setChatInput } = useChatTest(mnn);
+
 
   React.useEffect(() => {
     window.localStorage.setItem("pc-server-backend", selectedBackend);
   }, [selectedBackend]);
 
-  React.useEffect(() => {
-    window.localStorage.setItem("pc-server-hdc-llm-port", hdcLlmPort);
-  }, [hdcLlmPort]);
-
-  React.useEffect(() => {
-    if (autoHdcStartedRef.current || hdc === null || deviceBusy !== null) {
-      return;
-    }
-    autoHdcStartedRef.current = true;
-    void autoConnectHdc();
-  }, [deviceBusy, hdc]);
-
-  async function connectHdc() {
-    if (!hdcTarget.trim()) {
-      setDeviceNotice("请输入设备序列号或 host:port。");
-      return;
-    }
-    const llmPort = normalizePort(hdcLlmPort);
-    setDeviceBusy("connect");
-    setDeviceNotice(`正在连接 ${hdcTarget.trim()}...`);
-    try {
-      const nextStatus = await connectHdcTarget(hdcTarget.trim(), llmPort);
-      setHdc(nextStatus);
-      setDeviceNotice(nextStatus.message ?? "连接请求已完成。");
-      await load();
-    } catch (connectError) {
-      setDeviceNotice(connectError instanceof Error ? connectError.message : "连接失败。");
-    } finally {
-      setDeviceBusy(null);
-    }
-  }
-
-  async function autoConnectHdc() {
-    const llmPort = normalizePort(hdcLlmPort);
-    setDeviceBusy("auto");
-    setDeviceNotice("正在自动搜索 HarmonyOS 设备，可能需要十几秒...");
-    try {
-      const nextStatus = await autoConnectHdcTarget(llmPort);
-      setHdc(nextStatus);
-      if (nextStatus.devices.length > 0) {
-        setDeviceNotice(nextStatus.message ?? `已发现 ${nextStatus.devices.length} 台设备。`);
-      } else {
-        setDeviceNotice(nextStatus.message ?? "未发现可连接设备。");
-      }
-      await load();
-    } catch (autoConnectError) {
-      setDeviceNotice(autoConnectError instanceof Error ? autoConnectError.message : "自动搜索失败。");
-    } finally {
-      setDeviceBusy(null);
-    }
-  }
-
-  async function disconnectHdc() {
-    if (!hdcTarget.trim()) {
-      setDeviceNotice("请输入要断开的设备序列号或 host:port。");
-      return;
-    }
-    setDeviceBusy("disconnect");
-    setDeviceNotice(`正在断开 ${hdcTarget.trim()}...`);
-    try {
-      const nextStatus = await disconnectHdcTarget(hdcTarget.trim());
-      setHdc(nextStatus);
-      setDeviceNotice(nextStatus.message ?? "断开请求已完成。");
-      await load();
-    } catch (disconnectError) {
-      setDeviceNotice(disconnectError instanceof Error ? disconnectError.message : "断开失败。");
-    } finally {
-      setDeviceBusy(null);
-    }
-  }
-
-  async function sendChat() {
-    const prompt = chatInput.trim();
-    if (!prompt || chatBusy) {
-      return;
-    }
-    if (mnn?.state !== "running" || !mnn.port) {
-      setChatError("请确认推理服务正在运行。");
-      return;
-    }
-
-    const userMessage: ChatMessage = { role: "user", content: prompt };
-    const assistantMessage: ChatMessage = { role: "assistant", content: "" };
-    setChatMessages((current) => [...current, userMessage, assistantMessage]);
-    setChatInput("");
-    setChatBusy(true);
-    setChatError(null);
-
-    try {
-      const completion = await sendChatCompletion(mnn.active_model_id ?? "default", prompt);
-      const content = completionText(completion);
-      setChatMessages((current) => {
-        const next = [...current];
-        const last = next[next.length - 1];
-        if (last?.role === "assistant") {
-          next[next.length - 1] = { ...last, content: content || "模型没有返回文本。" };
-        }
-        return next;
-      });
-    } catch (chatRequestError) {
-      setChatError(chatRequestError instanceof Error ? chatRequestError.message : "请求失败");
-    } finally {
-      setChatBusy(false);
-    }
-  }
-
   const serverState = mnn?.state ?? "unknown";
   const hdcAvailable = hdc?.available ?? false;
   const connectedDevices = hdc?.devices.length ?? 0;
-  const visibleLogLines = React.useMemo(() => {
-    const lines = logs.split(/\r?\n/).filter((line) => line.length > 0);
-    const query = logFilter.trim().toLowerCase();
-    if (!query) {
-      return lines;
-    }
-    return lines.filter((line) => line.toLowerCase().includes(query));
-  }, [logFilter, logs]);
-  const criticalLog = [...visibleLogLines].reverse().find((line) => /error|failed|exception|timeout/i.test(line));
   const systemReady = serverState === "running" && Boolean(mnn?.active_model_id);
   const navItems: Array<{ id: ViewId; label: string; hint: string }> = [
     { id: "overview", label: "总览", hint: "状态与快捷操作" },
@@ -350,10 +239,7 @@ function App() {
             chatInput={chatInput}
             chatMessages={chatMessages}
             mnn={mnn}
-            onClearChat={() => {
-              setChatMessages([]);
-              setChatError(null);
-            }}
+            onClearChat={clearChat}
             sendChat={sendChat}
             setChatInput={setChatInput}
           />
