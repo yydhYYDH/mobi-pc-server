@@ -49,6 +49,15 @@ Can't Find type=2 backend, use 0 instead
 
 The JSON output also reported `"backend": "CPU"` for every MNN result. The terminal table labels the backend as `CUDA`, but the JSON and logs indicate fallback to backend type `0`, so the MNN numbers below should be treated as CPU fallback results from a `-a cuda` request, not as valid MNN CUDA GPU numbers.
 
+Follow-up diagnosis found that CUDA was built but not loaded by the stock `llm_bench` executable:
+
+- `MNN_CUDA=ON`
+- `CUDA_GPU_DETECT_OUTPUT=8.9`
+- `source/backend/cuda/libMNN_Cuda_Main.so` exists
+- `ldd 3rdparty/MNN/build_mnn_static/llm_bench` did not show `libMNN_Cuda_Main.so`
+
+CUDA backend registration lives in `source/backend/cuda/Register.cpp`, so it only runs if `libMNN_Cuda_Main.so` is loaded. A temporary relink that forced `libMNN_Cuda_Main.so` into ELF `NEEDED` removed the fallback logs on a small `p16/n8` probe. See `docs/mnn.md` for the exact diagnosis and relink command.
+
 OpenCL was also unavailable in this environment:
 
 ```text
