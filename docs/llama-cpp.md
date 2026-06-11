@@ -118,3 +118,42 @@ The server log should include a CUDA device line similar to:
 CUDA0 : NVIDIA GeForce RTX 4060 Laptop GPU
 CUDA : ARCHS = 890
 ```
+
+## GPU Benchmark Against MNN
+
+The backend includes a pytest benchmark that compares Qwen3.5 0.8B inference speed between MNN and llama.cpp using OpenAI-compatible chat endpoints.
+
+By default, the test starts both GPU servers on isolated benchmark ports:
+
+```text
+MNN        http://127.0.0.1:18088/v1/chat/completions
+llama.cpp  http://127.0.0.1:18090/v1/chat/completions
+```
+
+Run:
+
+```bash
+cd backend
+RUN_QWEN35_GPU_BENCHMARK=1 \
+  .venv/bin/python -m unittest tests.test_qwen35_gpu_benchmark -v
+```
+
+Useful overrides:
+
+```bash
+QWEN35_BENCHMARK_START_SERVERS=1
+QWEN35_MNN_PORT=18088
+QWEN35_LLAMA_CPP_PORT=18090
+QWEN35_MNN_MODEL=MNN/Qwen3.5-0.8B-MNN
+QWEN35_LLAMA_CPP_MODEL=qwen3.5-0.8b-q4-k-m-gguf
+QWEN35_MNN_CONFIG=/absolute/path/to/models/Qwen3.5-0.8B-MNN/config.json
+QWEN35_LLAMA_CPP_MODEL_PATH=/absolute/path/to/Qwen3.5-0.8B-Q4_K_M.gguf
+QWEN35_BENCHMARK_PROMPT_CHARS=64,512,2048
+QWEN35_BENCHMARK_DECODE_TOKENS=32,128,512
+QWEN35_BENCHMARK_WARMUP=1
+QWEN35_BENCHMARK_REPEATS=3
+```
+
+If both servers are already running, set `QWEN35_BENCHMARK_START_SERVERS=0` and point the ports to those services.
+
+The test prints a JSON summary for each backend and each prompt/decode case with average elapsed time, endpoint-reported prompt/completion tokens, endpoint-reported completion tokens per second, average response characters, and response characters per second. Keep the character metrics when token accounting differs between backends.
