@@ -8,13 +8,13 @@ The submodule is pinned by this repository to the upstream MNN baseline commit:
 2106d00b967c95d35661623c52e26cab238812cf
 ```
 
-Do not rely on a depth-1 fetch of the remote default branch for MNN. If upstream `master` moves, a shallow checkout of only the newest branch tip may not contain the pinned commit.
+Do not rely on a depth-1 fetch of the remote default branch for MNN. If upstream `master` moves, a shallow checkout of only the newest branch tip may not contain the pinned commit. Fetch the pinned commit itself with `--depth 1` instead.
 
 Preferred setup:
 
 ```bash
 git submodule update --init 3rdparty/MNN
-git -C 3rdparty/MNN fetch origin 2106d00b967c95d35661623c52e26cab238812cf
+git -C 3rdparty/MNN fetch --depth 1 origin 2106d00b967c95d35661623c52e26cab238812cf
 git -C 3rdparty/MNN checkout --detach 2106d00b967c95d35661623c52e26cab238812cf
 git submodule update --init --recursive 3rdparty/MNN
 ```
@@ -34,7 +34,7 @@ Apply patches after initializing or resetting the submodule:
 
 ```bash
 git submodule update --init 3rdparty/MNN
-git -C 3rdparty/MNN fetch origin 2106d00b967c95d35661623c52e26cab238812cf
+git -C 3rdparty/MNN fetch --depth 1 origin 2106d00b967c95d35661623c52e26cab238812cf
 git -C 3rdparty/MNN checkout --detach 2106d00b967c95d35661623c52e26cab238812cf
 git -C 3rdparty/MNN apply ../../patches/MNN/0001-enable-cuda-backend-for-mnncli-serve.patch
 git -C 3rdparty/MNN apply ../../patches/MNN/0002-link-cuda-backend-for-llm-bench.patch

@@ -109,11 +109,11 @@ MNN 作为 submodule 固定在项目记录的上游基线 commit：
 2106d00b967c95d35661623c52e26cab238812cf
 ```
 
-不要用 `--depth 1` 只拉远端默认分支最新提交；远端更新后可能拿不到这个历史 commit。初始化或重置 MNN 时，显式 fetch 这个 commit：
+不要用 `--depth 1` 只拉远端默认分支最新提交；远端更新后可能拿不到这个历史 commit。初始化或重置 MNN 时，显式 shallow fetch 这个 commit：
 
 ```bash
 git submodule update --init 3rdparty/MNN
-git -C 3rdparty/MNN fetch origin 2106d00b967c95d35661623c52e26cab238812cf
+git -C 3rdparty/MNN fetch --depth 1 origin 2106d00b967c95d35661623c52e26cab238812cf
 git -C 3rdparty/MNN checkout --detach 2106d00b967c95d35661623c52e26cab238812cf
 ```
 
@@ -149,10 +149,18 @@ MNNCLI_BIN=/absolute/path/to/mnncli
 
 ## llama.cpp
 
-llama.cpp 应以浅克隆 submodule 添加到：
+llama.cpp 作为 submodule 固定在项目记录的 commit：
+
+```text
+ac4cddeb0dbd778f650bf568f6f08344a06abe3a
+```
+
+初始化或重置 llama.cpp 时，显式 shallow fetch 这个 commit：
 
 ```bash
-git submodule add --depth 1 https://github.com/ggml-org/llama.cpp.git 3rdparty/llama.cpp
+git submodule update --init 3rdparty/llama.cpp
+git -C 3rdparty/llama.cpp fetch --depth 1 origin ac4cddeb0dbd778f650bf568f6f08344a06abe3a
+git -C 3rdparty/llama.cpp checkout --detach ac4cddeb0dbd778f650bf568f6f08344a06abe3a
 ```
 
 前端默认选择 MNN，可在推理服务页或页面顶部切换到 llama.cpp。后端默认查找：
