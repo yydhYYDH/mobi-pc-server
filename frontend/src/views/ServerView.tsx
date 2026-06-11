@@ -1,4 +1,5 @@
 import type { BackendId, MnnStatus, ServerBusy } from "../api/types";
+import { PanelTitle, StatusPill } from "../components";
 import { BACKEND_OPTIONS, serverOwnerLabel, statusLabel } from "../domain/runtime";
 
 export function ServerView(props: {
@@ -14,16 +15,11 @@ export function ServerView(props: {
   return (
     <section className="detail-grid">
       <article className="panel">
-        <div className="panel-title">
-          <div>
-            <span className="section-kicker">Runtime</span>
-            <h2>推理服务</h2>
-          </div>
-          <span className={`status-pill ${props.serverState}`}>
-            <span className="status-dot" />
-            {statusLabel(props.serverState)}
-          </span>
-        </div>
+        <PanelTitle
+          action={<StatusPill dot tone={props.serverState}>{statusLabel(props.serverState)}</StatusPill>}
+          kicker="Runtime"
+          title="推理服务"
+        />
         <dl>
           <dt>后端</dt>
           <dd>

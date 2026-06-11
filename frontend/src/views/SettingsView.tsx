@@ -1,4 +1,5 @@
 import type { BackendId, HdcStatus, MnnStatus } from "../api/types";
+import { PanelTitle } from "../components";
 import { backendLabel, serverOwnerLabel } from "../domain/runtime";
 
 export function SettingsView(props: {
@@ -12,12 +13,7 @@ export function SettingsView(props: {
   return (
     <section className="detail-grid">
       <article className="panel">
-        <div className="panel-title">
-          <div>
-            <span className="section-kicker">Runtime paths</span>
-            <h2>运行时信息</h2>
-          </div>
-        </div>
+        <PanelTitle kicker="Runtime paths" title="运行时信息" />
         <dl>
           <dt>前端 API</dt>
           <dd>{props.apiBase || "同源代理"}</dd>

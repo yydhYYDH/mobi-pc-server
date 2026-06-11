@@ -1,6 +1,7 @@
 import React from "react";
 
 import type { BackendId } from "../api/types";
+import { InlineNotice } from "../components";
 
 export function LogsView(props: {
   autoScrollLogs: boolean;
@@ -61,7 +62,7 @@ export function LogsView(props: {
           </button>
         </div>
       </div>
-      {copyNotice ? <div className="inline-notice">{copyNotice}</div> : null}
+      {copyNotice ? <InlineNotice>{copyNotice}</InlineNotice> : null}
       <pre ref={props.logRef}>{content || "暂无日志"}</pre>
     </section>
   );

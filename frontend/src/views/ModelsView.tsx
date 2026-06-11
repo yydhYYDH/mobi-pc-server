@@ -1,4 +1,5 @@
 import type { BackendId, CatalogModel, DownloadStatus, ServerBusy } from "../api/types";
+import { CountPill, PanelTitle, ProgressBar, StatusPill } from "../components";
 import { backendLabel, normalizeBackend, statusLabel } from "../domain/runtime";
 
 export function ModelsView(props: {
@@ -18,13 +19,7 @@ export function ModelsView(props: {
 }) {
   return (
     <section className="panel table-panel">
-      <div className="panel-title">
-        <div>
-          <span className="section-kicker">ModelScope</span>
-          <h2>模型资产</h2>
-        </div>
-        <span className="count-pill">{props.models.length}</span>
-      </div>
+      <PanelTitle action={<CountPill>{props.models.length}</CountPill>} kicker="ModelScope" title="模型资产" />
       <div className="model-table">
         <div className="table-row table-head">
           <span>模型</span>
@@ -51,18 +46,14 @@ export function ModelsView(props: {
                 <small>{model.modelscope_id}</small>
                 <p>{status?.message || model.description}</p>
               </div>
-              <span className={`status-pill ${backendMatches ? "running" : "stopped"}`}>
-                {backendLabel(model.runtime)}
-              </span>
-              <span className={`status-pill ${state}`}>{statusLabel(state)}</span>
+              <StatusPill tone={backendMatches ? "running" : "stopped"}>{backendLabel(model.runtime)}</StatusPill>
+              <StatusPill tone={state}>{statusLabel(state)}</StatusPill>
               <div>
                 <div className="download-meter">
                   <span>{props.formatDownloadSize(status, downloaded)}</span>
                   <strong>{progress}%</strong>
                 </div>
-                <div className={`progress-track ${downloading ? "active" : ""}`}>
-                  <div className="progress-value" style={{ width: `${progress}%` }} />
-                </div>
+                <ProgressBar active={downloading} value={progress} />
               </div>
               <div className="row-actions">
                 <button disabled={downloading || anyBusy} onClick={() => void props.downloadModel(model.id)}>

@@ -1,4 +1,5 @@
 import type { DeviceBusy, HdcStatus } from "../api/types";
+import { EmptyState, InlineNotice, PanelTitle, StatusPill } from "../components";
 
 export function DevicesView(props: {
   autoConnectHdc: () => Promise<void>;
@@ -15,16 +16,11 @@ export function DevicesView(props: {
   return (
     <section className="detail-grid">
       <article className="panel">
-        <div className="panel-title">
-          <div>
-            <span className="section-kicker">Device Bridge</span>
-            <h2>HarmonyOS 设备</h2>
-          </div>
-          <span className={`status-pill ${props.hdc?.available ? "running" : "error"}`}>
-            <span className="status-dot" />
-            {props.hdc?.available ? "可用" : "未找到"}
-          </span>
-        </div>
+        <PanelTitle
+          action={<StatusPill dot tone={props.hdc?.available ? "running" : "error"}>{props.hdc?.available ? "可用" : "未找到"}</StatusPill>}
+          kicker="Device Bridge"
+          title="HarmonyOS 设备"
+        />
         <dl>
           <dt>hdc</dt>
           <dd>{props.hdc?.available ? props.hdc.path : "未找到"}</dd>
@@ -38,10 +34,7 @@ export function DevicesView(props: {
           <dd>{props.hdc?.llm_rport_ready ? `已映射到本机 :${props.hdc.llm_port}` : "未建立"}</dd>
         </dl>
         {props.deviceNotice ? (
-          <div className={`device-notice ${props.deviceBusy ? "active" : ""}`}>
-            {props.deviceBusy ? <span className="inline-spinner" /> : null}
-            <span>{props.deviceNotice}</span>
-          </div>
+          <InlineNotice spinning={Boolean(props.deviceBusy)} variant="device">{props.deviceNotice}</InlineNotice>
         ) : null}
         <div className="device-list">
           {(props.hdc?.devices ?? []).map((device) => (
@@ -54,17 +47,12 @@ export function DevicesView(props: {
               <strong>{device.state}</strong>
             </div>
           ))}
-          {props.hdc && props.hdc.devices.length === 0 ? <div className="empty-state">暂无已连接设备</div> : null}
+          {props.hdc && props.hdc.devices.length === 0 ? <EmptyState>暂无已连接设备</EmptyState> : null}
         </div>
       </article>
 
       <article className="panel">
-        <div className="panel-title">
-          <div>
-            <span className="section-kicker">Connect</span>
-            <h2>连接方式</h2>
-          </div>
-        </div>
+        <PanelTitle kicker="Connect" title="连接方式" />
         <div className="device-form">
           <input
             value={props.hdcTarget}

@@ -1,4 +1,5 @@
 import type { BackendId, CatalogModel, HdcStatus, MnnStatus, ServerBusy } from "../api/types";
+import { CountPill, MetricCard, PanelTitle } from "../components";
 import { backendLabel, serverOwnerLabel, statusLabel } from "../domain/runtime";
 
 export function OverviewView(props: {
@@ -63,13 +64,11 @@ export function OverviewView(props: {
       </section>
 
       <section className="panel launch-panel">
-        <div className="panel-title">
-          <div>
-            <span className="section-kicker">Launch</span>
-            <h2>选择可启动模型</h2>
-          </div>
-          <span className="count-pill">{backendLabel(props.selectedBackend)} · {props.launchableModels.length} 个可用</span>
-        </div>
+        <PanelTitle
+          action={<CountPill>{backendLabel(props.selectedBackend)} · {props.launchableModels.length} 个可用</CountPill>}
+          kicker="Launch"
+          title="选择可启动模型"
+        />
         <div className="launch-row">
           <label>
             <span>本地 {backendLabel(props.selectedBackend)} 模型</span>
@@ -111,25 +110,20 @@ export function OverviewView(props: {
       </section>
 
       <section className="metric-grid">
-        <Metric
+        <MetricCard
           title="推理服务"
           value={statusLabel(props.serverState)}
           detail={`${backendLabel(props.mnn?.backend ?? props.selectedBackend)} · 端口 ${props.mnn?.port ?? "未监听"} · ${serverOwnerLabel(props.mnn)}`}
           tone={props.serverState}
         />
-        <Metric title="当前模型" value={props.activeModelName ?? props.mnn?.active_model_id ?? "无"} detail={props.mnn?.message ?? "无运行消息"} />
-        <Metric title="本地模型" value={`${props.downloadedCount}/${props.modelsCount}`} detail="已下载 / 模型目录" />
-        <Metric title="HarmonyOS 设备" value={`${props.connectedDevices}`} detail={props.hdc?.path ?? "hdc 未找到"} tone={props.connectedDevices > 0 ? "running" : "stopped"} />
+        <MetricCard title="当前模型" value={props.activeModelName ?? props.mnn?.active_model_id ?? "无"} detail={props.mnn?.message ?? "无运行消息"} />
+        <MetricCard title="本地模型" value={`${props.downloadedCount}/${props.modelsCount}`} detail="已下载 / 模型目录" />
+        <MetricCard title="HarmonyOS 设备" value={`${props.connectedDevices}`} detail={props.hdc?.path ?? "hdc 未找到"} tone={props.connectedDevices > 0 ? "running" : "stopped"} />
       </section>
 
       <section className="overview-layout">
         <article className="panel command-panel">
-          <div className="panel-title">
-            <div>
-              <span className="section-kicker">快捷操作</span>
-              <h2>常用任务</h2>
-            </div>
-          </div>
+          <PanelTitle kicker="快捷操作" title="常用任务" />
           <div className="command-list">
             <button onClick={props.onOpenModels}>选择或下载模型</button>
             <button onClick={() => void props.onAutoConnect()}>自动搜索设备</button>
@@ -139,12 +133,7 @@ export function OverviewView(props: {
         </article>
 
         <article className="panel issue-panel">
-          <div className="panel-title">
-            <div>
-              <span className="section-kicker">最近风险</span>
-              <h2>需要关注</h2>
-            </div>
-          </div>
+          <PanelTitle kicker="最近风险" title="需要关注" />
           <p className={props.criticalLog ? "issue-text" : "muted-text"}>
             {props.criticalLog ?? "暂无错误日志。"}
           </p>
@@ -154,12 +143,3 @@ export function OverviewView(props: {
   );
 }
 
-export function Metric(props: { title: string; value: string; detail: string; tone?: string }) {
-  return (
-    <div className="metric-card">
-      <span>{props.title}</span>
-      <strong>{props.value}</strong>
-      <small className={props.tone ? `metric-tone ${props.tone}` : ""}>{props.detail}</small>
-    </div>
-  );
-}

@@ -1,6 +1,7 @@
 import React from "react";
 
 import type { ChatMessage, MnnStatus } from "../api/types";
+import { EmptyState, PanelTitle, StatusPill } from "../components";
 import { serverOwnerLabel } from "../domain/runtime";
 
 export function ChatView(props: {
@@ -24,30 +25,29 @@ export function ChatView(props: {
 
   return (
     <section className="panel chat-panel">
-      <div className="panel-title">
-        <div>
-          <span className="section-kicker">OpenAI-compatible endpoint</span>
-          <h2>对话测试</h2>
-        </div>
-        <div className="chat-title-actions">
-          <span className={`status-pill ${props.mnn?.state === "running" ? "running" : "stopped"}`}>
-            <span className="status-dot" />
-            {props.mnn?.state === "running" && props.mnn.port
-              ? `:${props.mnn.port} · ${serverOwnerLabel(props.mnn)}`
-              : "未连接"}
-          </span>
-          <button
-            className="secondary-button"
-            disabled={props.chatBusy || props.chatMessages.length === 0}
-            onClick={props.onClearChat}
-          >
-            清空
-          </button>
-        </div>
-      </div>
+      <PanelTitle
+        action={
+          <div className="chat-title-actions">
+            <StatusPill dot tone={props.mnn?.state === "running" ? "running" : "stopped"}>
+              {props.mnn?.state === "running" && props.mnn.port
+                ? `:${props.mnn.port} · ${serverOwnerLabel(props.mnn)}`
+                : "未连接"}
+            </StatusPill>
+            <button
+              className="secondary-button"
+              disabled={props.chatBusy || props.chatMessages.length === 0}
+              onClick={props.onClearChat}
+            >
+              清空
+            </button>
+          </div>
+        }
+        kicker="OpenAI-compatible endpoint"
+        title="对话测试"
+      />
       <div className="chat-window" ref={chatWindowRef}>
         {props.chatMessages.length === 0 ? (
-          <div className="empty-state">暂无对话</div>
+          <EmptyState>暂无对话</EmptyState>
         ) : (
           props.chatMessages.map((message, index) => (
             <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
