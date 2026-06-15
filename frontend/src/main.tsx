@@ -77,20 +77,23 @@ function App() {
   } = useHdcActions({ hdc, load, setHdc });
 
   const {
+    activeModelSupportsImages,
     chatBusy,
     chatError,
     chatInput,
     chatMessages,
     clearChat,
+    imageDisabledReason,
     exampleImageError,
     exampleImages,
     imageBusy,
+    runningBackendLabel,
     selectedImage,
     selectedImageId,
     sendChat,
     setChatInput,
     setSelectedImageId
-  } = useChatTest(mnn, selectedBackend);
+  } = useChatTest(mnn, models);
 
 
   React.useEffect(() => {
@@ -143,6 +146,7 @@ function App() {
           activeModelName={activeModelName}
           activeView={activeView}
           apiBase={API_BASE}
+          activeModelSupportsImages={activeModelSupportsImages}
           autoConnectHdc={autoConnectHdc}
           autoScrollLogs={autoScrollLogs}
           chatBusy={chatBusy}
@@ -151,6 +155,7 @@ function App() {
           chatMessages={chatMessages}
           exampleImageError={exampleImageError}
           exampleImages={exampleImages}
+          imageDisabledReason={imageDisabledReason}
           imageBusy={imageBusy}
           clearChat={clearChat}
           connectedDevices={connectedDevices}
@@ -179,6 +184,7 @@ function App() {
           onOpenDevices={() => setActiveView("devices")}
           onOpenLogs={() => setActiveView("logs")}
           onOpenModels={() => setActiveView("models")}
+          runningBackendLabel={runningBackendLabel}
           selectedBackend={selectedBackend}
           selectedImage={selectedImage}
           selectedImageId={selectedImageId}

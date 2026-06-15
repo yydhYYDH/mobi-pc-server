@@ -1,4 +1,4 @@
-import type { BackendId, DownloadStatus, MnnStatus } from "../api/types";
+import type { BackendId, CatalogModel, DownloadStatus, MnnStatus } from "../api/types";
 
 const STATUS_LABELS: Record<string, string> = {
   stopped: "已停止",
@@ -58,6 +58,15 @@ export function backendSupportsRuntime(backend: BackendId, runtime: string | nul
     return normalizedRuntime === "llama_cpp";
   }
   return normalizedRuntime === "mnn" || normalizedRuntime === "mobiinfer";
+}
+
+export function modelSupportsImages(model: CatalogModel | null | undefined) {
+  if (!model) {
+    return false;
+  }
+
+  const metadata = `${model.id} ${model.name} ${model.description}`.toLowerCase();
+  return Boolean(model.mmproj_file) || normalizeBackend(model.runtime) === "mobiinfer" || /(visual|vision|qwen\d*vl|\bvl\b)/.test(metadata);
 }
 
 export function formatBytes(bytes: number | null | undefined) {

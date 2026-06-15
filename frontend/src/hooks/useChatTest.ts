@@ -2,7 +2,8 @@ import React from "react";
 
 import { completionText, sendChatCompletion, type ChatCompletionContent } from "../api/chat";
 import { getExampleImage, getExampleImages } from "../api/exampleImages";
-import type { BackendId, ChatMessage, ExampleImage, ExampleImageDetail, MnnStatus } from "../api/types";
+import type { BackendId, CatalogModel, ChatMessage, ExampleImage, ExampleImageDetail, MnnStatus } from "../api/types";
+import { backendLabel, modelSupportsImages, normalizeBackend } from "../domain/runtime";
 
 function buildChatContent(backend: BackendId, prompt: string, image: ExampleImageDetail | null): ChatCompletionContent {
   if (!image) {
@@ -19,7 +20,7 @@ function buildChatContent(backend: BackendId, prompt: string, image: ExampleImag
   ];
 }
 
-export function useChatTest(mnn: MnnStatus | null, selectedBackend: BackendId) {
+export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
   const [chatInput, setChatInput] = React.useState("请用一句话描述这张图片。");
   const [chatMessages, setChatMessages] = React.useState<ChatMessage[]>([]);
   const [chatBusy, setChatBusy] = React.useState(false);
@@ -29,6 +30,20 @@ export function useChatTest(mnn: MnnStatus | null, selectedBackend: BackendId) {
   const [selectedImageId, setSelectedImageId] = React.useState("");
   const [selectedImage, setSelectedImage] = React.useState<ExampleImageDetail | null>(null);
   const [imageBusy, setImageBusy] = React.useState(false);
+  const runningBackend = normalizeBackend(mnn?.backend);
+  const activeModel = React.useMemo(
+    () => models.find((model) => model.id === mnn?.active_model_id) ?? null,
+    [mnn?.active_model_id, models]
+  );
+  const activeModelSupportsImages = modelSupportsImages(activeModel);
+  const imageDisabledReason =
+    mnn?.state !== "running"
+      ? "推理服务未运行，图片测试暂不可用。"
+      : !activeModel
+        ? "当前没有已加载模型，图片测试暂不可用。"
+        : !activeModelSupportsImages
+          ? `${activeModel.name} 未标记为视觉模型，未配置 mmproj_file 或视觉能力。`
+          : null;
 
   React.useEffect(() => {
     let ignore = false;
@@ -52,6 +67,12 @@ export function useChatTest(mnn: MnnStatus | null, selectedBackend: BackendId) {
       ignore = true;
     };
   }, []);
+
+  React.useEffect(() => {
+    if (!activeModelSupportsImages && selectedImageId) {
+      setSelectedImageId("");
+    }
+  }, [activeModelSupportsImages, selectedImageId]);
 
   React.useEffect(() => {
     let ignore = false;
@@ -96,6 +117,10 @@ export function useChatTest(mnn: MnnStatus | null, selectedBackend: BackendId) {
       setChatError("请确认推理服务正在运行。");
       return;
     }
+    if (selectedImageId && !activeModelSupportsImages) {
+      setChatError(imageDisabledReason ?? "当前模型不支持图片测试。");
+      return;
+    }
     if (selectedImageId && !selectedImage) {
       setChatError("示例图片还未读取完成。");
       return;
@@ -109,7 +134,7 @@ export function useChatTest(mnn: MnnStatus | null, selectedBackend: BackendId) {
     setChatError(null);
 
     try {
-      const content = buildChatContent(selectedBackend, prompt, selectedImage);
+      const content = buildChatContent(runningBackend, prompt, selectedImage);
       const completion = await sendChatCompletion(mnn.active_model_id ?? "default", content);
       const responseText = completionText(completion);
       setChatMessages((current) => {
@@ -138,9 +163,12 @@ export function useChatTest(mnn: MnnStatus | null, selectedBackend: BackendId) {
     chatInput,
     chatMessages,
     clearChat,
+    imageDisabledReason,
     exampleImageError,
     exampleImages,
     imageBusy,
+    activeModelSupportsImages,
+    runningBackendLabel: backendLabel(runningBackend),
     selectedImage,
     selectedImageId,
     sendChat,

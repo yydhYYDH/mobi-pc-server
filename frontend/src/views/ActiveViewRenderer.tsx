@@ -22,7 +22,9 @@ export function ActiveViewRenderer(props: {
   chatMessages: ChatMessage[];
   exampleImageError: string | null;
   exampleImages: ExampleImage[];
+  imageDisabledReason: string | null;
   imageBusy: boolean;
+  activeModelSupportsImages: boolean;
   clearChat: () => void;
   connectedDevices: number;
   connectHdc: () => Promise<void>;
@@ -51,6 +53,7 @@ export function ActiveViewRenderer(props: {
   onOpenLogs: () => void;
   onOpenModels: () => void;
   selectedBackend: BackendId;
+  runningBackendLabel: string;
   selectedImage: ExampleImageDetail | null;
   selectedImageId: string;
   selectedLaunchModelId: string;
@@ -151,8 +154,11 @@ export function ActiveViewRenderer(props: {
           chatMessages={props.chatMessages}
           exampleImageError={props.exampleImageError}
           exampleImages={props.exampleImages}
+          imageDisabledReason={props.imageDisabledReason}
           imageBusy={props.imageBusy}
+          activeModelSupportsImages={props.activeModelSupportsImages}
           mnn={props.mnn}
+          runningBackendLabel={props.runningBackendLabel}
           selectedImage={props.selectedImage}
           selectedImageId={props.selectedImageId}
           onClearChat={props.clearChat}

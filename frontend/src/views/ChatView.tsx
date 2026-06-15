@@ -18,8 +18,11 @@ export function ChatView(props: {
   chatMessages: ChatMessage[];
   exampleImageError: string | null;
   exampleImages: ExampleImage[];
+  imageDisabledReason: string | null;
   imageBusy: boolean;
+  activeModelSupportsImages: boolean;
   mnn: MnnStatus | null;
+  runningBackendLabel: string;
   selectedImage: ExampleImageDetail | null;
   selectedImageId: string;
   onClearChat: () => void;
@@ -43,7 +46,7 @@ export function ChatView(props: {
           <div className="chat-title-actions">
             <StatusPill dot tone={props.mnn?.state === "running" ? "running" : "stopped"}>
               {props.mnn?.state === "running" && props.mnn.port
-                ? `:${props.mnn.port} · ${serverOwnerLabel(props.mnn)}`
+                ? `:${props.mnn.port} · ${props.runningBackendLabel} · ${serverOwnerLabel(props.mnn)}`
                 : "未连接"}
             </StatusPill>
             <button
@@ -77,7 +80,7 @@ export function ChatView(props: {
         <label>
           <span>示例图片</span>
           <select
-            disabled={props.chatBusy || props.imageBusy || props.exampleImages.length === 0}
+            disabled={props.chatBusy || props.imageBusy || !props.activeModelSupportsImages || props.exampleImages.length === 0}
             value={props.selectedImageId}
             onChange={(event) => props.setSelectedImageId(event.target.value)}
           >
@@ -99,6 +102,7 @@ export function ChatView(props: {
           </div>
         ) : null}
       </div>
+      {props.imageDisabledReason ? <div className="chat-image-hint">{props.imageDisabledReason}</div> : null}
       <div className="chat-form">
         <textarea
           value={props.chatInput}

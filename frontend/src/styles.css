@@ -918,6 +918,13 @@ dd {
   font-size: 12px;
 }
 
+.chat-image-hint {
+  color: #687386;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 7px;
+}
+
 .chat-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
