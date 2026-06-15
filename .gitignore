@@ -31,6 +31,7 @@ models/*
 !models/.gitkeep
 logs/*
 !logs/.gitkeep
+test/data/example/
 
 # Native/build output
 build/
