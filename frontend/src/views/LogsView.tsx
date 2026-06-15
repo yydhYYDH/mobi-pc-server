@@ -14,6 +14,12 @@ export function LogsView(props: {
 }) {
   const [copyNotice, setCopyNotice] = React.useState<string | null>(null);
   const content = props.visibleLogLines.join("\n");
+  const logFileName =
+    props.selectedBackend === "llama_cpp"
+      ? "llama-server.log"
+      : props.selectedBackend === "mobiinfer"
+        ? "mobiinfer.log"
+        : "mnncli.log";
 
   React.useEffect(() => {
     if (!copyNotice) {
@@ -40,7 +46,7 @@ export function LogsView(props: {
     <section className="panel log-panel">
       <div className="log-toolbar">
         <div>
-          <span className="section-kicker">{props.selectedBackend === "mnn" ? "mnncli.log" : "llama-server.log"}</span>
+          <span className="section-kicker">{logFileName}</span>
           <h2>运行日志</h2>
         </div>
         <div className="log-tools">

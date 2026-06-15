@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
-from app.api import devices, health, llama_cpp, logs, mnn, models, runtime
+from app.api import devices, health, llama_cpp, logs, mnn, mobiinfer, models, runtime
 
 
 app = FastAPI(title="PC MNN Server", version="0.1.0")
@@ -19,6 +19,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api")
 app.include_router(models.router, prefix="/api/models", tags=["models"])
 app.include_router(mnn.router, prefix="/api/mnn", tags=["mnn"])
+app.include_router(mobiinfer.router, prefix="/api/mobiinfer", tags=["mobiinfer"])
 app.include_router(llama_cpp.router, prefix="/api/llama-cpp", tags=["llama.cpp"])
 app.include_router(runtime.router, prefix="/api/runtime", tags=["runtime"])
 app.include_router(devices.router, prefix="/api/devices", tags=["devices"])

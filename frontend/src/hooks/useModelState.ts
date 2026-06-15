@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { BackendId, CatalogModel, DownloadStatus, LocalModel, MnnStatus } from "../api/types";
-import { normalizeBackend } from "../domain/runtime";
+import { backendSupportsRuntime } from "../domain/runtime";
 
 export function useModelState(params: {
   downloads: DownloadStatus[];
@@ -36,7 +36,7 @@ export function useModelState(params: {
   );
 
   const launchableModels = React.useMemo(
-    () => models.filter((model) => normalizeBackend(model.runtime) === selectedBackend && isDownloaded(model.id)),
+    () => models.filter((model) => backendSupportsRuntime(selectedBackend, model.runtime) && isDownloaded(model.id)),
     [isDownloaded, models, selectedBackend]
   );
 

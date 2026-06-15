@@ -9,7 +9,7 @@ function buildChatContent(backend: BackendId, prompt: string, image: ExampleImag
     return prompt;
   }
 
-  if (backend === "mnn") {
+  if (backend === "mnn" || backend === "mobiinfer") {
     return `<img>${image.path}</img>${prompt}`;
   }
 

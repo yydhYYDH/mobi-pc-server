@@ -1,6 +1,9 @@
 [submodule "3rdparty/MNN"]
 	path = 3rdparty/MNN
 	url = https://github.com/alibaba/MNN.git
+[submodule "3rdparty/mobiinfer"]
+	path = 3rdparty/mobiinfer
+	url = https://github.com/doulujiyao12/mobiinfer.git
 [submodule "3rdparty/llama.cpp"]
 	path = 3rdparty/llama.cpp
 	url = https://github.com/ggml-org/llama.cpp.git

@@ -17,11 +17,13 @@ const STATUS_LABELS: Record<string, string> = {
 
 const BACKEND_LABELS: Record<BackendId, string> = {
   mnn: "MNN",
+  mobiinfer: "MobiInfer",
   llama_cpp: "llama.cpp"
 };
 
 export const BACKEND_OPTIONS: Array<{ id: BackendId; label: string }> = [
   { id: "mnn", label: BACKEND_LABELS.mnn },
+  { id: "mobiinfer", label: BACKEND_LABELS.mobiinfer },
   { id: "llama_cpp", label: BACKEND_LABELS.llama_cpp }
 ];
 
@@ -40,11 +42,22 @@ export function normalizeBackend(runtime: string | null | undefined): BackendId 
   if (runtime === "llama_cpp" || runtime === "llama.cpp") {
     return "llama_cpp";
   }
+  if (runtime === "mobiinfer") {
+    return "mobiinfer";
+  }
   return "mnn";
 }
 
 export function backendLabel(backend: BackendId | string | null | undefined) {
   return BACKEND_LABELS[normalizeBackend(backend)];
+}
+
+export function backendSupportsRuntime(backend: BackendId, runtime: string | null | undefined) {
+  const normalizedRuntime = normalizeBackend(runtime);
+  if (backend === "llama_cpp") {
+    return normalizedRuntime === "llama_cpp";
+  }
+  return normalizedRuntime === "mnn" || normalizedRuntime === "mobiinfer";
 }
 
 export function formatBytes(bytes: number | null | undefined) {

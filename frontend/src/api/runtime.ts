@@ -2,7 +2,13 @@ import { API_BASE, apiErrorMessage, readApiJson } from "./client";
 import type { BackendId, MnnStatus } from "./types";
 
 export function runtimeApiPrefix(backend: BackendId) {
-  return backend === "llama_cpp" ? "/api/llama-cpp" : "/api/mnn";
+  if (backend === "llama_cpp") {
+    return "/api/llama-cpp";
+  }
+  if (backend === "mobiinfer") {
+    return "/api/mobiinfer";
+  }
+  return "/api/mnn";
 }
 
 export function getRuntimeStatus(backend: BackendId) {

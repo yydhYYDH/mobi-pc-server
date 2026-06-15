@@ -12,23 +12,34 @@ from app.services.modelscope import ModelScopeService
 
 
 DEFAULT_MNN_PORT = 8088
+DEFAULT_MOBIINFER_PORT = 8089
 DEFAULT_LLAMA_CPP_PORT = 8090
 MNN_LOG_FILE = "mnncli.log"
+MOBIINFER_LOG_FILE = "mobiinfer.log"
 LLAMA_CPP_LOG_FILE = "llama-server.log"
 
 BACKEND_LABELS: dict[InferenceBackend, str] = {
     "mnn": "MNN",
+    "mobiinfer": "MobiInfer",
     "llama_cpp": "llama.cpp",
 }
 
 BACKEND_LOG_FILES: dict[InferenceBackend, str] = {
     "mnn": MNN_LOG_FILE,
+    "mobiinfer": MOBIINFER_LOG_FILE,
     "llama_cpp": LLAMA_CPP_LOG_FILE,
 }
 
 BACKEND_PORTS: dict[InferenceBackend, int] = {
     "mnn": DEFAULT_MNN_PORT,
+    "mobiinfer": DEFAULT_MOBIINFER_PORT,
     "llama_cpp": DEFAULT_LLAMA_CPP_PORT,
+}
+
+BACKEND_RUNTIME_COMPATIBILITY: dict[InferenceBackend, set[InferenceBackend]] = {
+    "mnn": {"mnn", "mobiinfer"},
+    "mobiinfer": {"mnn", "mobiinfer"},
+    "llama_cpp": {"llama_cpp"},
 }
 
 
@@ -123,13 +134,17 @@ class MnnServerService:
         self._append_log(backend, f"Load model requested: {model_id}.")
         entry_path = self._models.entry_path(model_id)
         runtime = self._normalize_runtime(self._models.runtime(model_id))
-        if runtime != backend:
+        if runtime not in BACKEND_RUNTIME_COMPATIBILITY[backend]:
             label = BACKEND_LABELS[backend]
+            compatible = ", ".join(BACKEND_LABELS[item] for item in sorted(BACKEND_RUNTIME_COMPATIBILITY[backend]))
             self._status = MnnStatus(
                 state="error",
                 backend=backend,
                 active_model_id=model_id,
-                message=f"Model {model_id} is configured for {BACKEND_LABELS[runtime]}, not {label}.",
+                message=(
+                    f"Model {model_id} is configured for {BACKEND_LABELS[runtime]}. "
+                    f"{label} accepts: {compatible}."
+                ),
             )
             return self._status
 
@@ -248,11 +263,15 @@ class MnnServerService:
     def _normalize_runtime(self, runtime: str) -> InferenceBackend:
         if runtime in {"llama_cpp", "llama.cpp"}:
             return "llama_cpp"
+        if runtime == "mobiinfer":
+            return "mobiinfer"
         return "mnn"
 
     def _find_backend_binary(self, backend: InferenceBackend) -> Path | None:
         if backend == "llama_cpp":
             return self._llama_cpp.find_binary()
+        if backend == "mobiinfer":
+            return self._find_mobiinfer()
         return self._find_mnncli()
 
     def _find_mnncli(self) -> Path | None:
@@ -274,9 +293,35 @@ class MnnServerService:
                 return path
         return None
 
+    def _find_mobiinfer(self) -> Path | None:
+        env_path = os.environ.get("MOBIINFER_BIN")
+        if env_path:
+            path = Path(env_path).expanduser().resolve()
+            return path if path.exists() else None
+
+        candidates = [
+            REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli",
+            REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli.exe",
+            REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build/mnncli",
+            REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build/mnncli.exe",
+            REPO_ROOT / "3rdparty/mobiinfer/build/apps/mnncli/mnncli",
+            REPO_ROOT / "3rdparty/mobiinfer/build/apps/mnncli/mnncli.exe",
+            REPO_ROOT / "desktop/resources/mobiinfer/mnncli",
+            REPO_ROOT / "desktop/resources/mobiinfer/mnncli.exe",
+        ]
+        for path in candidates:
+            if path.exists():
+                return path
+        return None
+
     def _missing_binary_message(self, backend: InferenceBackend) -> str:
         if backend == "llama_cpp":
             return self._llama_cpp.missing_binary_message()
+        if backend == "mobiinfer":
+            return (
+                "MobiInfer binary was not found. Set MOBIINFER_BIN or build "
+                "3rdparty/mobiinfer/apps/mnncli."
+            )
         return (
             "mnncli binary was not found. Set MNNCLI_BIN or build "
             "3rdparty/MNN/apps/mnncli."

@@ -1,6 +1,6 @@
 import type { BackendId, CatalogModel, DownloadStatus, ServerBusy } from "../api/types";
 import { ActionButton, CountPill, DataState, PanelTitle, ProgressBar, StatusPill } from "../components";
-import { backendLabel, normalizeBackend, statusLabel } from "../domain/runtime";
+import { backendLabel, backendSupportsRuntime, statusLabel } from "../domain/runtime";
 
 export function ModelsView(props: {
   activeModelId: string | null;
@@ -35,7 +35,7 @@ export function ModelsView(props: {
           const downloading = props.isDownloading(model.id);
           const busy = props.modelBusy === model.id;
           const anyBusy = props.modelBusy !== null || props.serverBusy !== null;
-          const backendMatches = normalizeBackend(model.runtime) === props.selectedBackend;
+          const backendMatches = backendSupportsRuntime(props.selectedBackend, model.runtime);
           const runningThisModel = props.serverState === "running" && props.activeModelId === model.id;
           const progress = status?.progress ?? (downloaded ? 100 : 0);
           const state = status?.state ?? (downloaded ? "downloaded" : "idle");

@@ -9,7 +9,7 @@ PC 侧控制台应用，用于启动和管理本地 MNN server、从 ModelScope 
 - 前端：React + Vite + TypeScript
 - 后端：FastAPI
 - 桌面壳：Electron
-- 原生运行时：`3rdparty/MNN` 下的 MNN，`3rdparty/llama.cpp` 下的 llama.cpp
+- 原生运行时：`3rdparty/MNN` 下的 MNN，`3rdparty/mobiinfer` 下的 MobiInfer，`3rdparty/llama.cpp` 下的 llama.cpp
 - 模型来源：ModelScope
 - 设备桥接：HarmonyOS `hdc`
 
@@ -23,6 +23,7 @@ configs/         模型目录和静态配置
 models/          下载后的模型文件，不提交到 Git
 logs/            运行日志，不提交到 Git
 3rdparty/MNN     作为 Git submodule 引入的 MNN 上游源码
+3rdparty/mobiinfer  作为 Git submodule 引入的 mobiinfer 上游源码
 3rdparty/llama.cpp 作为 Git submodule 引入的 llama.cpp 上游源码
 docs/            项目文档
 scripts/         开发脚本
@@ -147,6 +148,26 @@ submodule 准备好后，可以尝试：
 MNNCLI_BIN=/absolute/path/to/mnncli
 ```
 
+## MobiInfer
+
+MobiInfer 目前按 MNN-compatible fork 接入，保留独立后端选择，不影响现有 MNN 流程。
+
+后端默认查找：
+
+```text
+3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli
+3rdparty/mobiinfer/apps/mnncli/build/mnncli
+3rdparty/mobiinfer/build/apps/mnncli/mnncli
+```
+
+如果二进制在其他位置，启动后端前设置：
+
+```bash
+MOBIINFER_BIN=/absolute/path/to/mnncli
+```
+
+更多集成说明见 [docs/mobiinfer.md](docs/mobiinfer.md)。
+
 ## llama.cpp
 
 llama.cpp 作为 submodule 固定在项目记录的 commit：
@@ -163,7 +184,7 @@ git -C 3rdparty/llama.cpp fetch --depth 1 origin ac4cddeb0dbd778f650bf568f6f0834
 git -C 3rdparty/llama.cpp checkout --detach ac4cddeb0dbd778f650bf568f6f08344a06abe3a
 ```
 
-前端默认选择 MNN，可在推理服务页或页面顶部切换到 llama.cpp。后端默认查找：
+前端默认选择 MNN，可在推理服务页或页面顶部切换到 MobiInfer 或 llama.cpp。后端默认查找：
 
 ```text
 3rdparty/llama.cpp/build/bin/llama-server

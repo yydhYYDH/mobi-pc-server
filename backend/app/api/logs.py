@@ -10,6 +10,7 @@ service = LogService()
 
 LOG_FILES: dict[InferenceBackend, str] = {
     "mnn": "mnncli.log",
+    "mobiinfer": "mobiinfer.log",
     "llama_cpp": "llama-server.log",
 }
 
