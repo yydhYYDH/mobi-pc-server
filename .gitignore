@@ -29,12 +29,15 @@ desktop/resources/hdc/*
 # Runtime data
 models/*
 !models/.gitkeep
-logs/*
+logs/
 !logs/.gitkeep
 test/data/example/
 
 # Native/build output
 build/
+!desktop/build/
+!desktop/build/icon.png
+!desktop/build/icon.ico
 cmake-build-*/
 3rdparty/MNN/build*/
 backend/build/
@@ -51,3 +54,7 @@ backend/*.spec
 Thumbs.db
 .idea/
 .vscode/
+
+test/results
+tmp
+desktop/resources

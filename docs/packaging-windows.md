@@ -275,7 +275,20 @@ where nvcc
 desktop/resources/hdc/hdc.exe
 ```
 
-如果 `hdc.exe` 依赖其他 DLL，也放在同一目录。
+当前验证过的 DevEco Studio SDK 版本是 `hdc 3.2.0c`，来源目录为：
+
+```text
+E:\Software\DevEco Studio\sdk\default\openharmony\toolchains
+```
+
+这个版本除了 `hdc.exe`，还需要同目录的 `libusb_shared.dll`：
+
+```text
+desktop/resources/hdc/hdc.exe
+desktop/resources/hdc/libusb_shared.dll
+```
+
+如果后续升级 SDK，重新检查 `toolchains` 目录里是否还有新的 DLL 依赖，并把依赖文件一起放到 `desktop/resources/hdc/`。
 
 ## 6. 构建 Windows 安装包
 
