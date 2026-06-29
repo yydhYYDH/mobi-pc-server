@@ -18,6 +18,7 @@ cd "$BACKEND_DIR"
   --onefile \
   --clean \
   --noconfirm \
+  --hidden-import app.legacy.hdc_server \
   app/main.py
 
 mkdir -p "$DESKTOP_BACKEND_DIR"

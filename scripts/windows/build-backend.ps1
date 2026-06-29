@@ -21,6 +21,7 @@ Push-Location $BackendDir
   --onefile `
   --clean `
   --noconfirm `
+  --hidden-import app.legacy.hdc_server `
   app\main.py
 Pop-Location
 

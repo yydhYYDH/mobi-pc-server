@@ -4,8 +4,12 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
+import threading
 import time
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 from app.core.paths import REPO_ROOT
@@ -28,11 +32,14 @@ HDC_AUTO_DEFAULT_PORTS = (8710, 10178, 5555)
 class HdcService:
     def __init__(self) -> None:
         self._last_llm_port = DEFAULT_LLM_PORT
+        self._origin_server_lock = threading.RLock()
+        self._origin_server_thread: threading.Thread | None = None
 
     def status(self) -> HdcStatus:
         hdc_path = self._hdc_path()
         if not hdc_path:
             return self._status_response(available=False, message="hdc was not found on PATH.")
+        self._ensure_origin_hdc_server()
 
         result = self._run([hdc_path, "list", "targets"], timeout=5)
         if result is None:
@@ -60,6 +67,7 @@ class HdcService:
         hdc_path = self._hdc_path()
         if not hdc_path:
             return self._status_response(available=False, message="hdc was not found on PATH.")
+        self._ensure_origin_hdc_server()
 
         result = self._run([hdc_path, "tconn", target.strip()], timeout=10)
         if result is None:
@@ -84,6 +92,7 @@ class HdcService:
         hdc_path = self._hdc_path()
         if not hdc_path:
             return self._status_response(available=False, message="hdc was not found on PATH.")
+        self._ensure_origin_hdc_server()
 
         current = self.status()
         if current.devices:
@@ -142,7 +151,60 @@ class HdcService:
         return current
 
     def _hdc_path(self) -> str | None:
+        env_path = os.environ.get("HDC_BIN")
+        if env_path:
+            path = Path(env_path).expanduser().resolve()
+            if path.exists():
+                return str(path)
         return shutil.which("hdc")
+
+    def _ensure_origin_hdc_server(self) -> None:
+        if self._origin_hdc_server_healthy():
+            return
+
+        with self._origin_server_lock:
+            if self._origin_hdc_server_healthy():
+                return
+            if self._origin_server_thread and self._origin_server_thread.is_alive():
+                return
+
+            hdc_path = self._hdc_path()
+            if hdc_path:
+                hdc_dir = str(Path(hdc_path).parent)
+                path_parts = os.environ.get("PATH", "").split(os.pathsep)
+                if hdc_dir not in path_parts:
+                    os.environ["PATH"] = os.pathsep.join([hdc_dir, os.environ.get("PATH", "")])
+
+            self._origin_server_thread = threading.Thread(
+                target=self._run_origin_hdc_server,
+                name="legacy-hdc-server",
+                daemon=True,
+            )
+            self._origin_server_thread.start()
+
+    def _origin_hdc_server_healthy(self) -> bool:
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:9124/api/health", timeout=0.4) as response:
+                return 200 <= response.status < 500
+        except Exception:
+            return False
+
+    def _run_origin_hdc_server(self) -> None:
+        legacy_dir = str(Path(__file__).resolve().parents[1] / "legacy")
+        if legacy_dir not in sys.path:
+            sys.path.insert(0, legacy_dir)
+
+        try:
+            from app.legacy import hdc_server as module
+
+            module.LEGACY_LOOP_ENABLED = False
+            server = ThreadingHTTPServer(("0.0.0.0", module.SERVER_PORT), module.HDCServerHandler)
+            print(f">> [HDC] legacy HDC server started on port {module.SERVER_PORT}.", flush=True)
+            server.serve_forever()
+        except OSError as exc:
+            print(f">> [HDC] legacy HDC server failed to bind: {exc}", flush=True)
+        except Exception as exc:
+            print(f">> [HDC] legacy HDC server exited: {exc}", flush=True)
 
     def _run(self, args: list[str], timeout: int) -> subprocess.CompletedProcess[str] | None:
         try:

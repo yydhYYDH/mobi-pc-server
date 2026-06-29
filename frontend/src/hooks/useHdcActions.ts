@@ -4,13 +4,46 @@ import { autoConnectHdcTarget, connectHdcTarget, disconnectHdcTarget } from "../
 import type { HdcStatus } from "../api/types";
 import { normalizePort } from "../domain/runtime";
 
+const RECENT_HDC_TARGETS_KEY = "pc-server-recent-hdc-targets";
+const RECENT_HDC_TARGET_LIMIT = 5;
+
+function readRecentHdcTargets() {
+  try {
+    const raw = window.localStorage.getItem(RECENT_HDC_TARGETS_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function writeRecentHdcTarget(target: string) {
+  const normalizedTarget = target.trim();
+  if (!normalizedTarget) {
+    return readRecentHdcTargets();
+  }
+  const nextTargets = [
+    normalizedTarget,
+    ...readRecentHdcTargets().filter((item) => item !== normalizedTarget)
+  ].slice(0, RECENT_HDC_TARGET_LIMIT);
+  window.localStorage.setItem(RECENT_HDC_TARGETS_KEY, JSON.stringify(nextTargets));
+  return nextTargets;
+}
+
 export function useHdcActions(params: {
   hdc: HdcStatus | null;
   load: () => Promise<void>;
   setHdc: (status: HdcStatus) => void;
 }) {
   const { hdc, load, setHdc } = params;
-  const [hdcTarget, setHdcTarget] = React.useState("");
+  const [recentHdcTargets, setRecentHdcTargets] = React.useState<string[]>(() => readRecentHdcTargets());
+  const [hdcTarget, setHdcTarget] = React.useState(() => readRecentHdcTargets()[0] ?? "");
   const [hdcLlmPort, setHdcLlmPort] = React.useState(
     () => window.localStorage.getItem("pc-server-hdc-llm-port") ?? "8088"
   );
@@ -21,6 +54,14 @@ export function useHdcActions(params: {
   React.useEffect(() => {
     window.localStorage.setItem("pc-server-hdc-llm-port", hdcLlmPort);
   }, [hdcLlmPort]);
+
+  React.useEffect(() => {
+    const connectedTarget = hdc?.devices[0]?.serial;
+    if (!connectedTarget) {
+      return;
+    }
+    setHdcTarget((currentTarget) => currentTarget || connectedTarget);
+  }, [hdc?.devices]);
 
   React.useEffect(() => {
     if (autoHdcStartedRef.current || hdc === null || deviceBusy !== null) {
@@ -41,6 +82,7 @@ export function useHdcActions(params: {
     try {
       const nextStatus = await connectHdcTarget(hdcTarget.trim(), llmPort);
       setHdc(nextStatus);
+      setRecentHdcTargets(writeRecentHdcTarget(hdcTarget.trim()));
       setDeviceNotice(nextStatus.message ?? "连接请求已完成。");
       await load();
     } catch (connectError) {
@@ -57,6 +99,11 @@ export function useHdcActions(params: {
     try {
       const nextStatus = await autoConnectHdcTarget(llmPort);
       setHdc(nextStatus);
+      const connectedTarget = nextStatus.devices[0]?.serial;
+      if (connectedTarget) {
+        setHdcTarget((currentTarget) => currentTarget || connectedTarget);
+        setRecentHdcTargets(writeRecentHdcTarget(connectedTarget));
+      }
       if (nextStatus.devices.length > 0) {
         setDeviceNotice(nextStatus.message ?? `已发现 ${nextStatus.devices.length} 台设备。`);
       } else {
@@ -97,6 +144,7 @@ export function useHdcActions(params: {
     disconnectHdc,
     hdcLlmPort,
     hdcTarget,
+    recentHdcTargets,
     setHdcLlmPort,
     setHdcTarget
   };
