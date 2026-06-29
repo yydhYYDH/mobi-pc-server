@@ -5,9 +5,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from app.core.paths import LOGS_DIR, REPO_ROOT
+from app.core.paths import LOGS_DIR, REPO_ROOT, RESOURCES_DIR
 from app.schemas.mnn import InferenceBackend, MnnStatus
-from app.services.llama_cpp_server import LlamaCppServerAdapter
+from app.services.llama_cpp_server import LlamaCppRuntime, LlamaCppServerAdapter
 from app.services.modelscope import ModelScopeService
 
 
@@ -133,6 +133,7 @@ class MnnServerService:
     def load_model(self, model_id: str, backend: InferenceBackend = "mnn") -> MnnStatus:
         self._append_log(backend, f"Load model requested: {model_id}.")
         entry_path = self._models.entry_path(model_id)
+        mmproj_path = self._models.mmproj_path(model_id) if backend == "llama_cpp" else None
         runtime = self._normalize_runtime(self._models.runtime(model_id))
         if runtime not in BACKEND_RUNTIME_COMPATIBILITY[backend]:
             label = BACKEND_LABELS[backend]
@@ -148,8 +149,8 @@ class MnnServerService:
             )
             return self._status
 
-        binary_path = self._find_backend_binary(backend)
-        if not binary_path:
+        runtime = self._find_backend_runtime(backend)
+        if not runtime:
             label = BACKEND_LABELS[backend]
             self._append_log(backend, f"{label} binary was not found.")
             self._status = MnnStatus(
@@ -177,11 +178,13 @@ class MnnServerService:
             self._append_log(backend, self._status.message)
             return self._status
 
-        command = self._build_command(backend, binary_path, model_id, entry_path, port)
+        command = self._build_command(backend, runtime, model_id, entry_path, port, mmproj_path)
         log_file = (LOGS_DIR / BACKEND_LOG_FILES[backend]).open("a", encoding="utf-8")
+        binary_path = runtime.binary_path if isinstance(runtime, LlamaCppRuntime) else runtime
+        runtime_label = f" runtime={runtime.accelerator}" if isinstance(runtime, LlamaCppRuntime) else ""
         self._append_log(
             backend,
-            f"Starting {BACKEND_LABELS[backend]}: binary={binary_path} model={model_id} "
+            f"Starting {BACKEND_LABELS[backend]}:{runtime_label} binary={binary_path} model={model_id} "
             f"entry={entry_path} host=127.0.0.1 port={port}",
         )
         self._append_log(backend, f"Working directory: {REPO_ROOT}")
@@ -240,16 +243,19 @@ class MnnServerService:
     def _build_command(
         self,
         backend: InferenceBackend,
-        binary_path: Path,
+        runtime: Path | LlamaCppRuntime,
         model_id: str,
         entry_path: Path,
         port: int,
+        mmproj_path: Path | None = None,
     ) -> list[str]:
         if backend == "llama_cpp":
-            return self._llama_cpp.build_command(binary_path, entry_path, port)
+            if not isinstance(runtime, LlamaCppRuntime):
+                runtime = LlamaCppRuntime(runtime, "auto")
+            return self._llama_cpp.build_command(runtime, entry_path, port, mmproj_path)
 
         return [
-            str(binary_path),
+            str(runtime),
             "serve",
             model_id,
             "--config",
@@ -267,9 +273,9 @@ class MnnServerService:
             return "mobiinfer"
         return "mnn"
 
-    def _find_backend_binary(self, backend: InferenceBackend) -> Path | None:
+    def _find_backend_runtime(self, backend: InferenceBackend) -> Path | LlamaCppRuntime | None:
         if backend == "llama_cpp":
-            return self._llama_cpp.find_binary()
+            return self._llama_cpp.find_runtime()
         if backend == "mobiinfer":
             return self._find_mobiinfer()
         return self._find_mnncli()
@@ -281,6 +287,8 @@ class MnnServerService:
             return path if path.exists() else None
 
         candidates = [
+            RESOURCES_DIR / "mnn/mnncli",
+            RESOURCES_DIR / "mnn/mnncli.exe",
             REPO_ROOT / "3rdparty/MNN/apps/mnncli/build_mnncli/mnncli",
             REPO_ROOT / "3rdparty/MNN/apps/mnncli/build_mnncli/mnncli.exe",
             REPO_ROOT / "3rdparty/MNN/apps/mnncli/build/mnncli",
@@ -300,6 +308,10 @@ class MnnServerService:
             return path if path.exists() else None
 
         candidates = [
+            RESOURCES_DIR / "mobiinfer/mnncli",
+            RESOURCES_DIR / "mobiinfer/mnncli.exe",
+            RESOURCES_DIR / "mnn/mobiinfer-mnncli",
+            RESOURCES_DIR / "mnn/mobiinfer-mnncli.exe",
             REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli",
             REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli.exe",
             REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build/mnncli",
