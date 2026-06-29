@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import threading
 import time
@@ -85,6 +86,10 @@ class ModelScopeService:
         model_id = item.id
         model_dir = self._safe_model_dir(item)
         model_dir.mkdir(parents=True, exist_ok=True)
+        cache_dir = MODELS_DIR.parent / "modelscope-cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("MODELSCOPE_CACHE", str(cache_dir))
+        os.environ.setdefault("MODELSCOPE_CACHE_HOME", str(cache_dir))
 
         try:
             from modelscope import snapshot_download
@@ -186,6 +191,16 @@ class ModelScopeService:
 
     def runtime(self, model_id: str) -> str:
         return self._find_model(model_id).runtime
+
+    def mmproj_path(self, model_id: str) -> Path | None:
+        item = self._find_model(model_id)
+        if not item.mmproj_file:
+            return None
+        model_dir = self._safe_model_dir(item)
+        mmproj_path = model_dir / item.mmproj_file
+        if not mmproj_path.exists():
+            raise FileNotFoundError(f"Model mmproj file does not exist: {mmproj_path}")
+        return mmproj_path
 
     def _find_model(self, model_id: str) -> ModelCatalogItem:
         for item in self.read_catalog():

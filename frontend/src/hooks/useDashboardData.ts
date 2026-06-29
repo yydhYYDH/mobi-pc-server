@@ -22,9 +22,11 @@ export function useDashboardData(params: {
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = React.useState<Date | null>(null);
 
-  const load = React.useCallback(async () => {
+  const load = React.useCallback(async (options: { background?: boolean } = {}) => {
     setError(null);
-    setIsRefreshing(true);
+    if (!options.background) {
+      setIsRefreshing(true);
+    }
     try {
       const [mnnResponse, modelsResponse, localModelsResponse, downloadsResponse, hdcResponse, logsResponse] =
         await Promise.all([
@@ -55,7 +57,9 @@ export function useDashboardData(params: {
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unknown error");
     } finally {
-      setIsRefreshing(false);
+      if (!options.background) {
+        setIsRefreshing(false);
+      }
     }
   }, [selectedBackend]);
 
@@ -72,7 +76,7 @@ export function useDashboardData(params: {
       return;
     }
     const intervalId = window.setInterval(() => {
-      void load();
+      void load({ background: true });
     }, hasActiveDownload ? 1500 : 3000);
     return () => window.clearInterval(intervalId);
   }, [activeView, hasActiveDownload, load]);

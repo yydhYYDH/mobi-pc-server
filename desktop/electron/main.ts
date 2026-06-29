@@ -25,7 +25,9 @@ function backendExecutablePath(): string {
 }
 
 function appDataRoot(): string {
-  return path.join(app.getPath("userData"), "pc-server-data");
+  return app.isPackaged
+    ? path.join(path.dirname(process.execPath), "pc-server-data")
+    : path.join(repoRoot(), "pc-server-data");
 }
 
 function npmCommand(): string {
@@ -164,6 +166,7 @@ function childEnv(): NodeJS.ProcessEnv {
     PC_SERVER_MODELS_DIR: path.join(dataRoot, "models"),
     PC_SERVER_RESOURCES: resourcesPath,
     PC_SERVER_ROOT: dataRoot,
+    MODELSCOPE_CACHE: path.join(dataRoot, "modelscope-cache"),
     PYTHONIOENCODING: "utf-8",
     PYTHONUTF8: "1"
   };

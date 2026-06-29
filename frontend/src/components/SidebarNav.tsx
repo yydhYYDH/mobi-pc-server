@@ -17,13 +17,6 @@ export function SidebarNav(props: {
 }) {
   return (
     <aside className="sidebar">
-      <div className="brand">
-        <div className="brand-mark">M</div>
-        <div>
-          <strong>PC MNN Server</strong>
-          <span>Local Developer Console</span>
-        </div>
-      </div>
       <nav className="nav-list" aria-label="主导航">
         {props.items.map((item) => (
           <button
