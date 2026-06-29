@@ -1,5 +1,6 @@
 appId: com.waic.pc-mnn-server
 productName: 数据归家
+executableName: DataHome
 directories:
   output: release
 files:
@@ -29,7 +30,7 @@ win:
   icon: build/icon.ico
   target:
     - nsis
-  artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+  artifactName: "DataHome-${version}-${os}-${arch}.${ext}"
 nsis:
   oneClick: false
   perMachine: false
@@ -39,4 +40,4 @@ linux:
   target:
     - AppImage
     - dir
-  artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+  artifactName: "DataHome-${version}-${os}-${arch}.${ext}"
