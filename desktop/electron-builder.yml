@@ -9,10 +9,16 @@ asar: true
 extraResources:
   - from: resources/frontend
     to: frontend
+  - from: resources/configs
+    to: configs
   - from: resources/backend
     to: backend
   - from: resources/mnn
     to: mnn
+    filter:
+      - "**/*"
+  - from: resources/llama-cpp
+    to: llama-cpp
     filter:
       - "**/*"
   - from: resources/hdc

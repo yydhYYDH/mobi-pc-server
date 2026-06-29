@@ -24,6 +24,10 @@ function backendExecutablePath(): string {
   return path.join(process.resourcesPath, "backend", executableName);
 }
 
+function appDataRoot(): string {
+  return path.join(app.getPath("userData"), "pc-server-data");
+}
+
 function npmCommand(): string {
   return process.platform === "win32" ? "npm.cmd" : "npm";
 }
@@ -143,9 +147,23 @@ function startBackend(): void {
 }
 
 function childEnv(): NodeJS.ProcessEnv {
+  const resourcesPath = app.isPackaged ? process.resourcesPath : repoRoot();
+  const dataRoot = app.isPackaged ? appDataRoot() : repoRoot();
+  const hdcDir = path.join(resourcesPath, "hdc");
+  const pathValue = [hdcDir, process.env.PATH ?? ""].filter(Boolean).join(path.delimiter);
+
   return {
     ...process.env,
     FORCE_COLOR: "0",
+    HDC_BIN: path.join(hdcDir, process.platform === "win32" ? "hdc.exe" : "hdc"),
+    MNNCLI_BIN: path.join(resourcesPath, "mnn", process.platform === "win32" ? "mnncli.exe" : "mnncli"),
+    MOBIINFER_BIN: path.join(resourcesPath, "mobiinfer", process.platform === "win32" ? "mnncli.exe" : "mnncli"),
+    PATH: pathValue,
+    PC_SERVER_CONFIGS_DIR: path.join(resourcesPath, "configs"),
+    PC_SERVER_LOGS_DIR: path.join(dataRoot, "logs"),
+    PC_SERVER_MODELS_DIR: path.join(dataRoot, "models"),
+    PC_SERVER_RESOURCES: resourcesPath,
+    PC_SERVER_ROOT: dataRoot,
     PYTHONIOENCODING: "utf-8",
     PYTHONUTF8: "1"
   };
