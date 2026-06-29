@@ -19,6 +19,7 @@ export type CatalogModel = {
   runtime: string;
   local_dir: string;
   entry_file: string;
+  mmproj_file?: string | null;
 };
 
 export type LocalModel = {
@@ -55,6 +56,13 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   imageName?: string;
+};
+
+export type ChatImageAttachment = {
+  name: string;
+  mime_type: string;
+  size_bytes: number;
+  data_uri: string;
 };
 
 export type ExampleImage = {

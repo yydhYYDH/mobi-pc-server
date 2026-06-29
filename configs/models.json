@@ -22,6 +22,17 @@
     "entry_file": "config.json"
   },
   {
+    "id": "mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100",
+    "name": "MAI-UI 2B 0422 Instruct RLv2 Base",
+    "modelscope_id": "YYDH21/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100",
+    "revision": "master",
+    "description": "YYDH21 MAI-UI 2B base model used as the GGUF conversion source.",
+    "size": "unknown",
+    "runtime": "mnn",
+    "local_dir": "models/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100",
+    "entry_file": "config.json"
+  },
+  {
     "id": "MNN/Qwen3.5-0.8B-MNN",
     "name": "MNN/Qwen3.5-0.8B-MNN",
     "modelscope_id": "MNN/Qwen3.5-0.8B-MNN",
@@ -53,5 +64,29 @@
     "runtime": "llama_cpp",
     "local_dir": "models/qwen3.5-0.8b-q4-k-m",
     "entry_file": "Qwen3.5-0.8B-Q4_K_M.gguf"
+  },
+  {
+    "id": "mai-ui-2b-0422-base-f16-gguf",
+    "name": "MAI-UI 2B 0422 Base F16 GGUF",
+    "modelscope_id": "YYDH21/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100",
+    "revision": "master",
+    "description": "FP16 GGUF converted locally from the MAI-UI 2B base Qwen3VL model.",
+    "size": "4.1 GB",
+    "runtime": "llama_cpp",
+    "local_dir": "models/mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-gguf",
+    "entry_file": "mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-f16.gguf",
+    "mmproj_file": "mmproj-mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-f16.gguf"
+  },
+  {
+    "id": "mai-ui-2b-0422-base-q4-k-m-gguf",
+    "name": "MAI-UI 2B 0422 Base Q4_K_M GGUF",
+    "modelscope_id": "YYDH21/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100-base-q4_k_m-gguf",
+    "revision": "master",
+    "description": "Q4_K_M GGUF with mmproj for MAI-UI 2B base Qwen3VL on llama.cpp.",
+    "size": "2.0 GB",
+    "runtime": "llama_cpp",
+    "local_dir": "models/mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-gguf",
+    "entry_file": "mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-f16-q4_k_m.gguf",
+    "mmproj_file": "mmproj-mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-f16.gguf"
   }
 ]

@@ -11,6 +11,7 @@ class ModelCatalogItem(BaseModel):
     runtime: str = "mnn"
     local_dir: str
     entry_file: str
+    mmproj_file: str | None = None
 
 
 class LocalModel(BaseModel):

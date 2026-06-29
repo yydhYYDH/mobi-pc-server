@@ -1,17 +1,12 @@
 import React from "react";
 
 import { completionText, sendChatCompletion, type ChatCompletionContent } from "../api/chat";
-import { getExampleImage, getExampleImages } from "../api/exampleImages";
-import type { BackendId, CatalogModel, ChatMessage, ExampleImage, ExampleImageDetail, MnnStatus } from "../api/types";
+import type { BackendId, CatalogModel, ChatImageAttachment, ChatMessage, MnnStatus } from "../api/types";
 import { backendLabel, modelSupportsImages, normalizeBackend } from "../domain/runtime";
 
-function buildChatContent(backend: BackendId, prompt: string, image: ExampleImageDetail | null): ChatCompletionContent {
+function buildChatContent(_backend: BackendId, prompt: string, image: ChatImageAttachment | null): ChatCompletionContent {
   if (!image) {
     return prompt;
-  }
-
-  if (backend === "mnn" || backend === "mobiinfer") {
-    return `<img>${image.path}</img>${prompt}`;
   }
 
   return [
@@ -20,15 +15,27 @@ function buildChatContent(backend: BackendId, prompt: string, image: ExampleImag
   ];
 }
 
+function fileToDataUri(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("图片读取失败。"));
+    };
+    reader.onerror = () => reject(new Error("图片读取失败。"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
   const [chatInput, setChatInput] = React.useState("请用一句话描述这张图片。");
   const [chatMessages, setChatMessages] = React.useState<ChatMessage[]>([]);
   const [chatBusy, setChatBusy] = React.useState(false);
   const [chatError, setChatError] = React.useState<string | null>(null);
-  const [exampleImages, setExampleImages] = React.useState<ExampleImage[]>([]);
-  const [exampleImageError, setExampleImageError] = React.useState<string | null>(null);
-  const [selectedImageId, setSelectedImageId] = React.useState("");
-  const [selectedImage, setSelectedImage] = React.useState<ExampleImageDetail | null>(null);
+  const [selectedImage, setSelectedImage] = React.useState<ChatImageAttachment | null>(null);
   const [imageBusy, setImageBusy] = React.useState(false);
   const runningBackend = normalizeBackend(mnn?.backend);
   const activeModel = React.useMemo(
@@ -46,67 +53,36 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
           : null;
 
   React.useEffect(() => {
-    let ignore = false;
-    async function loadExampleImages() {
-      try {
-        const images = await getExampleImages();
-        if (ignore) {
-          return;
-        }
-        setExampleImages(images);
-        setExampleImageError(null);
-        setSelectedImageId((current) => current || images[0]?.id || "");
-      } catch (error) {
-        if (!ignore) {
-          setExampleImageError(error instanceof Error ? error.message : "示例图片加载失败");
-        }
-      }
-    }
-    void loadExampleImages();
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  React.useEffect(() => {
-    if (!activeModelSupportsImages && selectedImageId) {
-      setSelectedImageId("");
-    }
-  }, [activeModelSupportsImages, selectedImageId]);
-
-  React.useEffect(() => {
-    let ignore = false;
-    if (!selectedImageId) {
+    if (!activeModelSupportsImages && selectedImage) {
       setSelectedImage(null);
-      setImageBusy(false);
+    }
+  }, [activeModelSupportsImages, selectedImage]);
+
+  async function selectImageFile(file: File | null) {
+    if (!file) {
       return;
     }
-
-    async function loadSelectedImage() {
-      setImageBusy(true);
-      try {
-        const image = await getExampleImage(selectedImageId);
-        if (!ignore) {
-          setSelectedImage(image);
-          setExampleImageError(null);
-        }
-      } catch (error) {
-        if (!ignore) {
-          setSelectedImage(null);
-          setExampleImageError(error instanceof Error ? error.message : "示例图片读取失败");
-        }
-      } finally {
-        if (!ignore) {
-          setImageBusy(false);
-        }
-      }
+    if (!file.type.startsWith("image/")) {
+      setChatError("请选择图片文件。");
+      return;
     }
-
-    void loadSelectedImage();
-    return () => {
-      ignore = true;
-    };
-  }, [selectedImageId]);
+    setImageBusy(true);
+    setChatError(null);
+    try {
+      const dataUri = await fileToDataUri(file);
+      setSelectedImage({
+        name: file.name,
+        mime_type: file.type || "image/*",
+        size_bytes: file.size,
+        data_uri: dataUri
+      });
+    } catch (error) {
+      setSelectedImage(null);
+      setChatError(error instanceof Error ? error.message : "图片读取失败。");
+    } finally {
+      setImageBusy(false);
+    }
+  }
 
   async function sendChat() {
     const prompt = chatInput.trim();
@@ -117,12 +93,8 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
       setChatError("请确认推理服务正在运行。");
       return;
     }
-    if (selectedImageId && !activeModelSupportsImages) {
+    if (selectedImage && !activeModelSupportsImages) {
       setChatError(imageDisabledReason ?? "当前模型不支持图片测试。");
-      return;
-    }
-    if (selectedImageId && !selectedImage) {
-      setChatError("示例图片还未读取完成。");
       return;
     }
 
@@ -164,15 +136,13 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
     chatMessages,
     clearChat,
     imageDisabledReason,
-    exampleImageError,
-    exampleImages,
     imageBusy,
     activeModelSupportsImages,
     runningBackendLabel: backendLabel(runningBackend),
     selectedImage,
-    selectedImageId,
+    clearSelectedImage: () => setSelectedImage(null),
+    selectImageFile,
     sendChat,
-    setChatInput,
-    setSelectedImageId
+    setChatInput
   };
 }

@@ -1,6 +1,6 @@
 import React from "react";
 
-import type { ChatMessage, ExampleImage, ExampleImageDetail, MnnStatus } from "../api/types";
+import type { ChatImageAttachment, ChatMessage, MnnStatus } from "../api/types";
 import { EmptyState, PanelTitle, StatusPill } from "../components";
 import { serverOwnerLabel } from "../domain/runtime";
 
@@ -16,21 +16,20 @@ export function ChatView(props: {
   chatError: string | null;
   chatInput: string;
   chatMessages: ChatMessage[];
-  exampleImageError: string | null;
-  exampleImages: ExampleImage[];
   imageDisabledReason: string | null;
   imageBusy: boolean;
   activeModelSupportsImages: boolean;
   mnn: MnnStatus | null;
   runningBackendLabel: string;
-  selectedImage: ExampleImageDetail | null;
-  selectedImageId: string;
+  selectedImage: ChatImageAttachment | null;
+  clearSelectedImage: () => void;
   onClearChat: () => void;
+  selectImageFile: (file: File | null) => Promise<void>;
   sendChat: () => Promise<void>;
   setChatInput: (value: string) => void;
-  setSelectedImageId: (value: string) => void;
 }) {
   const chatWindowRef = React.useRef<HTMLDivElement | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
     if (!chatWindowRef.current) {
@@ -61,9 +60,51 @@ export function ChatView(props: {
         kicker="OpenAI-compatible endpoint"
         title="对话测试"
       />
-      <div className="chat-window" ref={chatWindowRef}>
+      <div className="chat-window-wrap">
+        <button
+          className="chat-upload-button"
+          disabled={props.chatBusy || props.imageBusy || !props.activeModelSupportsImages}
+          onClick={() => fileInputRef.current?.click()}
+          type="button"
+        >
+          {props.imageBusy ? "读取中" : "上传图片"}
+        </button>
+        <input
+          ref={fileInputRef}
+          accept="image/*"
+          className="visually-hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0] ?? null;
+            event.target.value = "";
+            void props.selectImageFile(file);
+          }}
+          type="file"
+        />
+        <div className="chat-window" ref={chatWindowRef}>
         {props.chatMessages.length === 0 ? (
-          <EmptyState>暂无对话</EmptyState>
+          <div className="chat-welcome">
+            <div>
+              <span className="section-kicker">Chat Test</span>
+              <h3>试一下当前推理服务</h3>
+            <p>
+                上传图片或直接输入问题，快速验证当前本地 AI 是否工作正常。
+              </p>
+            </div>
+            <div className="chat-suggestions" aria-label="示例任务">
+              <div className="chat-suggestion">
+                <strong>看运行状态</strong>
+                <span>确认服务、模型和端口是否就绪</span>
+              </div>
+              <div className="chat-suggestion">
+                <strong>测一张图</strong>
+                <span>上传图片检查多模态链路</span>
+              </div>
+              <div className="chat-suggestion">
+                <strong>发一段话</strong>
+                <span>验证文本生成延迟和输出质量</span>
+              </div>
+            </div>
+          </div>
         ) : (
           props.chatMessages.map((message, index) => (
             <div className={`chat-bubble ${message.role}`} key={`${message.role}-${index}`}>
@@ -73,35 +114,21 @@ export function ChatView(props: {
             </div>
           ))
         )}
+        </div>
       </div>
       {props.chatError ? <div className="chat-error">{props.chatError}</div> : null}
-      {props.exampleImageError ? <div className="chat-error">{props.exampleImageError}</div> : null}
-      <div className="chat-image-row">
-        <label>
-          <span>示例图片</span>
-          <select
-            disabled={props.chatBusy || props.imageBusy || !props.activeModelSupportsImages || props.exampleImages.length === 0}
-            value={props.selectedImageId}
-            onChange={(event) => props.setSelectedImageId(event.target.value)}
-          >
-            <option value="">不带图片</option>
-            {props.exampleImages.map((image) => (
-              <option key={image.id} value={image.id}>
-                {image.name} · {formatImageSize(image.size_bytes)}
-              </option>
-            ))}
-          </select>
-        </label>
-        {props.selectedImage ? (
-          <div className="chat-image-preview">
-            <img alt={props.selectedImage.name} src={props.selectedImage.data_uri} />
-            <div>
-              <strong>{props.selectedImage.name}</strong>
-              <small>{props.selectedImage.mime_type} · {formatImageSize(props.selectedImage.size_bytes)}</small>
-            </div>
+      {props.selectedImage ? (
+        <div className="chat-image-preview">
+          <img alt={props.selectedImage.name} src={props.selectedImage.data_uri} />
+          <div>
+            <strong>{props.selectedImage.name}</strong>
+            <small>{props.selectedImage.mime_type} · {formatImageSize(props.selectedImage.size_bytes)}</small>
           </div>
-        ) : null}
-      </div>
+          <button className="secondary-button" disabled={props.chatBusy} onClick={props.clearSelectedImage} type="button">
+            移除
+          </button>
+        </div>
+      ) : null}
       {props.imageDisabledReason ? <div className="chat-image-hint">{props.imageDisabledReason}</div> : null}
       <div className="chat-form">
         <textarea

@@ -1,6 +1,8 @@
 import base64
 import json
 import mimetypes
+import re
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -16,6 +18,8 @@ router = APIRouter()
 LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 EXAMPLE_IMAGE_DIR = (REPO_ROOT / "test/data/example/pics").resolve()
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+UPLOAD_IMAGE_DIR = Path(tempfile.gettempdir()) / "pc_server_chat_images"
+DATA_IMAGE_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.*)$", re.DOTALL)
 
 
 def _example_image_path(image_id: str) -> Path:
@@ -38,6 +42,69 @@ def _example_image_summary(path: Path) -> dict[str, Any]:
         "mime_type": mime_type,
         "size_bytes": path.stat().st_size,
     }
+
+
+def _safe_image_suffix(mime_type: str) -> str:
+    suffix = mimetypes.guess_extension(mime_type) or ".jpg"
+    if suffix == ".jpe":
+        suffix = ".jpg"
+    if suffix.lower() not in SUPPORTED_IMAGE_SUFFIXES:
+        return ".jpg"
+    return suffix.lower()
+
+
+def _save_data_uri_image(data_uri: str) -> str:
+    match = DATA_IMAGE_RE.match(data_uri)
+    if not match:
+        raise HTTPException(status_code=400, detail="Only data:image/...;base64 image uploads are supported.")
+    mime_type, encoded = match.groups()
+    try:
+        image_bytes = base64.b64decode(encoded, validate=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Uploaded image is not valid base64.") from exc
+    UPLOAD_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = _safe_image_suffix(mime_type)
+    handle = tempfile.NamedTemporaryFile(prefix="chat_", suffix=suffix, dir=UPLOAD_IMAGE_DIR, delete=False)
+    with handle:
+        handle.write(image_bytes)
+    return handle.name
+
+
+def _content_block_to_text(content: Any) -> Any:
+    if not isinstance(content, list):
+        return content
+
+    parts: list[str] = []
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        block_type = block.get("type")
+        if block_type == "text" and isinstance(block.get("text"), str):
+            parts.append(block["text"])
+        elif block_type == "image_url":
+            image_url = block.get("image_url")
+            url = image_url.get("url") if isinstance(image_url, dict) else None
+            if isinstance(url, str):
+                image_path = _save_data_uri_image(url)
+                parts.append(f"<img>{image_path}</img>")
+    return "\n".join(parts)
+
+
+def _normalize_uploaded_images(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+    messages = normalized.get("messages")
+    if not isinstance(messages, list):
+        return normalized
+    next_messages: list[Any] = []
+    for message in messages:
+        if not isinstance(message, dict):
+            next_messages.append(message)
+            continue
+        next_message = dict(message)
+        next_message["content"] = _content_block_to_text(next_message.get("content"))
+        next_messages.append(next_message)
+    normalized["messages"] = next_messages
+    return normalized
 
 
 @router.get("/example-images")
@@ -66,7 +133,7 @@ def chat_completions(payload: dict[str, Any]) -> dict[str, Any]:
     if status.state != "running" or not status.port:
         raise HTTPException(status_code=409, detail="Inference server is not running.")
 
-    upstream_payload = dict(payload)
+    upstream_payload = _normalize_uploaded_images(payload)
     upstream_payload["stream"] = False
     data = json.dumps(upstream_payload).encode("utf-8")
     request = urllib.request.Request(
