@@ -1,17 +1,39 @@
 import json
+import multiprocessing
 import os
 import shutil
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from app.core.paths import MODEL_CATALOG_PATH, MODELS_DIR, REPO_ROOT
 from app.schemas.models import LocalModel, ModelCatalogItem, ModelDownloadStatus
 
 
+def _snapshot_download_worker(modelscope_id: str, revision: str, model_dir: str, cache_dir: str) -> None:
+    os.environ.setdefault("MODELSCOPE_CACHE", cache_dir)
+    os.environ.setdefault("MODELSCOPE_CACHE_HOME", cache_dir)
+
+    from modelscope import snapshot_download
+
+    snapshot_download(
+        model_id=modelscope_id,
+        revision=revision,
+        local_dir=model_dir,
+    )
+
+
+@dataclass
+class DownloadTask:
+    process: multiprocessing.Process | None
+    stop_event: threading.Event
+
+
 class ModelScopeService:
     def __init__(self) -> None:
         self._download_status: dict[str, ModelDownloadStatus] = {}
+        self._download_tasks: dict[str, DownloadTask] = {}
         self._lock = threading.Lock()
 
     def read_catalog(self) -> list[ModelCatalogItem]:
@@ -49,6 +71,36 @@ class ModelScopeService:
         thread = threading.Thread(target=self._download_worker, args=(item,), daemon=True)
         thread.start()
         return {"status": "queued", "message": f"Started download for {item.modelscope_id}."}
+
+    def pause_download(self, model_id: str) -> dict[str, str]:
+        item = self._find_model(model_id)
+        status = self.download_status(model_id)
+        if status.state not in {"queued", "downloading", "verifying"}:
+            return {"status": status.state, "message": "No active download to pause."}
+
+        with self._lock:
+            task = self._download_tasks.get(model_id)
+
+        if task:
+            task.stop_event.set()
+            process = task.process
+            if process and process.is_alive():
+                process.terminate()
+                process.join(timeout=5)
+                if process.is_alive():
+                    process.kill()
+                    process.join(timeout=2)
+
+        model_dir = self._safe_model_dir(item)
+        self._set_status(
+            model_id,
+            "paused",
+            status.progress,
+            "Download paused. Click download again to continue.",
+            downloaded_bytes=self._directory_size(model_dir),
+            total_bytes=status.total_bytes,
+        )
+        return {"status": "paused", "message": f"Paused download for {item.modelscope_id}."}
 
     def download_statuses(self) -> list[ModelDownloadStatus]:
         catalog_ids = {item.id for item in self.read_catalog()}
@@ -92,7 +144,7 @@ class ModelScopeService:
         os.environ.setdefault("MODELSCOPE_CACHE_HOME", str(cache_dir))
 
         try:
-            from modelscope import snapshot_download
+            import modelscope  # noqa: F401
         except ImportError as exc:
             self._set_status(model_id, "failed", 0, f"Install backend dependencies first: {exc}")
             return
@@ -104,8 +156,22 @@ class ModelScopeService:
             args=(item, total_bytes, stop_monitor),
             daemon=True,
         )
+        process: multiprocessing.Process | None = None
+        with self._lock:
+            self._download_tasks[model_id] = DownloadTask(process=None, stop_event=stop_monitor)
 
         try:
+            if stop_monitor.is_set() or self.download_status(model_id).state == "paused":
+                return
+            process = multiprocessing.Process(
+                target=_snapshot_download_worker,
+                args=(item.modelscope_id, item.revision, str(model_dir), str(cache_dir)),
+                daemon=True,
+            )
+            with self._lock:
+                self._download_tasks[model_id] = DownloadTask(process=process, stop_event=stop_monitor)
+            if stop_monitor.is_set() or self.download_status(model_id).state == "paused":
+                return
             self._set_status(
                 model_id,
                 "downloading",
@@ -115,13 +181,14 @@ class ModelScopeService:
                 total_bytes=total_bytes,
             )
             monitor.start()
-            snapshot_download(
-                model_id=item.modelscope_id,
-                revision=item.revision,
-                local_dir=str(model_dir),
-            )
+            process.start()
+            process.join()
             stop_monitor.set()
             monitor.join(timeout=1)
+            if self.download_status(model_id).state == "paused":
+                return
+            if process.exitcode != 0:
+                raise RuntimeError(f"ModelScope download process exited with code {process.exitcode}.")
             downloaded_bytes = self._directory_size(model_dir)
             self._set_status(
                 model_id,
@@ -134,6 +201,8 @@ class ModelScopeService:
         except Exception as exc:  # noqa: BLE001 - return SDK errors to the UI as task status.
             stop_monitor.set()
             monitor.join(timeout=1)
+            if self.download_status(model_id).state == "paused":
+                return
             self._set_status(
                 model_id,
                 "failed",
@@ -143,6 +212,11 @@ class ModelScopeService:
                 total_bytes=total_bytes,
             )
             return
+        finally:
+            with self._lock:
+                task = self._download_tasks.get(model_id)
+                if task and task.process is process:
+                    self._download_tasks.pop(model_id, None)
 
         entry_path = model_dir / item.entry_file
         if not entry_path.exists():

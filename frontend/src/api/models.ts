@@ -37,6 +37,18 @@ export async function downloadModelById(modelId: string) {
   return response.json() as Promise<{ status: string }>;
 }
 
+export async function pauseModelDownloadById(modelId: string) {
+  const response = await fetch(`${API_BASE}/api/models/pause`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model_id: modelId })
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response, "暂停失败"));
+  }
+  return response.json() as Promise<{ status: string }>;
+}
+
 export async function deleteModelById(modelId: string) {
   const response = await fetch(`${API_BASE}/api/models/delete`, {
     method: "POST",

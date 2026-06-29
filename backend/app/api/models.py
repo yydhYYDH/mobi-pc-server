@@ -36,6 +36,14 @@ def download_model(request: ModelDownloadRequest) -> dict[str, str]:
         raise HTTPException(status_code=404, detail=f"Unknown model: {request.model_id}") from exc
 
 
+@router.post("/pause")
+def pause_download(request: ModelDownloadRequest) -> dict[str, str]:
+    try:
+        return service.pause_download(request.model_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Unknown model: {request.model_id}") from exc
+
+
 @router.post("/delete")
 def delete_model(request: ModelDownloadRequest) -> dict[str, str]:
     try:

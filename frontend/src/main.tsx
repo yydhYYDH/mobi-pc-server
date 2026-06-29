@@ -41,7 +41,7 @@ function App() {
 
   const { autoScrollLogs, criticalLog, logFilter, setAutoScrollLogs, setLogFilter, visibleLogLines } = useLogState(logs, logRef);
 
-  const { activeModelName, downloadedCount, downloadStatus, isDownloaded, isDownloading, launchableModels } =
+  const { activeModelName, downloadedCount, downloadStatus, isDownloaded, isDownloading, launchableModels, selectableModels } =
     useModelState({
       downloads,
       localModels,
@@ -52,7 +52,7 @@ function App() {
       setSelectedLaunchModelId
     });
 
-  const { deleteModel, downloadModel, modelBusy, setModelBusy } = useModelActions({ load, mnn, models, setError });
+  const { deleteModel, downloadModel, modelBusy, pauseDownload, setModelBusy } = useModelActions({ load, mnn, models, setError });
 
   const { loadModel, serverBusy, startMnn, stopMnn } = useRuntimeActions({
     isDownloaded,
@@ -72,6 +72,7 @@ function App() {
     disconnectHdc,
     hdcLlmPort,
     hdcTarget,
+    recentHdcTargets,
     setHdcLlmPort,
     setHdcTarget
   } = useHdcActions({ hdc, load, setHdc });
@@ -83,16 +84,14 @@ function App() {
     chatInput,
     chatMessages,
     clearChat,
+    clearSelectedImage,
     imageDisabledReason,
-    exampleImageError,
-    exampleImages,
     imageBusy,
     runningBackendLabel,
     selectedImage,
-    selectedImageId,
+    selectImageFile,
     sendChat,
     setChatInput,
-    setSelectedImageId
   } = useChatTest(mnn, models);
 
 
@@ -106,7 +105,7 @@ function App() {
   const systemReady = serverState === "running" && Boolean(mnn?.active_model_id);
   const navItems: NavItem[] = [
     { id: "overview", label: "总览", hint: "状态与快捷操作" },
-    { id: "models", label: "模型", hint: `${downloadedCount}/${models.length} 已就绪` },
+    { id: "models", label: "模型", hint: `${downloadedCount}/${models.length} 已下载` },
     { id: "server", label: "推理服务", hint: `${backendLabel(selectedBackend)} · ${statusLabel(serverState)}` },
     { id: "devices", label: "设备", hint: connectedDevices ? `${connectedDevices} 台在线` : "未连接" },
     { id: "chat", label: "对话测试", hint: systemReady ? "可用" : "待加载模型" },
@@ -153,10 +152,9 @@ function App() {
           chatError={chatError}
           chatInput={chatInput}
           chatMessages={chatMessages}
-          exampleImageError={exampleImageError}
-          exampleImages={exampleImages}
           imageDisabledReason={imageDisabledReason}
           imageBusy={imageBusy}
+          clearSelectedImage={clearSelectedImage}
           clearChat={clearChat}
           connectedDevices={connectedDevices}
           connectHdc={connectHdc}
@@ -172,6 +170,7 @@ function App() {
           hdc={hdc}
           hdcLlmPort={hdcLlmPort}
           hdcTarget={hdcTarget}
+          recentHdcTargets={recentHdcTargets}
           isDownloaded={isDownloaded}
           isDownloading={isDownloading}
           launchableModels={launchableModels}
@@ -182,13 +181,17 @@ function App() {
           modelBusy={modelBusy}
           models={models}
           onOpenDevices={() => setActiveView("devices")}
+          onOpenChat={() => setActiveView("chat")}
           onOpenLogs={() => setActiveView("logs")}
           onOpenModels={() => setActiveView("models")}
+          onOpenServer={() => setActiveView("server")}
+          pauseDownload={pauseDownload}
           runningBackendLabel={runningBackendLabel}
           selectedBackend={selectedBackend}
           selectedImage={selectedImage}
-          selectedImageId={selectedImageId}
           selectedLaunchModelId={selectedLaunchModelId}
+          selectableModels={selectableModels}
+          selectImageFile={selectImageFile}
           sendChat={sendChat}
           serverBusy={serverBusy}
           serverState={serverState}
@@ -198,7 +201,6 @@ function App() {
           setHdcTarget={setHdcTarget}
           setLogFilter={setLogFilter}
           setSelectedBackend={setSelectedBackend}
-          setSelectedImageId={setSelectedImageId}
           setSelectedLaunchModelId={setSelectedLaunchModelId}
           startMnn={startMnn}
           stopMnn={stopMnn}

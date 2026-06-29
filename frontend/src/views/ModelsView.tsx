@@ -13,6 +13,7 @@ export function ModelsView(props: {
   loadModel: (modelId: string) => Promise<void>;
   modelBusy: string | null;
   models: CatalogModel[];
+  pauseDownload: (modelId: string) => Promise<void>;
   selectedBackend: BackendId;
   serverState: string;
   serverBusy: "start" | "stop" | null;
@@ -57,9 +58,15 @@ export function ModelsView(props: {
                 <ProgressBar active={downloading} value={progress} />
               </div>
               <div className="row-actions">
-                <ActionButton busy={busy && !downloaded} disabled={downloading || anyBusy} onClick={() => void props.downloadModel(model.id)}>
-                  下载
-                </ActionButton>
+                {downloading ? (
+                  <ActionButton busy={busy} busyText="暂停中..." disabled={props.serverBusy !== null} onClick={() => void props.pauseDownload(model.id)}>
+                    暂停
+                  </ActionButton>
+                ) : (
+                  <ActionButton busy={busy && !downloaded} disabled={anyBusy} onClick={() => void props.downloadModel(model.id)}>
+                    {state === "paused" ? "继续" : "下载"}
+                  </ActionButton>
+                )}
                 <ActionButton busy={busy && downloaded} busyText="加载中..." disabled={!backendMatches || !downloaded || downloading || anyBusy} onClick={() => void props.loadModel(model.id)}>
                   加载
                 </ActionButton>

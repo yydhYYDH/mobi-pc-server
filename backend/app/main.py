@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import multiprocessing
 import os
 
 from app.api import devices, health, llama_cpp, logs, mnn, mobiinfer, models, runtime
@@ -27,6 +28,8 @@ app.include_router(logs.router, prefix="/api/logs", tags=["logs"])
 
 
 def run() -> None:
+    multiprocessing.freeze_support()
+
     import uvicorn
 
     host = os.getenv("PC_SERVER_BACKEND_HOST", "127.0.0.1")

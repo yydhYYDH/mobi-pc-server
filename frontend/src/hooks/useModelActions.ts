@@ -1,6 +1,6 @@
 import React from "react";
 
-import { deleteModelById, downloadModelById } from "../api/models";
+import { deleteModelById, downloadModelById, pauseModelDownloadById } from "../api/models";
 import type { CatalogModel, MnnStatus } from "../api/types";
 
 export function useModelActions(params: {
@@ -44,10 +44,23 @@ export function useModelActions(params: {
     }
   }
 
+  async function pauseDownload(modelId: string) {
+    setModelBusy(modelId);
+    try {
+      await pauseModelDownloadById(modelId);
+      await load();
+    } catch (pauseError) {
+      setError(pauseError instanceof Error ? pauseError.message : "暂停失败。");
+    } finally {
+      setModelBusy(null);
+    }
+  }
+
   return {
     deleteModel,
     downloadModel,
     modelBusy,
+    pauseDownload,
     setModelBusy
   };
 }

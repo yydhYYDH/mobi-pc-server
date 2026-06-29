@@ -9,6 +9,7 @@ const STATUS_LABELS: Record<string, string> = {
   idle: "未下载",
   queued: "排队中",
   downloading: "下载中",
+  paused: "已暂停",
   verifying: "校验中",
   downloaded: "已下载",
   failed: "失败",

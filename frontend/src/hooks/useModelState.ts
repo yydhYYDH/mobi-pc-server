@@ -40,24 +40,29 @@ export function useModelState(params: {
     [isDownloaded, models, selectedBackend]
   );
 
+  const selectableModels = React.useMemo(
+    () => models.filter((model) => backendSupportsRuntime(selectedBackend, model.runtime)),
+    [models, selectedBackend]
+  );
+
   const activeModelName = React.useMemo(
     () => models.find((model) => model.id === mnn?.active_model_id)?.name,
     [mnn?.active_model_id, models]
   );
 
   React.useEffect(() => {
-    if (launchableModels.length === 0) {
+    if (selectableModels.length === 0) {
       setSelectedLaunchModelId("");
       return;
     }
-    if (selectedLaunchModelId && launchableModels.some((model) => model.id === selectedLaunchModelId)) {
+    if (selectedLaunchModelId && selectableModels.some((model) => model.id === selectedLaunchModelId)) {
       return;
     }
-    const activeModel = launchableModels.find(
+    const activeModel = selectableModels.find(
       (model) => model.id === mnn?.active_model_id && mnn?.backend === selectedBackend
     );
-    setSelectedLaunchModelId(activeModel?.id ?? launchableModels[0].id);
-  }, [launchableModels, mnn?.active_model_id, mnn?.backend, selectedBackend, selectedLaunchModelId, setSelectedLaunchModelId]);
+    setSelectedLaunchModelId(activeModel?.id ?? selectableModels[0].id);
+  }, [mnn?.active_model_id, mnn?.backend, selectableModels, selectedBackend, selectedLaunchModelId, setSelectedLaunchModelId]);
 
   return {
     activeModelName,
@@ -65,6 +70,7 @@ export function useModelState(params: {
     downloadStatus,
     isDownloaded,
     isDownloading,
-    launchableModels
+    launchableModels,
+    selectableModels
   };
 }
