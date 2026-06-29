@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "author": "WAIC",
-  "description": "Electron shell for the PC MNN Server developer console",
+  "description": "Electron shell for 数据归家",
   "main": "dist/main.js",
   "scripts": {
     "check-node": "node scripts/check-node.js",

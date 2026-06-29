@@ -1,6 +1,6 @@
 # Linux 打包说明
 
-本文档说明如何在 Linux 或 WSL 环境里打包 PC MNN Server 的 Linux 版本。
+本文档说明如何在 Linux 或 WSL 环境里打包数据归家的 Linux 版本。
 
 ## 产物结构
 

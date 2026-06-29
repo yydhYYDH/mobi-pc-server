@@ -1,6 +1,6 @@
 # Windows 打包说明
 
-本文档说明如何在 Windows 原生环境里打包 PC MNN Server。不要在 WSL 里生成 Windows 包；WSL 适合生成 Linux 包。
+本文档说明如何在 Windows 原生环境里打包数据归家。不要在 WSL 里生成 Windows 包；WSL 适合生成 Linux 包。
 
 ## 产物结构
 

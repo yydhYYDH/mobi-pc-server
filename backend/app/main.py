@@ -5,7 +5,7 @@ import os
 from app.api import devices, health, llama_cpp, logs, mnn, mobiinfer, models, runtime
 
 
-app = FastAPI(title="PC MNN Server", version="0.1.0")
+app = FastAPI(title="数据归家", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,

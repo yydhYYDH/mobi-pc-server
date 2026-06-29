@@ -4,7 +4,7 @@
 
 ## 1. 产品定位
 
-PC MNN Server 前端是本地控制台，服务对象是需要在 PC 上管理 MNN 推理服务、ModelScope 模型和 HarmonyOS 设备连接的开发者。
+数据归家前端是本地控制台，服务对象是需要在 PC 上管理 MNN 推理服务、ModelScope 模型和 HarmonyOS 设备连接的开发者。
 
 前端的核心职责：
 
@@ -358,4 +358,3 @@ async function parseApiError(response: Response, fallback: string) {
 - 使用 SSE 或 WebSocket 替代下载和日志轮询。
 - 将前端直接访问 MNN chat endpoint 改为后端代理。
 - 引入 TanStack Query 时，统一缓存 key 和刷新策略。
-

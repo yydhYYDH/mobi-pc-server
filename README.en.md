@@ -1,4 +1,4 @@
-# PC MNN Server
+# 数据归家
 
 PC-side control application for running an MNN server, downloading models from ModelScope, and connecting to HarmonyOS phones through `hdc`.
 
@@ -7,7 +7,7 @@ PC-side control application for running an MNN server, downloading models from M
 - Frontend: React + Vite + TypeScript
 - Backend: FastAPI
 - Desktop shell: Electron
-- Native runtime: MNN under `3rdparty/MNN`
+- Native runtime: MNN under `3rdparty/MNN`, MobiInfer under `3rdparty/mobiinfer`, llama.cpp under `3rdparty/llama.cpp`
 - Model source: ModelScope
 - Device bridge: HarmonyOS `hdc`
 
@@ -21,6 +21,8 @@ configs/         Model catalog and static config
 models/          Downloaded model files, ignored by Git
 logs/            Runtime logs, ignored by Git
 3rdparty/MNN     MNN upstream source as a Git submodule
+3rdparty/mobiinfer  MobiInfer upstream source as a Git submodule
+3rdparty/llama.cpp  llama.cpp upstream source as a Git submodule
 docs/            Project documentation
 scripts/         Developer scripts
 ```
@@ -118,6 +120,64 @@ This runs MNN's two-stage `apps/mnncli/build.sh` flow: first building the static
 ```
 
 If the binary is built elsewhere, set `MNNCLI_BIN=/absolute/path/to/mnncli` before starting the backend.
+
+## MobiInfer
+
+MobiInfer is currently integrated as an MNN-compatible fork without removing the original MNN flow.
+
+The repository currently pins the `3rdparty/mobiinfer` submodule to:
+
+```text
+798dbf4deddbb592bdf3ba07938fb31406d1578e
+```
+
+To initialize or reset the submodule:
+
+```bash
+git submodule update --init 3rdparty/mobiinfer
+git -C 3rdparty/mobiinfer fetch --depth 1 origin 798dbf4deddbb592bdf3ba07938fb31406d1578e
+git -C 3rdparty/mobiinfer checkout --detach 798dbf4deddbb592bdf3ba07938fb31406d1578e
+```
+
+To initialize all third-party runtimes in one step:
+
+```bash
+git submodule update --init 3rdparty/MNN 3rdparty/mobiinfer 3rdparty/llama.cpp
+```
+
+After the submodule is present, try:
+
+```bash
+./scripts/build-mobiinfer.sh
+```
+
+The backend checks these build outputs by default:
+
+```text
+3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli
+3rdparty/mobiinfer/apps/mnncli/build/mnncli
+3rdparty/mobiinfer/build/apps/mnncli/mnncli
+```
+
+If the binary is built elsewhere, set `MOBIINFER_BIN=/absolute/path/to/mnncli` before starting the backend.
+
+See [docs/mobiinfer.md](docs/mobiinfer.md) for integration details.
+
+## llama.cpp
+
+llama.cpp is pinned by this repository to:
+
+```text
+6eab47181cbd3532c88a105682b81b4729ab809b
+```
+
+To initialize or reset the submodule:
+
+```bash
+git submodule update --init 3rdparty/llama.cpp
+git -C 3rdparty/llama.cpp fetch --depth 1 origin 6eab47181cbd3532c88a105682b81b4729ab809b
+git -C 3rdparty/llama.cpp checkout --detach 6eab47181cbd3532c88a105682b81b4729ab809b
+```
 
 ## Models
 

@@ -1,5 +1,5 @@
 appId: com.waic.pc-mnn-server
-productName: PC MNN Server
+productName: 数据归家
 directories:
   output: release
 files:
