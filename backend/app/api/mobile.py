@@ -10,7 +10,7 @@ from app.api.devices import service as hdc_service
 from app.schemas.devices import HdcStatus
 from app.schemas.mnn import MnnStatus
 from app.services.hdc import PHONE_LLM_URL, PHONE_PC_SERVER_URL
-from app.services.logs import LogService
+from app.services.logs import BACKEND_SERVER_LOG, LogService
 from app.services.mobile_events import mobile_event_broker, mobile_event_state
 from app.services.modelscope import ModelScopeService
 from app.services.mnn_server import BACKEND_LABELS
@@ -23,7 +23,7 @@ logs = LogService()
 
 
 def _log_mobile(message: str) -> None:
-    logs.append("hdc.log", f">> [Mobile] {message}")
+    logs.append(BACKEND_SERVER_LOG, f">> [Mobile] {message}")
 
 
 def _request_label(request: Request) -> str:

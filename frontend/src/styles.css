@@ -110,6 +110,15 @@ button:disabled {
   box-shadow: 0 8px 18px rgb(89 104 255 / 12%);
 }
 
+.danger-button {
+  color: var(--red);
+}
+
+.danger-button:hover:not(:disabled) {
+  background: var(--red-soft);
+  box-shadow: none;
+}
+
 input,
 select,
 textarea {
@@ -1664,9 +1673,45 @@ dd {
 
 .log-tools {
   display: grid;
-  grid-template-columns: minmax(180px, 260px) auto auto;
+  grid-template-columns: minmax(180px, 260px) auto auto auto;
   gap: 9px;
   align-items: center;
+}
+
+.log-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.log-tabs button {
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  min-height: 54px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--text);
+  padding: 9px 11px;
+  text-align: left;
+}
+
+.log-tabs button.active {
+  border-color: rgb(89 104 255 / 34%);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.log-tabs span {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.log-tabs small {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .check-control {

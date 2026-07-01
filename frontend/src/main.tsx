@@ -35,11 +35,13 @@ function App() {
     logs,
     mnn,
     models,
+    refreshLogs,
     setError,
     setHdc
   } = useDashboardData({ activeView, selectedBackend });
 
-  const { autoScrollLogs, logFilter, setAutoScrollLogs, setLogFilter, visibleLogLines } = useLogState(logs, logRef);
+  const { activeLog, autoScrollLogs, logFilter, setActiveLog, setAutoScrollLogs, setLogFilter, visibleLogLines } =
+    useLogState(logs, logRef);
 
   const { activeModelName, downloadedCount, downloadStatus, isDownloaded, isDownloading, selectableModels } =
     useModelState({
@@ -74,9 +76,8 @@ function App() {
     hdcLlmPort,
     hdcTarget,
     recentHdcTargets,
-    setHdcLlmPort,
     setHdcTarget
-  } = useHdcActions({ hdc, setHdc });
+  } = useHdcActions({ hdc, selectedBackend, setHdc });
 
   const {
     activeModelSupportsImages,
@@ -144,6 +145,7 @@ function App() {
         <ActiveViewRenderer
           activeModelId={mnn?.active_model_id ?? null}
           activeModelName={activeModelName}
+          activeLog={activeLog}
           activeView={activeView}
           apiBase={API_BASE}
           activeModelSupportsImages={activeModelSupportsImages}
@@ -185,6 +187,7 @@ function App() {
           onOpenModels={() => setActiveView("models")}
           onOpenServer={() => setActiveView("server")}
           pauseDownload={pauseDownload}
+          refreshLogs={refreshLogs}
           runningBackendLabel={runningBackendLabel}
           selectedBackend={selectedBackend}
           selectedImage={selectedImage}
@@ -195,8 +198,8 @@ function App() {
           serverBusy={serverBusy}
           serverState={serverState}
           setAutoScrollLogs={setAutoScrollLogs}
+          setActiveLog={setActiveLog}
           setChatInput={setChatInput}
-          setHdcLlmPort={setHdcLlmPort}
           setHdcTarget={setHdcTarget}
           setLogFilter={setLogFilter}
           setSelectedBackend={setSelectedBackend}

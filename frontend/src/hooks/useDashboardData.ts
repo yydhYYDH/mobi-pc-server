@@ -2,7 +2,7 @@ import React from "react";
 
 import { LOG_LINES } from "../api/client";
 import { getHdcStatus, readHdcStatus } from "../api/devices";
-import { getHdcLogs, getRuntimeLogs, readHdcLogs, readRuntimeLogs } from "../api/logs";
+import { getSoftwareLogs, readSoftwareLogs, type SoftwareLogs } from "../api/logs";
 import {
   getLocalModels,
   getModelCatalog,
@@ -24,7 +24,11 @@ export function useDashboardData(params: {
   const [localModels, setLocalModels] = React.useState<LocalModel[]>([]);
   const [downloads, setDownloads] = React.useState<DownloadStatus[]>([]);
   const [hdc, setHdc] = React.useState<HdcStatus | null>(null);
-  const [logs, setLogs] = React.useState("");
+  const [logs, setLogs] = React.useState<SoftwareLogs>({
+    hdc_server: { content: "" },
+    backend_server: { content: "" },
+    llm_server: { content: "" }
+  });
   const [error, setError] = React.useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = React.useState<Date | null>(null);
@@ -36,25 +40,23 @@ export function useDashboardData(params: {
     }
     try {
       const shouldLoadDownloads = activeView === "models";
-      const [mnnResponse, modelsResponse, localModelsResponse, downloadsResponse, hdcResponse, runtimeLogsResponse, hdcLogsResponse] =
+      const [mnnResponse, modelsResponse, localModelsResponse, downloadsResponse, hdcResponse, logsResponse] =
         await Promise.all([
           getRuntimeStatus(selectedBackend),
           getModelCatalog(),
           getLocalModels(),
           shouldLoadDownloads ? getModelDownloads() : Promise.resolve(null),
           getHdcStatus(),
-          getRuntimeLogs(selectedBackend, LOG_LINES),
-          getHdcLogs(LOG_LINES)
+          getSoftwareLogs(LOG_LINES)
         ]);
 
-      const [nextMnn, nextModels, nextLocalModels, nextDownloads, nextHdc, nextRuntimeLogs, nextHdcLogs] = await Promise.all([
+      const [nextMnn, nextModels, nextLocalModels, nextDownloads, nextHdc, nextLogs] = await Promise.all([
         readRuntimeStatus(mnnResponse),
         readModelCatalog(modelsResponse),
         readLocalModels(localModelsResponse),
         downloadsResponse ? readModelDownloads(downloadsResponse) : Promise.resolve(null),
         readHdcStatus(hdcResponse),
-        readRuntimeLogs(runtimeLogsResponse),
-        readHdcLogs(hdcLogsResponse)
+        readSoftwareLogs(logsResponse)
       ]);
 
       setMnn(nextMnn);
@@ -64,15 +66,7 @@ export function useDashboardData(params: {
         setDownloads(nextDownloads);
       }
       setHdc(nextHdc);
-      setLogs(
-        [
-          "== HDC hdc.log ==",
-          nextHdcLogs.content.trim() || "暂无 HDC 日志",
-          "",
-          `== Local AI ${selectedBackend} ==`,
-          nextRuntimeLogs.content.trim() || "暂无本地 AI 推理日志"
-        ].join("\n")
-      );
+      setLogs(nextLogs);
       setLastUpdatedAt(new Date());
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unknown error");
@@ -98,6 +92,16 @@ export function useDashboardData(params: {
       setLastUpdatedAt(new Date());
     } catch {
       // Keep the current model snapshot; the next manual refresh will surface errors.
+    }
+  }, []);
+
+  const refreshLogs = React.useCallback(async () => {
+    try {
+      const logsResponse = await getSoftwareLogs(LOG_LINES);
+      setLogs(await readSoftwareLogs(logsResponse));
+      setLastUpdatedAt(new Date());
+    } catch (logsError) {
+      setError(logsError instanceof Error ? logsError.message : "日志刷新失败");
     }
   }, []);
 
@@ -156,6 +160,7 @@ export function useDashboardData(params: {
     logs,
     mnn,
     models,
+    refreshLogs,
     setError,
     setHdc
   };

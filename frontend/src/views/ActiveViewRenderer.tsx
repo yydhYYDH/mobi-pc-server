@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 
+import type { SoftwareLogKey } from "../api/logs";
 import type { BackendId, CatalogModel, ChatImageAttachment, ChatMessage, DeviceBusy, DownloadStatus, HdcStatus, MnnStatus, ServerBusy, ViewId } from "../api/types";
 import { ChatView } from "./ChatView";
 import { DevicesView } from "./DevicesView";
@@ -11,6 +12,7 @@ import { SettingsView } from "./SettingsView";
 
 export function ActiveViewRenderer(props: {
   activeModelId: string | null;
+  activeLog: SoftwareLogKey;
   activeModelName: string | undefined;
   activeView: ViewId;
   apiBase: string;
@@ -52,6 +54,7 @@ export function ActiveViewRenderer(props: {
   onOpenModels: () => void;
   onOpenServer: () => void;
   pauseDownload: (modelId: string) => Promise<void>;
+  refreshLogs: () => Promise<void>;
   recentHdcTargets: string[];
   selectedBackend: BackendId;
   runningBackendLabel: string;
@@ -62,9 +65,9 @@ export function ActiveViewRenderer(props: {
   sendChat: () => Promise<void>;
   serverBusy: ServerBusy;
   serverState: string;
+  setActiveLog: (activeLog: SoftwareLogKey) => void;
   setAutoScrollLogs: (autoScrollLogs: boolean) => void;
   setChatInput: (chatInput: string) => void;
-  setHdcLlmPort: (hdcLlmPort: string) => void;
   setHdcTarget: (hdcTarget: string) => void;
   setLogFilter: (logFilter: string) => void;
   setSelectedBackend: (backend: BackendId) => void;
@@ -155,7 +158,6 @@ export function ActiveViewRenderer(props: {
           hdc={props.hdc}
           hdcLlmPort={props.hdcLlmPort}
           hdcTarget={props.hdcTarget}
-          setHdcLlmPort={props.setHdcLlmPort}
           setHdcTarget={props.setHdcTarget}
         />
       );
@@ -182,10 +184,12 @@ export function ActiveViewRenderer(props: {
     case "logs":
       return (
         <LogsView
+          activeLog={props.activeLog}
           autoScrollLogs={props.autoScrollLogs}
-          selectedBackend={props.selectedBackend}
           logFilter={props.logFilter}
           logRef={props.logRef}
+          refreshLogs={props.refreshLogs}
+          setActiveLog={props.setActiveLog}
           setAutoScrollLogs={props.setAutoScrollLogs}
           setLogFilter={props.setLogFilter}
           visibleLogLines={props.visibleLogLines}
@@ -199,7 +203,6 @@ export function ActiveViewRenderer(props: {
           hdcLlmPort={props.hdcLlmPort}
           mnn={props.mnn}
           selectedBackend={props.selectedBackend}
-          setHdcLlmPort={props.setHdcLlmPort}
         />
       );
     default:

@@ -137,7 +137,7 @@ class HDCServerHandler(BaseHTTPRequestHandler):
                             'status': 'error',
                             'message': (
                                 'Legacy HDC connect commands are disabled. '
-                                'Use /api/devices/hdc/connect so connection attempts are recorded in hdc.log.'
+                                'Use /api/devices/hdc/connect so connection attempts are recorded in hdc-server.log.'
                             ),
                         })
                         return
@@ -225,7 +225,7 @@ class HDCServerHandler(BaseHTTPRequestHandler):
                 'status': 'error',
                 'message': (
                     'Legacy /api/hdc/connect is disabled. '
-                    'Use /api/devices/hdc/connect so connection attempts are recorded in hdc.log.'
+                    'Use /api/devices/hdc/connect so connection attempts are recorded in hdc-server.log.'
                 ),
                 'hdc_connected': False,
                 'tunnel_ready': False,

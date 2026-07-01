@@ -1,28 +1,34 @@
 import React from "react";
 
-export function useLogState(logs: string, logRef: React.RefObject<HTMLPreElement | null>) {
+import type { SoftwareLogKey, SoftwareLogs } from "../api/logs";
+
+export function useLogState(logs: SoftwareLogs, logRef: React.RefObject<HTMLPreElement | null>) {
+  const [activeLog, setActiveLog] = React.useState<SoftwareLogKey>("hdc_server");
   const [logFilter, setLogFilter] = React.useState("");
   const [autoScrollLogs, setAutoScrollLogs] = React.useState(true);
 
+  const activeContent = logs[activeLog]?.content ?? "";
   const visibleLogLines = React.useMemo(() => {
-    const lines = logs.split(/\r?\n/).filter((line) => line.length > 0);
+    const lines = activeContent.split(/\r?\n/).filter((line) => line.length > 0);
     const query = logFilter.trim().toLowerCase();
     if (!query) {
       return lines;
     }
     return lines.filter((line) => line.toLowerCase().includes(query));
-  }, [logFilter, logs]);
+  }, [activeContent, logFilter]);
 
   React.useEffect(() => {
     if (!autoScrollLogs || !logRef.current) {
       return;
     }
     logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [autoScrollLogs, logFilter, logRef, logs]);
+  }, [activeContent, activeLog, autoScrollLogs, logFilter, logRef]);
 
   return {
+    activeLog,
     autoScrollLogs,
     logFilter,
+    setActiveLog,
     setAutoScrollLogs,
     setLogFilter,
     visibleLogLines
