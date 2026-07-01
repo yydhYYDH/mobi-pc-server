@@ -8,7 +8,6 @@ export function SettingsView(props: {
   hdcLlmPort: string;
   mnn: MnnStatus | null;
   selectedBackend: BackendId;
-  setHdcLlmPort: (value: string) => void;
 }) {
   return (
     <section className="detail-grid">
@@ -32,17 +31,9 @@ export function SettingsView(props: {
               : props.hdc?.hdc_server_message ?? "未启动"}
           </dd>
           <dt>LLM server 端口</dt>
-          <dd>
-            <input
-              max="65535"
-              min="1"
-              type="number"
-              value={props.hdcLlmPort}
-              onChange={(event) => props.setHdcLlmPort(event.target.value)}
-            />
-          </dd>
+          <dd>{props.hdcLlmPort || "未转发"}</dd>
           <dt>手机访问地址</dt>
-          <dd>{props.hdc?.phone_llm_url ?? "http://127.0.0.1:15000"}</dd>
+          <dd>{props.hdc?.phone_llm_url ?? "http://127.0.0.1:8090"}</dd>
           <dt>手机控制地址</dt>
           <dd>{props.hdc?.phone_pc_server_url ?? "http://127.0.0.1:15001"}</dd>
           <dt>桌面平台</dt>

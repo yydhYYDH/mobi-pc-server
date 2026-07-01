@@ -15,15 +15,16 @@ from pathlib import Path
 
 from app.core.paths import REPO_ROOT
 from app.schemas.devices import HdcDevice, HdcStatus
-from app.services.logs import LogService
+from app.services.logs import HDC_SERVER_LOG, LogService
 from app.services.mobile_events import mobile_event_broker, mobile_event_state
+from app.services.runtime_state import runtime_service
 
 
-DEFAULT_LLM_PORT = 8088
+DEFAULT_LLM_PORT = 8090
 DEFAULT_PC_SERVER_PORT = int(os.getenv("PC_SERVER_BACKEND_PORT", "18188"))
 HDC_SERVER_PORT = 9124
 HDC_SERVER_URL = f"http://127.0.0.1:{HDC_SERVER_PORT}"
-PHONE_LLM_PORT = 15000
+PHONE_LLM_PORT = 8090
 PHONE_LLM_URL = f"http://127.0.0.1:{PHONE_LLM_PORT}"
 PHONE_PC_SERVER_PORT = 15001
 PHONE_PC_SERVER_URL = f"http://127.0.0.1:{PHONE_PC_SERVER_PORT}"
@@ -46,6 +47,8 @@ class HdcService:
         self._pc_server_rport_ready = False
         self._llm_rport_target = ""
         self._pc_server_rport_target = ""
+        self._llm_rport_pc_port = 0
+        self._pc_server_rport_pc_port = 0
         self._last_device_connected_broadcast_target = ""
         self._origin_server_lock = threading.RLock()
         self._origin_server_thread: threading.Thread | None = None
@@ -113,19 +116,21 @@ class HdcService:
             self._pc_server_rport_ready = False
             self._llm_rport_target = ""
             self._pc_server_rport_target = ""
+            self._llm_rport_pc_port = 0
+            self._pc_server_rport_pc_port = 0
             self._last_device_connected_broadcast_target = ""
             self._last_observed_connected_target = ""
         status = self._status_response(available=True, path=hdc_path, devices=devices)
         self._set_status_cache(status)
         return status
 
-    def connect(self, target: str, llm_port: int = DEFAULT_LLM_PORT) -> HdcStatus:
+    def connect(self, target: str, llm_port: int | None = None) -> HdcStatus:
         return self._start_connect_task(
             "manual",
             lambda: self._connect_sync(target, llm_port=llm_port),
         )
 
-    def auto_connect(self, llm_port: int = DEFAULT_LLM_PORT) -> HdcStatus:
+    def auto_connect(self, llm_port: int | None = None) -> HdcStatus:
         return self._start_connect_task(
             "auto",
             lambda: self._auto_connect_sync(llm_port=llm_port),
@@ -166,7 +171,7 @@ class HdcService:
             with self._connect_task_lock:
                 self._connect_task_running = False
 
-    def _connect_sync(self, target: str, llm_port: int = DEFAULT_LLM_PORT) -> HdcStatus:
+    def _connect_sync(self, target: str, llm_port: int | None = None) -> HdcStatus:
         llm_port = self._normalize_port(llm_port)
         if not target.strip():
             return self._auto_connect_sync(llm_port=llm_port)
@@ -218,7 +223,7 @@ class HdcService:
         self._log_hdc(f"Manual hdc tconn succeeded: {target.strip()}. {message}")
         return self._with_llm_rport(current, target.strip(), llm_port, message)
 
-    def _auto_connect_sync(self, llm_port: int = DEFAULT_LLM_PORT) -> HdcStatus:
+    def _auto_connect_sync(self, llm_port: int | None = None) -> HdcStatus:
         llm_port = self._normalize_port(llm_port)
         hdc_path = self._hdc_path()
         if not hdc_path:
@@ -305,7 +310,7 @@ class HdcService:
                     status = self._with_llm_rport(
                         status,
                         target,
-                        self._last_llm_port,
+                        self._normalize_port(None),
                         "HDC monitor observed connected target.",
                     )
                     self._set_status_cache(status)
@@ -413,10 +418,10 @@ class HdcService:
     def _log_hdc_server(self, message: str) -> None:
         text = f">> [HDC] {message}"
         print(text, flush=True)
-        self._logs.append("hdc.log", text)
+        self._logs.append(HDC_SERVER_LOG, text)
 
     def _log_hdc(self, message: str) -> None:
-        self._logs.append("hdc.log", f">> [HDC] {message}")
+        self._logs.append(HDC_SERVER_LOG, f">> [HDC] {message}")
 
     def _origin_hdc_server_running(self) -> bool:
         return bool(
@@ -488,6 +493,7 @@ class HdcService:
             phone_url=PHONE_LLM_URL,
             already_ready=self._llm_rport_ready,
             ready_target=self._llm_rport_target,
+            ready_pc_port=self._llm_rport_pc_port,
         )
         pc_server_ready, pc_server_message = self._ensure_rport(
             target=target,
@@ -497,17 +503,20 @@ class HdcService:
             phone_url=PHONE_PC_SERVER_URL,
             already_ready=self._pc_server_rport_ready,
             ready_target=self._pc_server_rport_target,
+            ready_pc_port=self._pc_server_rport_pc_port,
         )
         status.llm_port = llm_port
         status.phone_llm_url = PHONE_LLM_URL
         status.llm_rport_ready = llm_ready
         self._llm_rport_ready = llm_ready
         self._llm_rport_target = target if llm_ready else ""
+        self._llm_rport_pc_port = llm_port if llm_ready else 0
         status.pc_server_port = self._pc_server_port
         status.phone_pc_server_url = PHONE_PC_SERVER_URL
         status.pc_server_rport_ready = pc_server_ready
         self._pc_server_rport_ready = pc_server_ready
         self._pc_server_rport_target = target if pc_server_ready else ""
+        self._pc_server_rport_pc_port = self._pc_server_port if pc_server_ready else 0
         status.message = f"{message} {llm_message} {pc_server_message}".strip()
         if target != self._last_device_connected_broadcast_target:
             self._broadcast_device_connected(status, target)
@@ -546,12 +555,13 @@ class HdcService:
         phone_url: str,
         already_ready: bool,
         ready_target: str,
+        ready_pc_port: int,
     ) -> tuple[bool, str]:
         hdc_path = self._hdc_path()
         if not hdc_path:
             return False, f"{label} rport skipped: hdc was not found."
 
-        if already_ready and ready_target == target:
+        if already_ready and ready_target == target and ready_pc_port == pc_port:
             return True, f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
 
         args_prefix = [hdc_path]
@@ -559,7 +569,7 @@ class HdcService:
             args_prefix.extend(["-t", target])
 
         self._run(
-            args_prefix + ["rport", "rm", f"tcp:{phone_port}", f"tcp:{pc_port}"],
+            args_prefix + ["fport", "rm", f"tcp:{phone_port}", f"tcp:{pc_port}"],
             timeout=5,
         )
         result = self._run(
@@ -576,7 +586,61 @@ class HdcService:
         self._log_hdc(f"{label} rport succeeded: phone tcp:{phone_port} -> PC tcp:{pc_port}")
         return True, message
 
-    def _normalize_port(self, port: int) -> int:
+    def cleanup_ports(self) -> None:
+        cleanup_specs = [
+            (
+                self._llm_rport_target,
+                PHONE_LLM_PORT,
+                self._llm_rport_pc_port or self._last_llm_port,
+                "LLM",
+            ),
+            (
+                self._pc_server_rport_target,
+                PHONE_PC_SERVER_PORT,
+                self._pc_server_rport_pc_port or self._pc_server_port,
+                "PC Server",
+            ),
+        ]
+        for target, phone_port, pc_port, label in cleanup_specs:
+            if not target or not pc_port:
+                continue
+            hdc_path = self._hdc_path()
+            if not hdc_path:
+                continue
+            args = [
+                hdc_path,
+                "-t",
+                target,
+                "fport",
+                "rm",
+                f"tcp:{phone_port}",
+                f"tcp:{pc_port}",
+            ]
+            result = self._run(args, timeout=5)
+            if result is None:
+                self._log_hdc(f"{label} rport cleanup timed out: phone tcp:{phone_port} -> PC tcp:{pc_port}")
+            elif result.returncode == 0:
+                self._log_hdc(f"{label} rport cleaned up: phone tcp:{phone_port} -> PC tcp:{pc_port}")
+            else:
+                message = result.stderr.strip() or result.stdout.strip() or "cleanup failed"
+                self._log_hdc(
+                    f"{label} rport cleanup failed: phone tcp:{phone_port} -> PC tcp:{pc_port}: {message}"
+                )
+        self._llm_rport_ready = False
+        self._pc_server_rport_ready = False
+        self._llm_rport_target = ""
+        self._pc_server_rport_target = ""
+        self._llm_rport_pc_port = 0
+        self._pc_server_rport_pc_port = 0
+
+    def _normalize_port(self, port: int | None) -> int:
+        if port is None:
+            status = runtime_service.status()
+            if status.state in {"starting", "running"} and status.port:
+                return status.port
+            if status.backend == "mobiinfer":
+                return 8089
+            return DEFAULT_LLM_PORT
         try:
             value = int(port)
         except (TypeError, ValueError):

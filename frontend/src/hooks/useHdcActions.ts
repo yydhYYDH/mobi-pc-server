@@ -1,8 +1,7 @@
 import React from "react";
 
 import { autoConnectHdcTarget, connectHdcTarget, disconnectHdcTarget } from "../api/devices";
-import type { HdcStatus } from "../api/types";
-import { normalizePort } from "../domain/runtime";
+import type { BackendId, HdcStatus } from "../api/types";
 
 const RECENT_HDC_TARGETS_KEY = "pc-server-recent-hdc-targets";
 const RECENT_HDC_TARGET_LIMIT = 5;
@@ -38,23 +37,17 @@ function writeRecentHdcTarget(target: string) {
 
 export function useHdcActions(params: {
   hdc: HdcStatus | null;
+  selectedBackend: BackendId;
   setHdc: (status: HdcStatus) => void;
 }) {
-  const { hdc, setHdc } = params;
+  const { hdc, selectedBackend: _selectedBackend, setHdc } = params;
   const [recentHdcTargets, setRecentHdcTargets] = React.useState<string[]>(() => readRecentHdcTargets());
   const [hdcTarget, setHdcTarget] = React.useState(() => readRecentHdcTargets()[0] ?? "");
-  const [hdcLlmPort, setHdcLlmPort] = React.useState(
-    () => window.localStorage.getItem("pc-server-hdc-llm-port") ?? "8088"
-  );
   const [deviceBusy, setDeviceBusy] = React.useState<"auto" | "connect" | "disconnect" | null>(null);
   const [deviceNotice, setDeviceNotice] = React.useState<string | null>(null);
   const autoDiscoverInFlightRef = React.useRef(false);
   const deviceBusyRef = React.useRef<typeof deviceBusy>(null);
   const autoDiscovering = Boolean(hdc?.available && !hdc?.pc_server_rport_ready);
-
-  React.useEffect(() => {
-    window.localStorage.setItem("pc-server-hdc-llm-port", hdcLlmPort);
-  }, [hdcLlmPort]);
 
   React.useEffect(() => {
     deviceBusyRef.current = deviceBusy;
@@ -83,8 +76,7 @@ export function useHdcActions(params: {
     return () => window.clearInterval(intervalId);
   }, [
     hdc?.available,
-    hdc?.pc_server_rport_ready,
-    hdcLlmPort
+    hdc?.pc_server_rport_ready
   ]);
 
   async function connectHdc() {
@@ -92,11 +84,10 @@ export function useHdcActions(params: {
       setDeviceNotice("请输入设备序列号或 host:port。");
       return;
     }
-    const llmPort = normalizePort(hdcLlmPort);
     setDeviceBusy("connect");
     setDeviceNotice(`正在连接 ${hdcTarget.trim()}...`);
     try {
-      const nextStatus = await connectHdcTarget(hdcTarget.trim(), llmPort);
+      const nextStatus = await connectHdcTarget(hdcTarget.trim());
       setHdc(nextStatus);
       setRecentHdcTargets(writeRecentHdcTarget(hdcTarget.trim()));
       setDeviceNotice(nextStatus.message ?? "连接请求已完成。");
@@ -112,13 +103,12 @@ export function useHdcActions(params: {
       return;
     }
     autoDiscoverInFlightRef.current = true;
-    const llmPort = normalizePort(hdcLlmPort);
     if (!options.silent) {
       setDeviceBusy("auto");
       setDeviceNotice("正在自动搜索 HarmonyOS 设备，可能需要十几秒...");
     }
     try {
-      const nextStatus = await autoConnectHdcTarget(llmPort);
+      const nextStatus = await autoConnectHdcTarget();
       setHdc(nextStatus);
       const connectedTarget = nextStatus.devices[0]?.serial;
       if (connectedTarget) {
@@ -169,10 +159,9 @@ export function useHdcActions(params: {
     autoDiscovering,
     deviceNotice,
     disconnectHdc,
-    hdcLlmPort,
+    hdcLlmPort: String(hdc?.llm_port ?? ""),
     hdcTarget,
     recentHdcTargets,
-    setHdcLlmPort,
-    setHdcTarget
+    setHdcTarget: (target: string) => setHdcTarget(target)
   };
 }

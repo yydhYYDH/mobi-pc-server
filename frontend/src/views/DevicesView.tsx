@@ -10,7 +10,6 @@ export function DevicesView(props: {
   hdc: HdcStatus | null;
   hdcLlmPort: string;
   hdcTarget: string;
-  setHdcLlmPort: (value: string) => void;
   setHdcTarget: (value: string) => void;
 }) {
   return (
@@ -35,7 +34,7 @@ export function DevicesView(props: {
               : props.hdc?.hdc_server_message ?? "未启动"}
           </dd>
           <dt>手机 LLM URL</dt>
-          <dd>{props.hdc?.phone_llm_url ?? "http://127.0.0.1:15000"}</dd>
+          <dd>{props.hdc?.phone_llm_url ?? "http://127.0.0.1:8090"}</dd>
           <dt>LLM 转发</dt>
           <dd>{props.hdc?.llm_rport_ready ? `已映射到本机 :${props.hdc.llm_port}` : "未建立"}</dd>
           <dt>手机控制 URL</dt>
@@ -69,14 +68,7 @@ export function DevicesView(props: {
             onChange={(event) => props.setHdcTarget(event.target.value)}
             placeholder="设备序列号或 host:port"
           />
-          <input
-            max="65535"
-            min="1"
-            type="number"
-            value={props.hdcLlmPort}
-            onChange={(event) => props.setHdcLlmPort(event.target.value)}
-            placeholder="LLM server port"
-          />
+          <div className="device-form-note">LLM 端口由后端自动映射：{props.hdcLlmPort || "未转发"}</div>
           <div className="actions">
             <button disabled={props.deviceBusy !== null} onClick={() => void props.autoConnectHdc()}>
               {props.deviceBusy === "auto" ? "搜索中..." : "自动搜索"}
