@@ -9,7 +9,7 @@ InferenceBackend = Literal["mnn", "mobiinfer", "llama_cpp"]
 
 class MnnStatus(BaseModel):
     state: MnnState
-    backend: InferenceBackend = "mnn"
+    backend: InferenceBackend = "llama_cpp"
     active_model_id: str | None = None
     port: int | None = None
     message: str | None = None
@@ -18,4 +18,4 @@ class MnnStatus(BaseModel):
 
 class LoadModelRequest(BaseModel):
     model_id: str
-    backend: InferenceBackend = "mnn"
+    backend: InferenceBackend = "llama_cpp"

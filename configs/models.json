@@ -1,59 +1,17 @@
 [
   {
-    "id": "mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-w8g128-mnn",
-    "name": "MAI-UI 2B 0422 Instruct RLv2",
-    "modelscope_id": "YYDH21/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100-w8g128-mnn",
+    "id": "mobi0402-2b-halfimage-rl-q4-k-m-gguf",
+    "name": "mobi0402 2B Halfimage RL Q4_K_M GGUF",
+    "modelscope_id": "YYDH21/mobi0402_2B_halfimage_rl-q4_k_m-gguf",
     "revision": "master",
-    "description": "YYDH21 MAI-UI 2B instruct model for MNN runtime experiments.",
-    "size": "unknown",
-    "runtime": "mnn",
-    "local_dir": "models/mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-w8g128-mnn",
-    "entry_file": "config.json"
+    "description": "Q4_K_M GGUF converted locally from YYDH21/mobi0402_2B_halfimage_rl for llama.cpp.",
+    "size": "1.3 GB",
+    "runtime": "llama_cpp",
+    "local_dir": "models/mobi0402_2B_halfimage_rl-gguf",
+    "entry_file": "mobi0402_2B_halfimage_rl-f16-q4_k_m.gguf",
+    "mmproj_file": "mmproj-mobi0402_2B_halfimage_rl-f16.gguf"
   },
-  {
-    "id": "mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-w8g128",
-    "name": "MAI-UI 2B 0422 Instruct RLv2",
-    "modelscope_id": "YYDH21/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100-w8g128",
-    "revision": "master",
-    "description": "YYDH21 MAI-UI 2B instruct model for MNN runtime experiments.",
-    "size": "unknown",
-    "runtime": "mnn",
-    "local_dir": "models/mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-w8g128",
-    "entry_file": "config.json"
-  },
-  {
-    "id": "mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100",
-    "name": "MAI-UI 2B 0422 Instruct RLv2 Base",
-    "modelscope_id": "YYDH21/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100",
-    "revision": "master",
-    "description": "YYDH21 MAI-UI 2B base model used as the GGUF conversion source.",
-    "size": "unknown",
-    "runtime": "mnn",
-    "local_dir": "models/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100",
-    "entry_file": "config.json"
-  },
-  {
-    "id": "MNN/Qwen3.5-0.8B-MNN",
-    "name": "MNN/Qwen3.5-0.8B-MNN",
-    "modelscope_id": "MNN/Qwen3.5-0.8B-MNN",
-    "revision": "master",
-    "description": "MNN/Qwen3.5-0.8B-MNN",
-    "size": "unknown",
-    "runtime": "mnn",
-    "local_dir": "models/Qwen3.5-0.8B-MNN",
-    "entry_file": "config.json"
-  },
-  {
-    "id": "mnn-mobi-gptq-new-sym-e2e-2b-w8a8-half-rl-n64-s512-visual",
-    "name": "MNN Mobi GPTQ New Sym E2E 2B W8A8 Visual",
-    "modelscope_id": "doulujiyao/mnn_mobi_gptq_new_sym_e2e_2B_w8a8_half_rl_n64_s512_visual",
-    "revision": "master",
-    "description": "MobiInfer-compatible visual model from doulujiyao on ModelScope.",
-    "size": "unknown",
-    "runtime": "mobiinfer",
-    "local_dir": "models/mnn-mobi-gptq-new-sym-e2e-2b-w8a8-half-rl-n64-s512-visual",
-    "entry_file": "config.json"
-  },
+
   {
     "id": "qwen3.5-0.8b-q4-k-m-gguf",
     "name": "Qwen3.5 0.8B Q4_K_M GGUF",
@@ -64,29 +22,5 @@
     "runtime": "llama_cpp",
     "local_dir": "models/qwen3.5-0.8b-q4-k-m",
     "entry_file": "Qwen3.5-0.8B-Q4_K_M.gguf"
-  },
-  {
-    "id": "mai-ui-2b-0422-base-f16-gguf",
-    "name": "MAI-UI 2B 0422 Base F16 GGUF",
-    "modelscope_id": "YYDH21/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100",
-    "revision": "master",
-    "description": "FP16 GGUF converted locally from the MAI-UI 2B base Qwen3VL model.",
-    "size": "4.1 GB",
-    "runtime": "llama_cpp",
-    "local_dir": "models/mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-gguf",
-    "entry_file": "mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-f16.gguf",
-    "mmproj_file": "mmproj-mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-f16.gguf"
-  },
-  {
-    "id": "mai-ui-2b-0422-base-q4-k-m-gguf",
-    "name": "MAI-UI 2B 0422 Base Q4_K_M GGUF",
-    "modelscope_id": "YYDH21/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100-base-q4_k_m-gguf",
-    "revision": "master",
-    "description": "Q4_K_M GGUF with mmproj for MAI-UI 2B base Qwen3VL on llama.cpp.",
-    "size": "2.0 GB",
-    "runtime": "llama_cpp",
-    "local_dir": "models/mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-gguf",
-    "entry_file": "mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-f16-q4_k_m.gguf",
-    "mmproj_file": "mmproj-mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-base-f16.gguf"
   }
 ]

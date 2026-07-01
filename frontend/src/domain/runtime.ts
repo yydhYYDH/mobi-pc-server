@@ -23,9 +23,8 @@ const BACKEND_LABELS: Record<BackendId, string> = {
 };
 
 export const BACKEND_OPTIONS: Array<{ id: BackendId; label: string }> = [
-  { id: "mnn", label: BACKEND_LABELS.mnn },
+  { id: "llama_cpp", label: BACKEND_LABELS.llama_cpp },
   { id: "mobiinfer", label: BACKEND_LABELS.mobiinfer },
-  { id: "llama_cpp", label: BACKEND_LABELS.llama_cpp }
 ];
 
 export function statusLabel(status: string | undefined) {
@@ -46,7 +45,7 @@ export function normalizeBackend(runtime: string | null | undefined): BackendId 
   if (runtime === "mobiinfer") {
     return "mobiinfer";
   }
-  return "mnn";
+  return "llama_cpp";
 }
 
 export function backendLabel(backend: BackendId | string | null | undefined) {
@@ -58,7 +57,7 @@ export function backendSupportsRuntime(backend: BackendId, runtime: string | nul
   if (backend === "llama_cpp") {
     return normalizedRuntime === "llama_cpp";
   }
-  return normalizedRuntime === "mnn" || normalizedRuntime === "mobiinfer";
+  return normalizedRuntime === "mobiinfer";
 }
 
 export function modelSupportsImages(model: CatalogModel | null | undefined) {
@@ -100,4 +99,14 @@ export function formatDownloadSize(status: DownloadStatus | undefined, downloade
 export function normalizePort(value: string, fallback = 8088) {
   const port = Number(value);
   return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : fallback;
+}
+
+export function defaultRuntimePort(backend: BackendId) {
+  if (backend === "llama_cpp") {
+    return 8090;
+  }
+  if (backend === "mobiinfer") {
+    return 8089;
+  }
+  return 8088;
 }

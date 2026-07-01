@@ -8,7 +8,7 @@ class ModelCatalogItem(BaseModel):
     revision: str = "master"
     description: str = ""
     size: str = "unknown"
-    runtime: str = "mnn"
+    runtime: str = "mobiinfer"
     local_dir: str
     entry_file: str
     mmproj_file: str | None = None

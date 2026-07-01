@@ -1,4 +1,5 @@
 import os
+import platform
 import subprocess
 from pathlib import Path
 from typing import NamedTuple
@@ -26,36 +27,7 @@ class LlamaCppServerAdapter:
                 return LlamaCppRuntime(path, os.environ.get("LLAMA_CPP_ACCELERATOR", "custom"))
             return None
 
-        candidates = [
-            ("cuda", RESOURCES_DIR / "llama-cpp/cuda/llama-server"),
-            ("cuda", RESOURCES_DIR / "llama-cpp/cuda/llama-server.exe"),
-            ("cuda", REPO_ROOT / "desktop/resources/llama-cpp/cuda/llama-server"),
-            ("cuda", REPO_ROOT / "desktop/resources/llama-cpp/cuda/llama-server.exe"),
-            ("cuda", REPO_ROOT / "3rdparty/llama.cpp/build-cuda-windows/bin/llama-server"),
-            ("cuda", REPO_ROOT / "3rdparty/llama.cpp/build-cuda-windows/bin/llama-server.exe"),
-            ("cuda", REPO_ROOT / "3rdparty/llama.cpp/build-cuda-native/bin/llama-server"),
-            ("cuda", REPO_ROOT / "3rdparty/llama.cpp/build-cuda-native/bin/llama-server.exe"),
-            ("cpu", RESOURCES_DIR / "llama-cpp/cpu/llama-server"),
-            ("cpu", RESOURCES_DIR / "llama-cpp/cpu/llama-server.exe"),
-            ("cpu", REPO_ROOT / "desktop/resources/llama-cpp/cpu/llama-server"),
-            ("cpu", REPO_ROOT / "desktop/resources/llama-cpp/cpu/llama-server.exe"),
-            ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-windows/bin/llama-server"),
-            ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-windows/bin/llama-server.exe"),
-            ("auto", RESOURCES_DIR / "llama-cpp/llama-server"),
-            ("auto", RESOURCES_DIR / "llama-cpp/llama-server.exe"),
-            ("auto", RESOURCES_DIR / "mnn/llama-server"),
-            ("auto", RESOURCES_DIR / "mnn/llama-server.exe"),
-            ("auto", REPO_ROOT / "desktop/resources/llama-cpp/llama-server"),
-            ("auto", REPO_ROOT / "desktop/resources/llama-cpp/llama-server.exe"),
-            ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server"),
-            ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server.exe"),
-            ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/server"),
-            ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/server.exe"),
-            ("auto", REPO_ROOT / "desktop/resources/mnn/llama-server"),
-            ("auto", REPO_ROOT / "desktop/resources/mnn/llama-server.exe"),
-            ("auto", REPO_ROOT / "3rdparty/llama.cpp/llama-server"),
-            ("auto", REPO_ROOT / "3rdparty/llama.cpp/llama-server.exe"),
-        ]
+        candidates = self._runtime_candidates()
         fallback: LlamaCppRuntime | None = None
         for accelerator, path in candidates:
             if not path.exists():
@@ -73,6 +45,40 @@ class LlamaCppServerAdapter:
         if fallback:
             return fallback
         return None
+
+    def _runtime_candidates(self) -> list[tuple[str, Path]]:
+        if platform.system() == "Windows":
+            return [
+                ("cuda", RESOURCES_DIR / "llama-cpp/cuda/llama-server.exe"),
+                ("cuda", REPO_ROOT / "desktop/resources/llama-cpp/cuda/llama-server.exe"),
+                ("cuda", REPO_ROOT / "3rdparty/llama.cpp/build-cuda-windows/bin/llama-server.exe"),
+                ("cpu", RESOURCES_DIR / "llama-cpp/cpu/llama-server.exe"),
+                ("cpu", REPO_ROOT / "desktop/resources/llama-cpp/cpu/llama-server.exe"),
+                ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-windows/bin/llama-server.exe"),
+                ("auto", RESOURCES_DIR / "llama-cpp/llama-server.exe"),
+                ("auto", RESOURCES_DIR / "mnn/llama-server.exe"),
+                ("auto", REPO_ROOT / "desktop/resources/llama-cpp/llama-server.exe"),
+                ("auto", REPO_ROOT / "desktop/resources/mnn/llama-server.exe"),
+                ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server.exe"),
+                ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/server.exe"),
+                ("auto", REPO_ROOT / "3rdparty/llama.cpp/llama-server.exe"),
+            ]
+
+        return [
+            ("cuda", RESOURCES_DIR / "llama-cpp/cuda/llama-server"),
+            ("cuda", REPO_ROOT / "desktop/resources/llama-cpp/cuda/llama-server"),
+            ("cuda", REPO_ROOT / "3rdparty/llama.cpp/build-cuda-native/bin/llama-server"),
+            ("cpu", RESOURCES_DIR / "llama-cpp/cpu/llama-server"),
+            ("cpu", REPO_ROOT / "desktop/resources/llama-cpp/cpu/llama-server"),
+            ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-cpu-native/bin/llama-server"),
+            ("auto", RESOURCES_DIR / "llama-cpp/llama-server"),
+            ("auto", RESOURCES_DIR / "mnn/llama-server"),
+            ("auto", REPO_ROOT / "desktop/resources/llama-cpp/llama-server"),
+            ("auto", REPO_ROOT / "desktop/resources/mnn/llama-server"),
+            ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server"),
+            ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/server"),
+            ("auto", REPO_ROOT / "3rdparty/llama.cpp/llama-server"),
+        ]
 
     def find_binary(self) -> Path | None:
         runtime = self.find_runtime()
