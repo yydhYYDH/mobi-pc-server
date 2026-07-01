@@ -22,6 +22,19 @@ Push-Location $BackendDir
   --clean `
   --noconfirm `
   --hidden-import app.legacy.hdc_server `
+  --hidden-import harmony_agent `
+  --hidden-import wechat_collect `
+  --hidden-import wechat_collect.service `
+  --hidden-import wechat_collect.collector `
+  --hidden-import wechat_collect.config `
+  --hidden-import wechat_collect.device `
+  --hidden-import wechat_collect.parser `
+  --hidden-import wechat_collect.render `
+  --add-data "app\legacy\harmony_agent.py;app\legacy" `
+  --add-data "app\legacy\serve_model.py;app\legacy" `
+  --add-data "app\legacy\screen.jpeg;app\legacy" `
+  --add-data "app\legacy\prompts;app\legacy\prompts" `
+  --add-data "app\legacy\wechat_collect;app\legacy\wechat_collect" `
   app\main.py
 Pop-Location
 

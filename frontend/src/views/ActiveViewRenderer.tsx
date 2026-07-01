@@ -15,6 +15,7 @@ export function ActiveViewRenderer(props: {
   activeView: ViewId;
   apiBase: string;
   autoConnectHdc: () => Promise<void>;
+  autoDiscovering: boolean;
   autoScrollLogs: boolean;
   chatBusy: boolean;
   chatError: string | null;
@@ -25,9 +26,7 @@ export function ActiveViewRenderer(props: {
   activeModelSupportsImages: boolean;
   clearSelectedImage: () => void;
   clearChat: () => void;
-  connectedDevices: number;
   connectHdc: () => Promise<void>;
-  criticalLog: string | undefined;
   deleteModel: (modelId: string) => Promise<void>;
   deviceBusy: DeviceBusy;
   deviceNotice: string | null;
@@ -41,7 +40,6 @@ export function ActiveViewRenderer(props: {
   hdcTarget: string;
   isDownloaded: (modelId: string) => boolean;
   isDownloading: (modelId: string) => boolean;
-  launchableModels: CatalogModel[];
   loadModel: (modelId: string) => Promise<void>;
   logFilter: string;
   logRef: RefObject<HTMLPreElement | null>;
@@ -80,12 +78,9 @@ export function ActiveViewRenderer(props: {
       return (
         <OverviewView
           activeModelName={props.activeModelName}
-          connectedDevices={props.connectedDevices}
           connectHdc={props.connectHdc}
-          criticalLog={props.criticalLog}
           deviceBusy={props.deviceBusy}
           deviceNotice={props.deviceNotice}
-          disconnectHdc={props.disconnectHdc}
           downloadedCount={props.downloadedCount}
           downloadModel={props.downloadModel}
           downloadStatus={props.downloadStatus}
@@ -94,12 +89,12 @@ export function ActiveViewRenderer(props: {
           hdcTarget={props.hdcTarget}
           isDownloaded={props.isDownloaded}
           isDownloading={props.isDownloading}
-          launchableModels={props.launchableModels}
           modelBusy={props.modelBusy}
           models={props.models}
           modelsCount={props.models.length}
           mnn={props.mnn}
           onAutoConnect={props.autoConnectHdc}
+          autoDiscovering={props.autoDiscovering}
           onLoadModel={props.loadModel}
           onOpenChat={props.onOpenChat}
           onOpenDevices={props.onOpenDevices}
@@ -107,8 +102,6 @@ export function ActiveViewRenderer(props: {
           onOpenModels={props.onOpenModels}
           onOpenServer={props.onOpenServer}
           recentHdcTargets={props.recentHdcTargets}
-          onStartMnn={props.startMnn}
-          onStopMnn={props.stopMnn}
           pauseDownload={props.pauseDownload}
           selectableModels={props.selectableModels}
           selectedLaunchModelId={props.selectedLaunchModelId}

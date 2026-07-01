@@ -37,7 +37,7 @@ export function WorkspaceHeader(props: {
           ))}
         </select>
         <StatusPill dot tone={props.hdcAvailable ? "running" : "error"}>HDC {props.hdcAvailable ? "可用" : "未找到"}</StatusPill>
-        <button className="secondary-button" disabled={props.isRefreshing} onClick={() => void props.onRefresh()}>
+        <button className="secondary-button refresh-button" disabled={props.isRefreshing} onClick={() => void props.onRefresh()}>
           {props.isRefreshing ? "刷新中..." : "刷新"}
         </button>
       </div>

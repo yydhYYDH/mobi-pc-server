@@ -2,8 +2,15 @@ import React from "react";
 
 import { LOG_LINES } from "../api/client";
 import { getHdcStatus, readHdcStatus } from "../api/devices";
-import { getRuntimeLogs, readRuntimeLogs } from "../api/logs";
-import { getLocalModels, getModelCatalog, getModelDownloads, readLocalModels, readModelCatalog, readModelDownloads } from "../api/models";
+import { getHdcLogs, getRuntimeLogs, readHdcLogs, readRuntimeLogs } from "../api/logs";
+import {
+  getLocalModels,
+  getModelCatalog,
+  getModelDownloads,
+  readLocalModels,
+  readModelCatalog,
+  readModelDownloads
+} from "../api/models";
 import { getRuntimeStatus, readRuntimeStatus } from "../api/runtime";
 import type { BackendId, CatalogModel, DownloadStatus, HdcStatus, LocalModel, MnnStatus, ViewId } from "../api/types";
 
@@ -28,31 +35,44 @@ export function useDashboardData(params: {
       setIsRefreshing(true);
     }
     try {
-      const [mnnResponse, modelsResponse, localModelsResponse, downloadsResponse, hdcResponse, logsResponse] =
+      const shouldLoadDownloads = activeView === "models";
+      const [mnnResponse, modelsResponse, localModelsResponse, downloadsResponse, hdcResponse, runtimeLogsResponse, hdcLogsResponse] =
         await Promise.all([
           getRuntimeStatus(selectedBackend),
           getModelCatalog(),
           getLocalModels(),
-          getModelDownloads(),
+          shouldLoadDownloads ? getModelDownloads() : Promise.resolve(null),
           getHdcStatus(),
-          getRuntimeLogs(selectedBackend, LOG_LINES)
+          getRuntimeLogs(selectedBackend, LOG_LINES),
+          getHdcLogs(LOG_LINES)
         ]);
 
-      const [nextMnn, nextModels, nextLocalModels, nextDownloads, nextHdc, nextLogs] = await Promise.all([
+      const [nextMnn, nextModels, nextLocalModels, nextDownloads, nextHdc, nextRuntimeLogs, nextHdcLogs] = await Promise.all([
         readRuntimeStatus(mnnResponse),
         readModelCatalog(modelsResponse),
         readLocalModels(localModelsResponse),
-        readModelDownloads(downloadsResponse),
+        downloadsResponse ? readModelDownloads(downloadsResponse) : Promise.resolve(null),
         readHdcStatus(hdcResponse),
-        readRuntimeLogs(logsResponse)
+        readRuntimeLogs(runtimeLogsResponse),
+        readHdcLogs(hdcLogsResponse)
       ]);
 
       setMnn(nextMnn);
       setModels(nextModels);
       setLocalModels(nextLocalModels);
-      setDownloads(nextDownloads);
+      if (nextDownloads) {
+        setDownloads(nextDownloads);
+      }
       setHdc(nextHdc);
-      setLogs(nextLogs.content);
+      setLogs(
+        [
+          "== HDC hdc.log ==",
+          nextHdcLogs.content.trim() || "暂无 HDC 日志",
+          "",
+          `== Local AI ${selectedBackend} ==`,
+          nextRuntimeLogs.content.trim() || "暂无本地 AI 推理日志"
+        ].join("\n")
+      );
       setLastUpdatedAt(new Date());
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unknown error");
@@ -61,7 +81,25 @@ export function useDashboardData(params: {
         setIsRefreshing(false);
       }
     }
-  }, [selectedBackend]);
+  }, [activeView, selectedBackend]);
+
+  const refreshModelDownloads = React.useCallback(async () => {
+    try {
+      const [localModelsResponse, downloadsResponse] = await Promise.all([
+        getLocalModels(),
+        getModelDownloads()
+      ]);
+      const [nextLocalModels, nextDownloads] = await Promise.all([
+        readLocalModels(localModelsResponse),
+        readModelDownloads(downloadsResponse)
+      ]);
+      setLocalModels(nextLocalModels);
+      setDownloads(nextDownloads);
+      setLastUpdatedAt(new Date());
+    } catch {
+      // Keep the current model snapshot; the next manual refresh will surface errors.
+    }
+  }, []);
 
   React.useEffect(() => {
     void load();
@@ -72,14 +110,35 @@ export function useDashboardData(params: {
   );
 
   React.useEffect(() => {
-    if (!hasActiveDownload && activeView !== "logs") {
+    if (activeView !== "models" || !hasActiveDownload) {
       return;
     }
     const intervalId = window.setInterval(() => {
-      void load({ background: true });
-    }, hasActiveDownload ? 1500 : 3000);
+      void refreshModelDownloads();
+    }, 1500);
     return () => window.clearInterval(intervalId);
-  }, [activeView, hasActiveDownload, load]);
+  }, [activeView, hasActiveDownload, refreshModelDownloads]);
+
+  React.useEffect(() => {
+    const intervalId = window.setInterval(async () => {
+      try {
+        const [hdcResponse, runtimeResponse] = await Promise.all([
+          getHdcStatus(),
+          getRuntimeStatus(selectedBackend)
+        ]);
+        const [nextHdc, nextMnn] = await Promise.all([
+          readHdcStatus(hdcResponse),
+          readRuntimeStatus(runtimeResponse)
+        ]);
+        setHdc(nextHdc);
+        setMnn(nextMnn);
+        setLastUpdatedAt(new Date());
+      } catch {
+        // Keep the last successful dashboard snapshot; the next full refresh will surface errors.
+      }
+    }, 2000);
+    return () => window.clearInterval(intervalId);
+  }, [selectedBackend]);
 
 
   const lastUpdatedText = lastUpdatedAt

@@ -8,12 +8,10 @@ type ReadinessState = "hdc-missing" | "device-missing" | "ai-missing" | "ready";
 
 export function OverviewView(props: {
   activeModelName: string | undefined;
-  connectedDevices: number;
+  autoDiscovering: boolean;
   connectHdc: () => Promise<void>;
-  criticalLog: string | undefined;
   deviceBusy: DeviceBusy;
   deviceNotice: string | null;
-  disconnectHdc: () => Promise<void>;
   downloadedCount: number;
   downloadModel: (modelId: string) => Promise<void>;
   downloadStatus: (modelId: string) => DownloadStatus | undefined;
@@ -22,7 +20,6 @@ export function OverviewView(props: {
   hdcTarget: string;
   isDownloaded: (modelId: string) => boolean;
   isDownloading: (modelId: string) => boolean;
-  launchableModels: CatalogModel[];
   modelBusy: string | null;
   models: CatalogModel[];
   modelsCount: number;
@@ -34,8 +31,6 @@ export function OverviewView(props: {
   onOpenLogs: () => void;
   onOpenModels: () => void;
   onOpenServer: () => void;
-  onStartMnn: () => Promise<void>;
-  onStopMnn: () => Promise<void>;
   pauseDownload: (modelId: string) => Promise<void>;
   recentHdcTargets: string[];
   selectableModels: CatalogModel[];
@@ -63,23 +58,25 @@ export function OverviewView(props: {
     !["starting", "stopping"].includes(props.serverState);
   const primaryDevice = props.hdc?.devices[0];
   const hdcAvailable = props.hdc?.available ?? false;
-  const hdcConnected = props.connectedDevices > 0;
-  const aiReady = props.serverState === "running" && Boolean(props.mnn?.active_model_id);
+  const hdcConnected = Boolean(props.hdc?.pc_server_rport_ready);
+  const hdcServerRunning = props.hdc?.hdc_server_running ?? false;
+  const aiReady = props.serverState === "running";
   const deviceName = primaryDevice
     ? primaryDevice.host
       ? `${primaryDevice.host}${primaryDevice.port ? `:${primaryDevice.port}` : ""}`
       : primaryDevice.serial
     : "";
   const deviceType = primaryDevice?.connection_type === "network" ? "无线调试" : "USB 连接";
-  const activeModelLabel = props.activeModelName ?? props.mnn?.active_model_id ?? selectedModel?.name ?? "未启用";
+  const activeModelLabel =
+    props.activeModelName ?? props.mnn?.active_model_id ?? `${backendLabel(props.selectedBackend)} 服务`;
   const deviceSummary = !hdcAvailable
     ? "需要先安装并配置 HDC"
     : hdcConnected
-      ? `${deviceName || props.connectedDevices + " 台设备"} 已连接`
+      ? `${deviceName || "HarmonyOS 手机"} 已连接`
       : "还没有连接手机";
   const aiSummary = aiReady ? `${activeModelLabel} 已启用` : hdcConnected ? "还没有启用本地 AI" : "连接手机后自动检测";
   const connectionSummary = hdcConnected
-    ? deviceType
+    ? primaryDevice ? deviceType : "连接通道已建立"
     : hdcAvailable
       ? "自动连接失败？请打开无线调试后手动连接"
       : "配置 HDC 后即可连接 HarmonyOS 手机";
@@ -100,11 +97,13 @@ export function OverviewView(props: {
       primary: "查看配置方法"
     },
     "device-missing": {
-      title: props.deviceBusy === "auto" ? "正在连接手机" : "连接 HarmonyOS 手机",
-      description: props.deviceNotice ?? "连接手机后，可以在本机启用 AI 并开始测试。",
-      status: props.deviceBusy === "auto" ? "搜索中" : "未连接",
+      title: props.autoDiscovering ? "正在查找 HarmonyOS 手机" : "连接 HarmonyOS 手机",
+      description: props.autoDiscovering
+        ? "请保持手机无线调试开启，PC Server 会持续尝试建立连接。"
+        : props.deviceNotice ?? "连接手机后，可以在本机启用 AI 并开始测试。",
+      status: props.autoDiscovering ? "搜索中" : "未连接",
       tone: "starting",
-      primary: props.deviceBusy === "auto" ? "正在查找" : "自动连接手机"
+      primary: "自动连接手机"
     },
     "ai-missing": {
       title: "启用本地 AI",
@@ -121,6 +120,7 @@ export function OverviewView(props: {
       primary: "开始测试"
     }
   }[state];
+  const isSearchingDevice = state === "device-missing" && props.autoDiscovering;
 
   function runPrimaryAction() {
     if (state === "hdc-missing") {
@@ -150,7 +150,7 @@ export function OverviewView(props: {
           <h2>{content.title}</h2>
           <p>{content.description}</p>
         </div>
-        <StatusPill dot tone={content.tone}>{content.status}</StatusPill>
+        <StatusPill dot={!isSearchingDevice} spinning={isSearchingDevice} tone={content.tone}>{content.status}</StatusPill>
       </div>
 
       <button
@@ -162,6 +162,7 @@ export function OverviewView(props: {
         }
         onClick={runPrimaryAction}
       >
+        {isSearchingDevice ? <span className="inline-spinner" /> : null}
         {content.primary}
       </button>
 
@@ -177,6 +178,10 @@ export function OverviewView(props: {
         <div className={hdcConnected ? "ready" : hdcAvailable ? "hint" : "blocked"}>
           <span>连接方式</span>
           <strong>{connectionSummary}</strong>
+        </div>
+        <div className={hdcServerRunning ? "ready" : hdcAvailable ? "pending" : "blocked"}>
+          <span>HDC Server</span>
+          <strong>{hdcServerRunning ? `已启动 :${props.hdc?.hdc_server_port ?? 9124}` : "未启动"}</strong>
         </div>
       </div>
 

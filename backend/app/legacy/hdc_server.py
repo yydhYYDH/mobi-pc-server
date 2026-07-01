@@ -27,6 +27,9 @@ except Exception as ex:
 NO_REASON_MODE = False
 LEGACY_LOOP_ENABLED = True
 AUTO_DISCOVERY_ENABLED = False
+LEGACY_HDC_CONNECT_ENABLED = os.environ.get(
+    "LEGACY_HDC_CONNECT_ENABLED", "0"
+).strip().lower() in ("1", "true", "yes", "on")
 HDC_HEALTH_CACHE_TTL = float(os.environ.get("HDC_HEALTH_CACHE_TTL", "15"))
 HDC_COMMAND_TIMEOUT = float(os.environ.get("HDC_COMMAND_TIMEOUT", "20"))
 HDC_ACTION_TIMEOUT = float(os.environ.get("HDC_ACTION_TIMEOUT", "6"))
@@ -129,6 +132,15 @@ class HDCServerHandler(BaseHTTPRequestHandler):
                 data = json.loads(post_data)
                 cmd = data.get('cmd', '')
                 if cmd:
+                    if is_legacy_hdc_connect_command(cmd):
+                        self.write_json(409, {
+                            'status': 'error',
+                            'message': (
+                                'Legacy HDC connect commands are disabled. '
+                                'Use /api/devices/hdc/connect so connection attempts are recorded in hdc.log.'
+                            ),
+                        })
+                        return
                     print(f">> 正在执行远程指令: {cmd}")
                     # App 端只发送受控调试命令；这里保留 shell=True 以兼容 hdc/tconn 等复合命令。
                     result = run_remote_command(cmd)
@@ -208,6 +220,21 @@ class HDCServerHandler(BaseHTTPRequestHandler):
             })
 
     def handle_hdc_connect(self):
+        if not LEGACY_HDC_CONNECT_ENABLED:
+            self.write_json(409, {
+                'status': 'error',
+                'message': (
+                    'Legacy /api/hdc/connect is disabled. '
+                    'Use /api/devices/hdc/connect so connection attempts are recorded in hdc.log.'
+                ),
+                'hdc_connected': False,
+                'tunnel_ready': False,
+                'fport_ready': False,
+                'rport_ready': False,
+                'rport_listening': None,
+                'rport_listen_check_supported': False,
+            })
+            return
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length)
         try:
@@ -1461,6 +1488,19 @@ def workflow_wechat_collect_action(payload):
         "workflow_wechat_collect",
         collect_and_return_app
     )
+
+def is_legacy_hdc_connect_command(cmd):
+    try:
+        parts = shlex.split(str(cmd or ""))
+    except ValueError:
+        parts = str(cmd or "").split()
+    lowered = [part.lower() for part in parts]
+    if not lowered:
+        return False
+    if "hdc" not in lowered[0] and not lowered[0].endswith("/hdc") and not lowered[0].endswith("\\hdc"):
+        return False
+    return any(part in ("tconn", "tdisconn") for part in lowered)
+
 
 def run_remote_command(cmd):
     def execute():

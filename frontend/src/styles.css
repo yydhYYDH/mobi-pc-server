@@ -303,6 +303,11 @@ h2 {
   width: 150px;
 }
 
+.refresh-button {
+  justify-content: center;
+  min-width: 86px;
+}
+
 .refresh-meta {
   display: block;
   color: var(--muted);
@@ -392,9 +397,18 @@ h2 {
 }
 
 .readiness-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   width: fit-content;
   min-width: 164px;
   min-height: 46px;
+}
+
+.readiness-primary .inline-spinner {
+  border-color: rgb(255 255 255 / 36%);
+  border-top-color: #ffffff;
 }
 
 .readiness-summary {
@@ -1131,6 +1145,15 @@ dd {
   height: 7px;
   border-radius: 50%;
   background: currentColor;
+}
+
+.status-spinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: inline-spin 850ms linear infinite;
 }
 
 .status-pill.running,

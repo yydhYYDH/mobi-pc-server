@@ -88,6 +88,8 @@ Generated content that should normally be ignored:
 - Node dependencies
 - frontend build output
 
+Runtime and benchmark command output should be written under `logs/` by default. Keep committed docs focused on commands, environment, summary metrics, and qualitative conclusions; do not commit generated full logs.
+
 ## Architecture
 
 Use a browser-based frontend with a local backend.

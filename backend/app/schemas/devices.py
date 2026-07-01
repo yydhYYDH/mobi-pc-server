@@ -19,9 +19,20 @@ class HdcStatus(BaseModel):
     path: str | None = None
     devices: list[HdcDevice] = Field(default_factory=list)
     message: str | None = None
+    hdc_server_running: bool = False
+    hdc_server_port: int = 9124
+    hdc_server_url: str = "http://127.0.0.1:9124"
+    hdc_server_message: str | None = None
     llm_port: int = 8088
-    phone_llm_url: str = "http://127.0.0.1:19000"
+    phone_llm_url: str = "http://127.0.0.1:15000"
     llm_rport_ready: bool = False
+    pc_server_port: int = 18188
+    phone_pc_server_url: str = "http://127.0.0.1:15001"
+    pc_server_rport_ready: bool = False
+    mobile_event_ready: bool = False
+    mobile_event_connections: int = 0
+    mobile_event_type: str | None = None
+    mobile_event_client: str | None = None
 
 
 class HdcConnectRequest(BaseModel):

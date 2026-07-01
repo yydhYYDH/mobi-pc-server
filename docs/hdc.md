@@ -30,10 +30,23 @@ Default scanned ports are `8710`, `10178`, and `5555`. Extra ports can be added 
 After a device connects, the backend also prepares an LLM reverse port:
 
 ```text
-phone http://127.0.0.1:19000 -> PC http://127.0.0.1:<LLM server port>
+phone http://127.0.0.1:15000 -> PC http://127.0.0.1:<LLM server port>
 ```
 
-The default LLM server port is `8088`. The frontend settings page and device page can override it before connecting. The phone should use `http://127.0.0.1:19000` as the LLM server base URL.
+The backend also exposes the PC server control channel to the phone:
+
+```text
+phone http://127.0.0.1:15001 -> PC http://127.0.0.1:<PC_SERVER_BACKEND_PORT>
+```
+
+The default PC server backend port is `18188`. The phone app should use:
+
+```text
+GET http://127.0.0.1:15001/status
+WS  ws://127.0.0.1:15001/events
+```
+
+The default LLM server port is `8088`. The frontend settings page and device page can override it before connecting. The phone should use `http://127.0.0.1:15000` as the LLM server base URL.
 
 Useful tuning variables:
 

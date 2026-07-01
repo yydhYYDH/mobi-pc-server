@@ -28,10 +28,20 @@ export function DevicesView(props: {
           <dd>{props.hdc?.devices.length ?? 0}</dd>
           <dt>消息</dt>
           <dd>{props.deviceNotice ?? props.hdc?.message ?? "无"}</dd>
+          <dt>HDC Server</dt>
+          <dd>
+            {props.hdc?.hdc_server_running
+              ? `已启动 ${props.hdc.hdc_server_url}`
+              : props.hdc?.hdc_server_message ?? "未启动"}
+          </dd>
           <dt>手机 LLM URL</dt>
-          <dd>{props.hdc?.phone_llm_url ?? "http://127.0.0.1:19000"}</dd>
+          <dd>{props.hdc?.phone_llm_url ?? "http://127.0.0.1:15000"}</dd>
           <dt>LLM 转发</dt>
           <dd>{props.hdc?.llm_rport_ready ? `已映射到本机 :${props.hdc.llm_port}` : "未建立"}</dd>
+          <dt>手机控制 URL</dt>
+          <dd>{props.hdc?.phone_pc_server_url ?? "http://127.0.0.1:15001"}</dd>
+          <dt>控制转发</dt>
+          <dd>{props.hdc?.pc_server_rport_ready ? `已映射到后端 :${props.hdc.pc_server_port}` : "未建立"}</dd>
         </dl>
         {props.deviceNotice ? (
           <InlineNotice spinning={Boolean(props.deviceBusy)} variant="device">{props.deviceNotice}</InlineNotice>

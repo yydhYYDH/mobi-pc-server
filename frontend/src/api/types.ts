@@ -47,9 +47,20 @@ export type HdcStatus = {
     connection_type: string;
   }>;
   message: string | null;
+  hdc_server_running: boolean;
+  hdc_server_port: number;
+  hdc_server_url: string;
+  hdc_server_message: string | null;
   llm_port: number;
   phone_llm_url: string;
   llm_rport_ready: boolean;
+  pc_server_port: number;
+  phone_pc_server_url: string;
+  pc_server_rport_ready: boolean;
+  mobile_event_ready: boolean;
+  mobile_event_connections: number;
+  mobile_event_type: string | null;
+  mobile_event_client: string | null;
 };
 
 export type ChatMessage = {

@@ -2,11 +2,33 @@
 
 MobiInfer is currently integrated as an MNN-compatible fork under `3rdparty/mobiinfer`.
 
+The repository currently pins the submodule to:
+
+```text
+798dbf4deddbb592bdf3ba07938fb31406d1578e
+```
+
 At this stage the backend assumes:
 
 - the repository layout stays compatible with MNN's `apps/mnncli` layout
 - the runtime entrypoint is still `mnncli serve`
 - model config shape remains compatible with the existing MNN catalog entries
+
+## Submodule Setup
+
+To initialize or reset the local MobiInfer checkout:
+
+```bash
+git submodule update --init 3rdparty/mobiinfer
+git -C 3rdparty/mobiinfer fetch --depth 1 origin 798dbf4deddbb592bdf3ba07938fb31406d1578e
+git -C 3rdparty/mobiinfer checkout --detach 798dbf4deddbb592bdf3ba07938fb31406d1578e
+```
+
+If you want all inference runtimes locally in one step:
+
+```bash
+git submodule update --init 3rdparty/MNN 3rdparty/mobiinfer 3rdparty/llama.cpp
+```
 
 ## Backend API
 

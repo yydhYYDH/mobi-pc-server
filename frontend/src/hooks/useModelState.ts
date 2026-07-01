@@ -35,11 +35,6 @@ export function useModelState(params: {
     [localModels]
   );
 
-  const launchableModels = React.useMemo(
-    () => models.filter((model) => backendSupportsRuntime(selectedBackend, model.runtime) && isDownloaded(model.id)),
-    [isDownloaded, models, selectedBackend]
-  );
-
   const selectableModels = React.useMemo(
     () => models.filter((model) => backendSupportsRuntime(selectedBackend, model.runtime)),
     [models, selectedBackend]
@@ -70,7 +65,6 @@ export function useModelState(params: {
     downloadStatus,
     isDownloaded,
     isDownloading,
-    launchableModels,
     selectableModels
   };
 }

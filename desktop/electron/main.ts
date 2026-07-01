@@ -5,9 +5,8 @@ import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 
-const BACKEND_PORT = Number(process.env.PC_SERVER_BACKEND_PORT ?? "8000");
 const BACKEND_HOST = process.env.PC_SERVER_BACKEND_HOST ?? "127.0.0.1";
-const BACKEND_BASE_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
+let backendPort = Number(process.env.PC_SERVER_BACKEND_PORT ?? "18188");
 let frontendDevUrl = process.env.PC_SERVER_FRONTEND_URL ?? "http://127.0.0.1:5173";
 const SKIP_BACKEND = process.env.PC_SERVER_SKIP_BACKEND === "1";
 
@@ -59,6 +58,10 @@ function parsePort(url: string): number {
   return Number(new URL(url).port);
 }
 
+function backendBaseUrl(): string {
+  return `http://${BACKEND_HOST}:${backendPort}`;
+}
+
 function isPortFree(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
@@ -77,6 +80,15 @@ async function pickFrontendPort(startPort: number): Promise<number> {
     }
   }
   throw new Error(`No available frontend port found from ${startPort} to ${startPort + 19}`);
+}
+
+async function pickBackendPort(startPort: number): Promise<number> {
+  for (let port = startPort; port < startPort + 20; port += 1) {
+    if (await isPortFree(port)) {
+      return port;
+    }
+  }
+  throw new Error(`No available backend port found from ${startPort} to ${startPort + 19}`);
 }
 
 function devPythonCommand(): string {
@@ -138,7 +150,7 @@ function startBackend(): void {
 
   backendProcess = spawn(
     devPythonCommand(),
-    ["-m", "uvicorn", "app.main:app", "--host", BACKEND_HOST, "--port", String(BACKEND_PORT)],
+    ["-m", "uvicorn", "app.main:app", "--host", BACKEND_HOST, "--port", String(backendPort)],
     {
       cwd: path.join(repoRoot(), "backend"),
       env: childEnv(),
@@ -161,6 +173,8 @@ function childEnv(): NodeJS.ProcessEnv {
     MNNCLI_BIN: path.join(resourcesPath, "mnn", process.platform === "win32" ? "mnncli.exe" : "mnncli"),
     MOBIINFER_BIN: path.join(resourcesPath, "mobiinfer", process.platform === "win32" ? "mnncli.exe" : "mnncli"),
     PATH: pathValue,
+    PC_SERVER_BACKEND_HOST: BACKEND_HOST,
+    PC_SERVER_BACKEND_PORT: String(backendPort),
     PC_SERVER_CONFIGS_DIR: path.join(resourcesPath, "configs"),
     PC_SERVER_LOGS_DIR: path.join(dataRoot, "logs"),
     PC_SERVER_MODELS_DIR: path.join(dataRoot, "models"),
@@ -238,7 +252,7 @@ function urlCheck(url: string): Promise<boolean> {
 }
 
 function healthCheck(): Promise<boolean> {
-  return urlCheck(`${BACKEND_BASE_URL}/api/health`);
+  return urlCheck(`${backendBaseUrl()}/api/health`);
 }
 
 async function waitForBackend(timeoutMs = 15000): Promise<void> {
@@ -251,7 +265,7 @@ async function waitForBackend(timeoutMs = 15000): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
 
-  throw new Error(`Backend did not become healthy at ${BACKEND_BASE_URL}/api/health`);
+  throw new Error(`Backend did not become healthy at ${backendBaseUrl()}/api/health`);
 }
 
 async function waitForFrontend(timeoutMs = 15000): Promise<void> {
@@ -354,8 +368,15 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   await startFrontendDevServer();
 
-  if (await healthCheck()) {
-    console.log(`[backend] Reusing existing backend at ${BACKEND_BASE_URL}`);
+  if (app.isPackaged && !SKIP_BACKEND && !process.env.PC_SERVER_BACKEND_PORT && !(await isPortFree(backendPort))) {
+    const occupiedPort = backendPort;
+    backendPort = await pickBackendPort(backendPort + 1);
+    process.env.PC_SERVER_BACKEND_PORT = String(backendPort);
+    console.log(`[backend] Port ${occupiedPort} is occupied; starting packaged backend at ${backendBaseUrl()}`);
+  }
+
+  if (!app.isPackaged && (await healthCheck())) {
+    console.log(`[backend] Reusing existing backend at ${backendBaseUrl()}`);
   } else {
     startBackend();
   }

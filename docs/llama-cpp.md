@@ -3,15 +3,15 @@
 llama.cpp lives at `3rdparty/llama.cpp` as a Git submodule pinned by this repository to:
 
 ```text
-ac4cddeb0dbd778f650bf568f6f08344a06abe3a
+6eab47181cbd3532c88a105682b81b4729ab809b
 ```
 
 Initialize or reset it by shallow-fetching the pinned commit itself:
 
 ```bash
 git submodule update --init 3rdparty/llama.cpp
-git -C 3rdparty/llama.cpp fetch --depth 1 origin ac4cddeb0dbd778f650bf568f6f08344a06abe3a
-git -C 3rdparty/llama.cpp checkout --detach ac4cddeb0dbd778f650bf568f6f08344a06abe3a
+git -C 3rdparty/llama.cpp fetch --depth 1 origin 6eab47181cbd3532c88a105682b81b4729ab809b
+git -C 3rdparty/llama.cpp checkout --detach 6eab47181cbd3532c88a105682b81b4729ab809b
 ```
 
 ## Backend API

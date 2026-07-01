@@ -23,3 +23,8 @@ def mnncli_log(lines: int = 120) -> dict[str, str]:
 @router.get("/runtime")
 def runtime_log(backend: InferenceBackend = "mnn", lines: int = 120) -> dict[str, str]:
     return {"content": service.tail(LOG_FILES[backend], lines)}
+
+
+@router.get("/hdc")
+def hdc_log(lines: int = 120) -> dict[str, str]:
+    return {"content": service.tail("hdc.log", lines)}

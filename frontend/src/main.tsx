@@ -39,9 +39,9 @@ function App() {
     setHdc
   } = useDashboardData({ activeView, selectedBackend });
 
-  const { autoScrollLogs, criticalLog, logFilter, setAutoScrollLogs, setLogFilter, visibleLogLines } = useLogState(logs, logRef);
+  const { autoScrollLogs, logFilter, setAutoScrollLogs, setLogFilter, visibleLogLines } = useLogState(logs, logRef);
 
-  const { activeModelName, downloadedCount, downloadStatus, isDownloaded, isDownloading, launchableModels, selectableModels } =
+  const { activeModelName, downloadedCount, downloadStatus, isDownloaded, isDownloading, selectableModels } =
     useModelState({
       downloads,
       localModels,
@@ -66,6 +66,7 @@ function App() {
 
   const {
     autoConnectHdc,
+    autoDiscovering,
     connectHdc,
     deviceBusy,
     deviceNotice,
@@ -75,7 +76,7 @@ function App() {
     recentHdcTargets,
     setHdcLlmPort,
     setHdcTarget
-  } = useHdcActions({ hdc, load, setHdc });
+  } = useHdcActions({ hdc, setHdc });
 
   const {
     activeModelSupportsImages,
@@ -147,6 +148,7 @@ function App() {
           apiBase={API_BASE}
           activeModelSupportsImages={activeModelSupportsImages}
           autoConnectHdc={autoConnectHdc}
+          autoDiscovering={autoDiscovering}
           autoScrollLogs={autoScrollLogs}
           chatBusy={chatBusy}
           chatError={chatError}
@@ -156,9 +158,7 @@ function App() {
           imageBusy={imageBusy}
           clearSelectedImage={clearSelectedImage}
           clearChat={clearChat}
-          connectedDevices={connectedDevices}
           connectHdc={connectHdc}
-          criticalLog={criticalLog}
           deleteModel={deleteModel}
           deviceBusy={deviceBusy}
           deviceNotice={deviceNotice}
@@ -173,7 +173,6 @@ function App() {
           recentHdcTargets={recentHdcTargets}
           isDownloaded={isDownloaded}
           isDownloading={isDownloading}
-          launchableModels={launchableModels}
           loadModel={loadModel}
           logFilter={logFilter}
           logRef={logRef}

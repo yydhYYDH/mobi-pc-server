@@ -25,6 +25,12 @@ export function SettingsView(props: {
           <dd>{serverOwnerLabel(props.mnn)}</dd>
           <dt>hdc 路径</dt>
           <dd>{props.hdc?.path ?? "未找到"}</dd>
+          <dt>HDC Server</dt>
+          <dd>
+            {props.hdc?.hdc_server_running
+              ? `已启动 ${props.hdc.hdc_server_url}`
+              : props.hdc?.hdc_server_message ?? "未启动"}
+          </dd>
           <dt>LLM server 端口</dt>
           <dd>
             <input
@@ -36,7 +42,9 @@ export function SettingsView(props: {
             />
           </dd>
           <dt>手机访问地址</dt>
-          <dd>{props.hdc?.phone_llm_url ?? "http://127.0.0.1:19000"}</dd>
+          <dd>{props.hdc?.phone_llm_url ?? "http://127.0.0.1:15000"}</dd>
+          <dt>手机控制地址</dt>
+          <dd>{props.hdc?.phone_pc_server_url ?? "http://127.0.0.1:15001"}</dd>
           <dt>桌面平台</dt>
           <dd>{window.pcServerDesktop?.platform ?? "browser"}</dd>
         </dl>

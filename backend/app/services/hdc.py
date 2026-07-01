@@ -9,16 +9,24 @@ import threading
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 from app.core.paths import REPO_ROOT
 from app.schemas.devices import HdcDevice, HdcStatus
+from app.services.logs import LogService
+from app.services.mobile_events import mobile_event_broker, mobile_event_state
 
 
 DEFAULT_LLM_PORT = 8088
+DEFAULT_PC_SERVER_PORT = int(os.getenv("PC_SERVER_BACKEND_PORT", "18188"))
+HDC_SERVER_PORT = 9124
+HDC_SERVER_URL = f"http://127.0.0.1:{HDC_SERVER_PORT}"
 PHONE_LLM_PORT = 15000
 PHONE_LLM_URL = f"http://127.0.0.1:{PHONE_LLM_PORT}"
+PHONE_PC_SERVER_PORT = 15001
+PHONE_PC_SERVER_URL = f"http://127.0.0.1:{PHONE_PC_SERVER_PORT}"
 HDC_AUTO_CACHE = Path(os.getenv("HDC_AUTO_CACHE", REPO_ROOT / ".hdc-auto-cache" / "targets.json"))
 HDC_AUTO_CONNECT_TIMEOUT = float(os.getenv("HDC_AUTO_CONNECT_TIMEOUT", "0.25"))
 HDC_AUTO_TCONN_TIMEOUT = int(float(os.getenv("HDC_AUTO_TCONN_TIMEOUT", "6")))
@@ -27,42 +35,141 @@ HDC_AUTO_SCAN_BUDGET = float(os.getenv("HDC_AUTO_SCAN_BUDGET", "12"))
 HDC_AUTO_MAX_WORKERS = max(8, int(os.getenv("HDC_AUTO_MAX_WORKERS", "128")))
 HDC_AUTO_MAX_SUBNETS = max(1, int(os.getenv("HDC_AUTO_MAX_SUBNETS", "8")))
 HDC_AUTO_DEFAULT_PORTS = (8710, 10178, 5555)
+HDC_STATUS_REFRESH_INTERVAL = float(os.getenv("HDC_STATUS_REFRESH_INTERVAL", "5"))
 
 
 class HdcService:
     def __init__(self) -> None:
         self._last_llm_port = DEFAULT_LLM_PORT
+        self._pc_server_port = DEFAULT_PC_SERVER_PORT
+        self._llm_rport_ready = False
+        self._pc_server_rport_ready = False
+        self._llm_rport_target = ""
+        self._pc_server_rport_target = ""
+        self._last_device_connected_broadcast_target = ""
         self._origin_server_lock = threading.RLock()
         self._origin_server_thread: threading.Thread | None = None
+        self._origin_server_message: str | None = None
+        self._origin_server_started = False
+        self._origin_server_health_checked_at = 0.0
+        self._origin_server_health_cache = False
+        self._origin_server_health_failures = 0
+        self._logs = LogService()
+        self._connect_task_lock = threading.Lock()
+        self._connect_task_running = False
+        self._connection_monitor_lock = threading.Lock()
+        self._connection_monitor_thread: threading.Thread | None = None
+        self._last_observed_connected_target = ""
+        self._status_cache_lock = threading.RLock()
+        self._status_cache: HdcStatus | None = None
 
     def status(self) -> HdcStatus:
         hdc_path = self._hdc_path()
         if not hdc_path:
             return self._status_response(available=False, message="hdc was not found on PATH.")
         self._ensure_origin_hdc_server()
+        self._ensure_connection_monitor()
+
+        cached = self._cached_status()
+        if cached:
+            return cached
+
+        return self._status_response(
+            available=True,
+            path=hdc_path,
+            message="HDC status is initializing. Background refresh runs every 5 seconds.",
+        )
+
+    def _status_live(self) -> HdcStatus:
+        hdc_path = self._hdc_path()
+        if not hdc_path:
+            status = self._status_response(available=False, message="hdc was not found on PATH.")
+            self._set_status_cache(status)
+            return status
+        self._ensure_origin_hdc_server()
 
         result = self._run([hdc_path, "list", "targets"], timeout=5)
         if result is None:
-            return self._status_response(
+            status = self._status_response(
                 available=True,
                 path=hdc_path,
                 message="hdc list targets timed out.",
             )
+            self._set_status_cache(status)
+            return status
 
         if result.returncode != 0:
-            return self._status_response(
+            status = self._status_response(
                 available=True,
                 path=hdc_path,
                 message=result.stderr.strip() or "hdc list targets failed.",
             )
+            self._set_status_cache(status)
+            return status
 
         devices = [self._device_from_target(target) for target in self._parse_targets(result.stdout)]
-        return self._status_response(available=True, path=hdc_path, devices=devices)
+        if not devices:
+            self._llm_rport_ready = False
+            self._pc_server_rport_ready = False
+            self._llm_rport_target = ""
+            self._pc_server_rport_target = ""
+            self._last_device_connected_broadcast_target = ""
+            self._last_observed_connected_target = ""
+        status = self._status_response(available=True, path=hdc_path, devices=devices)
+        self._set_status_cache(status)
+        return status
 
     def connect(self, target: str, llm_port: int = DEFAULT_LLM_PORT) -> HdcStatus:
+        return self._start_connect_task(
+            "manual",
+            lambda: self._connect_sync(target, llm_port=llm_port),
+        )
+
+    def auto_connect(self, llm_port: int = DEFAULT_LLM_PORT) -> HdcStatus:
+        return self._start_connect_task(
+            "auto",
+            lambda: self._auto_connect_sync(llm_port=llm_port),
+        )
+
+    def _start_connect_task(self, label: str, action) -> HdcStatus:
+        hdc_path = self._hdc_path()
+        if not hdc_path:
+            return self._status_response(available=False, message="hdc was not found on PATH.")
+
+        with self._connect_task_lock:
+            if self._connect_task_running:
+                status = self.status()
+                status.message = "HDC connection is already running in background."
+                return status
+            self._connect_task_running = True
+
+        self._log_hdc(f"Started background HDC {label} connection task.")
+        thread = threading.Thread(
+            target=self._run_connect_task,
+            args=(label, action),
+            name=f"hdc-{label}-connect",
+            daemon=True,
+        )
+        thread.start()
+
+        status = self.status()
+        status.message = "HDC connection is running in background."
+        return status
+
+    def _run_connect_task(self, label: str, action) -> None:
+        try:
+            result = action()
+            self._log_hdc(f"Background HDC {label} connection task finished: {result.message or 'ok'}")
+        except Exception as exc:
+            self._log_hdc(f"Background HDC {label} connection task failed: {exc}")
+        finally:
+            with self._connect_task_lock:
+                self._connect_task_running = False
+
+    def _connect_sync(self, target: str, llm_port: int = DEFAULT_LLM_PORT) -> HdcStatus:
         llm_port = self._normalize_port(llm_port)
         if not target.strip():
-            return self.auto_connect(llm_port=llm_port)
+            return self._auto_connect_sync(llm_port=llm_port)
 
         hdc_path = self._hdc_path()
         if not hdc_path:
@@ -71,32 +178,57 @@ class HdcService:
 
         result = self._run([hdc_path, "tconn", target.strip()], timeout=10)
         if result is None:
+            current = self._status_live()
+            if self._status_contains_target(current, target.strip()):
+                self._cache_target(target.strip())
+                self._log_hdc(f"Manual hdc tconn timed out but target is connected: {target.strip()}")
+                return self._with_llm_rport(
+                    current,
+                    target.strip(),
+                    llm_port,
+                    "HDC target connected after tconn timeout.",
+                )
             return self._status_response(
                 available=True,
                 path=hdc_path,
                 message="hdc connect timed out.",
             )
         if result.returncode != 0:
+            current = self._status_live()
+            if self._status_contains_target(current, target.strip()):
+                self._cache_target(target.strip())
+                message = result.stderr.strip() or result.stdout.strip() or "hdc connect returned non-zero"
+                self._log_hdc(
+                    f"Manual hdc tconn returned non-zero but target is connected: {target.strip()}. {message}"
+                )
+                return self._with_llm_rport(
+                    current,
+                    target.strip(),
+                    llm_port,
+                    "HDC target connected despite tconn error.",
+                )
             return self._status_response(
                 available=True,
                 path=hdc_path,
                 message=result.stderr.strip() or result.stdout.strip() or "hdc connect failed.",
             )
-        current = self.status()
+        current = self._status_live()
         self._cache_target(target.strip())
         message = result.stdout.strip() or f"Connected to {target.strip()}."
+        self._log_hdc(f"Manual hdc tconn succeeded: {target.strip()}. {message}")
         return self._with_llm_rport(current, target.strip(), llm_port, message)
 
-    def auto_connect(self, llm_port: int = DEFAULT_LLM_PORT) -> HdcStatus:
+    def _auto_connect_sync(self, llm_port: int = DEFAULT_LLM_PORT) -> HdcStatus:
         llm_port = self._normalize_port(llm_port)
         hdc_path = self._hdc_path()
         if not hdc_path:
             return self._status_response(available=False, message="hdc was not found on PATH.")
         self._ensure_origin_hdc_server()
 
-        current = self.status()
+        current = self._status_live()
         if current.devices:
             target = current.devices[0].serial
+            self._log_hdc(f"Using existing HDC target from hdc list targets: {target}")
             return self._with_llm_rport(current, target, llm_port, "Using existing HDC target.")
 
         candidates = self._discover_candidates(hdc_path)
@@ -146,9 +278,54 @@ class HdcService:
                 path=hdc_path,
                 message=result.stderr.strip() or result.stdout.strip() or "hdc disconnect failed.",
             )
-        current = self.status()
+        current = self._status_live()
         current.message = result.stdout.strip() or f"Disconnected from {target}."
         return current
+
+    def _ensure_connection_monitor(self) -> None:
+        with self._connection_monitor_lock:
+            if self._connection_monitor_thread and self._connection_monitor_thread.is_alive():
+                return
+            self._connection_monitor_thread = threading.Thread(
+                target=self._run_connection_monitor,
+                name="hdc-connection-monitor",
+                daemon=True,
+            )
+            self._connection_monitor_thread.start()
+
+    def _run_connection_monitor(self) -> None:
+        while True:
+            try:
+                status = self._status_live()
+                targets = [device.serial for device in status.devices]
+                target = targets[0] if targets else ""
+                if target and target != self._last_observed_connected_target:
+                    self._last_observed_connected_target = target
+                    self._log_hdc(f"HDC monitor observed connected target: {target}")
+                    status = self._with_llm_rport(
+                        status,
+                        target,
+                        self._last_llm_port,
+                        "HDC monitor observed connected target.",
+                    )
+                    self._set_status_cache(status)
+                elif not target and self._last_observed_connected_target:
+                    self._log_hdc("HDC monitor observed no connected target.")
+                    self._last_observed_connected_target = ""
+                    self._last_device_connected_broadcast_target = ""
+            except Exception as exc:
+                self._log_hdc(f"HDC monitor failed: {exc}")
+            time.sleep(HDC_STATUS_REFRESH_INTERVAL)
+
+    def _cached_status(self) -> HdcStatus | None:
+        with self._status_cache_lock:
+            if not self._status_cache:
+                return None
+            return self._status_cache.model_copy(deep=True)
+
+    def _set_status_cache(self, status: HdcStatus) -> None:
+        with self._status_cache_lock:
+            self._status_cache = status.model_copy(deep=True)
 
     def _hdc_path(self) -> str | None:
         env_path = os.environ.get("HDC_BIN")
@@ -181,13 +358,35 @@ class HdcService:
                 daemon=True,
             )
             self._origin_server_thread.start()
+            for _ in range(5):
+                if self._origin_hdc_server_healthy():
+                    return
+                time.sleep(0.1)
 
-    def _origin_hdc_server_healthy(self) -> bool:
+    def _origin_hdc_server_healthy(self, *, force: bool = False) -> bool:
+        now = time.monotonic()
+        if not force and now - self._origin_server_health_checked_at < 3:
+            return self._origin_server_health_cache
+
         try:
-            with urllib.request.urlopen("http://127.0.0.1:9124/api/health", timeout=0.4) as response:
-                return 200 <= response.status < 500
+            with urllib.request.urlopen(f"{HDC_SERVER_URL}/api/health", timeout=0.4) as response:
+                healthy = 200 <= response.status < 500
         except Exception:
-            return False
+            healthy = False
+
+        self._origin_server_health_checked_at = now
+        if healthy:
+            self._origin_server_health_cache = True
+            self._origin_server_started = True
+            self._origin_server_health_failures = 0
+            return True
+
+        self._origin_server_health_failures += 1
+        if self._origin_server_health_cache and self._origin_server_health_failures < 3:
+            return True
+
+        self._origin_server_health_cache = False
+        return False
 
     def _run_origin_hdc_server(self) -> None:
         legacy_dir = str(Path(__file__).resolve().parents[1] / "legacy")
@@ -199,12 +398,32 @@ class HdcService:
 
             module.LEGACY_LOOP_ENABLED = False
             server = ThreadingHTTPServer(("0.0.0.0", module.SERVER_PORT), module.HDCServerHandler)
-            print(f">> [HDC] legacy HDC server started on port {module.SERVER_PORT}.", flush=True)
+            self._origin_server_started = True
+            self._origin_server_health_cache = True
+            self._origin_server_message = f"HDC server started on port {module.SERVER_PORT}."
+            self._log_hdc_server(self._origin_server_message)
             server.serve_forever()
         except OSError as exc:
-            print(f">> [HDC] legacy HDC server failed to bind: {exc}", flush=True)
+            self._origin_server_message = f"HDC server failed to bind: {exc}"
+            self._log_hdc_server(self._origin_server_message)
         except Exception as exc:
-            print(f">> [HDC] legacy HDC server exited: {exc}", flush=True)
+            self._origin_server_message = f"HDC server exited: {exc}"
+            self._log_hdc_server(self._origin_server_message)
+
+    def _log_hdc_server(self, message: str) -> None:
+        text = f">> [HDC] {message}"
+        print(text, flush=True)
+        self._logs.append("hdc.log", text)
+
+    def _log_hdc(self, message: str) -> None:
+        self._logs.append("hdc.log", f">> [HDC] {message}")
+
+    def _origin_hdc_server_running(self) -> bool:
+        return bool(
+            self._origin_server_started
+            or self._origin_server_health_cache
+            or (self._origin_server_thread and self._origin_server_thread.is_alive())
+        )
 
     def _run(self, args: list[str], timeout: int) -> subprocess.CompletedProcess[str] | None:
         try:
@@ -224,16 +443,33 @@ class HdcService:
         path: str | None = None,
         devices: list[HdcDevice] | None = None,
         message: str | None = None,
-        llm_rport_ready: bool = False,
+        llm_rport_ready: bool | None = None,
+        pc_server_rport_ready: bool | None = None,
     ) -> HdcStatus:
+        mobile_snapshot = mobile_event_state.snapshot()
         return HdcStatus(
             available=available,
             path=path,
             devices=devices or [],
             message=message,
+            hdc_server_running=self._origin_hdc_server_running(),
+            hdc_server_port=HDC_SERVER_PORT,
+            hdc_server_url=HDC_SERVER_URL,
+            hdc_server_message=self._origin_server_message,
             llm_port=self._last_llm_port,
             phone_llm_url=PHONE_LLM_URL,
-            llm_rport_ready=llm_rport_ready,
+            llm_rport_ready=self._llm_rport_ready if llm_rport_ready is None else llm_rport_ready,
+            pc_server_port=self._pc_server_port,
+            phone_pc_server_url=PHONE_PC_SERVER_URL,
+            pc_server_rport_ready=(
+                self._pc_server_rport_ready
+                if pc_server_rport_ready is None
+                else pc_server_rport_ready
+            ),
+            mobile_event_ready=mobile_snapshot.event_ready,
+            mobile_event_connections=mobile_snapshot.active_connections,
+            mobile_event_type=mobile_snapshot.last_event_type,
+            mobile_event_client=mobile_snapshot.last_client,
         )
 
     def _with_llm_rport(
@@ -244,36 +480,101 @@ class HdcService:
         message: str,
     ) -> HdcStatus:
         self._last_llm_port = llm_port
-        ready, rport_message = self._ensure_llm_rport(target, llm_port)
+        llm_ready, llm_message = self._ensure_rport(
+            target=target,
+            phone_port=PHONE_LLM_PORT,
+            pc_port=llm_port,
+            label="LLM",
+            phone_url=PHONE_LLM_URL,
+            already_ready=self._llm_rport_ready,
+            ready_target=self._llm_rport_target,
+        )
+        pc_server_ready, pc_server_message = self._ensure_rport(
+            target=target,
+            phone_port=PHONE_PC_SERVER_PORT,
+            pc_port=self._pc_server_port,
+            label="PC Server",
+            phone_url=PHONE_PC_SERVER_URL,
+            already_ready=self._pc_server_rport_ready,
+            ready_target=self._pc_server_rport_target,
+        )
         status.llm_port = llm_port
         status.phone_llm_url = PHONE_LLM_URL
-        status.llm_rport_ready = ready
-        status.message = f"{message} {rport_message}".strip()
+        status.llm_rport_ready = llm_ready
+        self._llm_rport_ready = llm_ready
+        self._llm_rport_target = target if llm_ready else ""
+        status.pc_server_port = self._pc_server_port
+        status.phone_pc_server_url = PHONE_PC_SERVER_URL
+        status.pc_server_rport_ready = pc_server_ready
+        self._pc_server_rport_ready = pc_server_ready
+        self._pc_server_rport_target = target if pc_server_ready else ""
+        status.message = f"{message} {llm_message} {pc_server_message}".strip()
+        if target != self._last_device_connected_broadcast_target:
+            self._broadcast_device_connected(status, target)
+            self._last_device_connected_broadcast_target = target
         return status
 
-    def _ensure_llm_rport(self, target: str, llm_port: int) -> tuple[bool, str]:
+    def _broadcast_device_connected(self, status: HdcStatus, target: str) -> None:
+        device = status.devices[0] if status.devices else self._device_from_target(target)
+        payload = {
+            "success": True,
+            "message": "设备已连接",
+            "device": {
+                "connected": True,
+                "name": device.serial,
+                "serial": device.serial,
+                "connection": device.connection_type,
+                "state": device.state,
+            },
+            "tunnel": {
+                "pc_server_url": status.phone_pc_server_url,
+                "llm_url": status.phone_llm_url,
+                "pc_server_ready": status.pc_server_rport_ready,
+                "llm_ready": status.llm_rport_ready,
+            },
+            "time": datetime.now(timezone.utc).isoformat(),
+        }
+        count = mobile_event_broker.broadcast_threadsafe("device_connected", payload)
+        self._log_hdc(f"Broadcast device_connected to {count} mobile event connection(s): {device.serial}")
+
+    def _ensure_rport(
+        self,
+        target: str,
+        phone_port: int,
+        pc_port: int,
+        label: str,
+        phone_url: str,
+        already_ready: bool,
+        ready_target: str,
+    ) -> tuple[bool, str]:
         hdc_path = self._hdc_path()
         if not hdc_path:
-            return False, "LLM rport skipped: hdc was not found."
+            return False, f"{label} rport skipped: hdc was not found."
+
+        if already_ready and ready_target == target:
+            return True, f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
 
         args_prefix = [hdc_path]
         if target:
             args_prefix.extend(["-t", target])
 
         self._run(
-            args_prefix + ["rport", "rm", f"tcp:{PHONE_LLM_PORT}", f"tcp:{llm_port}"],
+            args_prefix + ["rport", "rm", f"tcp:{phone_port}", f"tcp:{pc_port}"],
             timeout=5,
         )
         result = self._run(
-            args_prefix + ["rport", f"tcp:{PHONE_LLM_PORT}", f"tcp:{llm_port}"],
+            args_prefix + ["rport", f"tcp:{phone_port}", f"tcp:{pc_port}"],
             timeout=8,
         )
         if result is None:
-            return False, "LLM rport timed out."
+            return False, f"{label} rport timed out."
         if result.returncode != 0:
-            message = result.stderr.strip() or result.stdout.strip() or "LLM rport failed."
+            message = result.stderr.strip() or result.stdout.strip() or f"{label} rport failed."
+            self._log_hdc(f"{label} rport failed: phone tcp:{phone_port} -> PC tcp:{pc_port}: {message}")
             return False, message
-        return True, f"Phone LLM URL: {PHONE_LLM_URL} -> PC 127.0.0.1:{llm_port}."
+        message = f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
+        self._log_hdc(f"{label} rport succeeded: phone tcp:{phone_port} -> PC tcp:{pc_port}")
+        return True, message
 
     def _normalize_port(self, port: int) -> int:
         try:
@@ -341,18 +642,63 @@ class HdcService:
         errors: list[str],
         llm_port: int,
     ) -> HdcStatus | None:
+        if candidates:
+            self._log_hdc(f"Auto-connect candidates: {', '.join(candidates)}")
         for target in candidates:
+            self._log_hdc(f"Trying hdc tconn {target}")
             result = self._run([hdc_path, "tconn", target], timeout=HDC_AUTO_TCONN_TIMEOUT)
             if result is None:
-                errors.append(f"{target}: timed out")
+                connected = self._status_live()
+                if self._status_contains_target(connected, target):
+                    self._cache_target(target)
+                    self._log_hdc(f"hdc tconn timed out but target is connected: {target}")
+                    return self._with_llm_rport(
+                        connected,
+                        target,
+                        llm_port,
+                        "HDC target connected after tconn timeout.",
+                    )
+                message = f"{target}: timed out"
+                self._log_hdc(f"hdc tconn failed: {message}")
+                errors.append(message)
                 continue
-            if result.returncode == 0:
+            message = result.stderr.strip() or result.stdout.strip() or "unknown error"
+            if result.returncode == 0 and self._tconn_output_succeeded(result.stdout, result.stderr):
                 self._cache_target(target)
-                connected = self.status()
+                connected = self._status_live()
                 message = result.stdout.strip() or f"Auto-connected to {target}."
+                self._log_hdc(f"hdc tconn succeeded: {target}. {message}")
                 return self._with_llm_rport(connected, target, llm_port, message)
-            errors.append(f"{target}: {result.stderr.strip() or result.stdout.strip()}")
+            connected = self._status_live()
+            if self._status_contains_target(connected, target):
+                self._cache_target(target)
+                self._log_hdc(f"hdc tconn returned error but target is connected: {target}: {message}")
+                return self._with_llm_rport(
+                    connected,
+                    target,
+                    llm_port,
+                    "HDC target connected despite tconn error.",
+                )
+            self._log_hdc(f"hdc tconn failed: {target}: {message}")
+            errors.append(f"{target}: {message}")
         return None
+
+    def _status_contains_target(self, status: HdcStatus, target: str) -> bool:
+        return any(device.serial == target for device in status.devices)
+
+    def _tconn_output_succeeded(self, stdout: str, stderr: str) -> bool:
+        text = f"{stdout}\n{stderr}".lower()
+        failure_markers = (
+            "[fail]",
+            "connect failed",
+            "failed",
+            "failure",
+            "timeout",
+            "unable",
+            "refused",
+            "not found",
+        )
+        return not any(marker in text for marker in failure_markers)
 
     def _seed_targets(self) -> list[str]:
         targets: list[str] = []
@@ -553,7 +899,17 @@ class HdcService:
         port = int(match.group(2))
         if any(int(octet) > 255 for octet in octets) or not 0 < port <= 65535:
             return ""
+        if self._is_ignored_auto_target_host(match.group(1)):
+            return ""
         return f"{match.group(1)}:{port}"
+
+    def _is_ignored_auto_target_host(self, host: str) -> bool:
+        octets = [int(part) for part in host.split(".")]
+        if octets[0] == 127:
+            return True
+        if octets[0] == 0:
+            return True
+        return octets[0] == 169 and octets[1] == 254
 
     def _is_private_lan_ipv4(self, address: str) -> bool:
         parsed = self._parse_wireless_target(f"{address}:1")

@@ -38,10 +38,9 @@ function writeRecentHdcTarget(target: string) {
 
 export function useHdcActions(params: {
   hdc: HdcStatus | null;
-  load: () => Promise<void>;
   setHdc: (status: HdcStatus) => void;
 }) {
-  const { hdc, load, setHdc } = params;
+  const { hdc, setHdc } = params;
   const [recentHdcTargets, setRecentHdcTargets] = React.useState<string[]>(() => readRecentHdcTargets());
   const [hdcTarget, setHdcTarget] = React.useState(() => readRecentHdcTargets()[0] ?? "");
   const [hdcLlmPort, setHdcLlmPort] = React.useState(
@@ -49,11 +48,17 @@ export function useHdcActions(params: {
   );
   const [deviceBusy, setDeviceBusy] = React.useState<"auto" | "connect" | "disconnect" | null>(null);
   const [deviceNotice, setDeviceNotice] = React.useState<string | null>(null);
-  const autoHdcStartedRef = React.useRef(false);
+  const autoDiscoverInFlightRef = React.useRef(false);
+  const deviceBusyRef = React.useRef<typeof deviceBusy>(null);
+  const autoDiscovering = Boolean(hdc?.available && !hdc?.pc_server_rport_ready);
 
   React.useEffect(() => {
     window.localStorage.setItem("pc-server-hdc-llm-port", hdcLlmPort);
   }, [hdcLlmPort]);
+
+  React.useEffect(() => {
+    deviceBusyRef.current = deviceBusy;
+  }, [deviceBusy]);
 
   React.useEffect(() => {
     const connectedTarget = hdc?.devices[0]?.serial;
@@ -64,12 +69,23 @@ export function useHdcActions(params: {
   }, [hdc?.devices]);
 
   React.useEffect(() => {
-    if (autoHdcStartedRef.current || hdc === null || deviceBusy !== null) {
+    const connected = Boolean(hdc?.pc_server_rport_ready);
+    if (!hdc?.available || connected) {
       return;
     }
-    autoHdcStartedRef.current = true;
-    void autoConnectHdc();
-  }, [deviceBusy, hdc]);
+
+    const intervalId = window.setInterval(() => {
+      if (deviceBusyRef.current !== null) {
+        return;
+      }
+      void autoConnectHdc({ silent: true });
+    }, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [
+    hdc?.available,
+    hdc?.pc_server_rport_ready,
+    hdcLlmPort
+  ]);
 
   async function connectHdc() {
     if (!hdcTarget.trim()) {
@@ -84,7 +100,6 @@ export function useHdcActions(params: {
       setHdc(nextStatus);
       setRecentHdcTargets(writeRecentHdcTarget(hdcTarget.trim()));
       setDeviceNotice(nextStatus.message ?? "连接请求已完成。");
-      await load();
     } catch (connectError) {
       setDeviceNotice(connectError instanceof Error ? connectError.message : "连接失败。");
     } finally {
@@ -92,10 +107,16 @@ export function useHdcActions(params: {
     }
   }
 
-  async function autoConnectHdc() {
+  async function autoConnectHdc(options: { silent?: boolean } = {}) {
+    if (autoDiscoverInFlightRef.current) {
+      return;
+    }
+    autoDiscoverInFlightRef.current = true;
     const llmPort = normalizePort(hdcLlmPort);
-    setDeviceBusy("auto");
-    setDeviceNotice("正在自动搜索 HarmonyOS 设备，可能需要十几秒...");
+    if (!options.silent) {
+      setDeviceBusy("auto");
+      setDeviceNotice("正在自动搜索 HarmonyOS 设备，可能需要十几秒...");
+    }
     try {
       const nextStatus = await autoConnectHdcTarget(llmPort);
       setHdc(nextStatus);
@@ -104,16 +125,22 @@ export function useHdcActions(params: {
         setHdcTarget((currentTarget) => currentTarget || connectedTarget);
         setRecentHdcTargets(writeRecentHdcTarget(connectedTarget));
       }
-      if (nextStatus.devices.length > 0) {
-        setDeviceNotice(nextStatus.message ?? `已发现 ${nextStatus.devices.length} 台设备。`);
-      } else {
-        setDeviceNotice(nextStatus.message ?? "未发现可连接设备。");
+      if (!options.silent) {
+        if (nextStatus.devices.length > 0) {
+          setDeviceNotice(nextStatus.message ?? `已发现 ${nextStatus.devices.length} 台设备。`);
+        } else {
+          setDeviceNotice(nextStatus.message ?? "未发现可连接设备。");
+        }
       }
-      await load();
     } catch (autoConnectError) {
-      setDeviceNotice(autoConnectError instanceof Error ? autoConnectError.message : "自动搜索失败。");
+      if (!options.silent) {
+        setDeviceNotice(autoConnectError instanceof Error ? autoConnectError.message : "自动搜索失败。");
+      }
     } finally {
-      setDeviceBusy(null);
+      autoDiscoverInFlightRef.current = false;
+      if (!options.silent) {
+        setDeviceBusy(null);
+      }
     }
   }
 
@@ -128,7 +155,6 @@ export function useHdcActions(params: {
       const nextStatus = await disconnectHdcTarget(hdcTarget.trim());
       setHdc(nextStatus);
       setDeviceNotice(nextStatus.message ?? "断开请求已完成。");
-      await load();
     } catch (disconnectError) {
       setDeviceNotice(disconnectError instanceof Error ? disconnectError.message : "断开失败。");
     } finally {
@@ -140,6 +166,7 @@ export function useHdcActions(params: {
     autoConnectHdc,
     connectHdc,
     deviceBusy,
+    autoDiscovering,
     deviceNotice,
     disconnectHdc,
     hdcLlmPort,

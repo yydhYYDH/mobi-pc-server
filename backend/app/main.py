@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import multiprocessing
 import os
 
-from app.api import devices, health, llama_cpp, logs, mnn, mobiinfer, models, runtime
+from app.api import devices, health, llama_cpp, logs, mnn, mobile, mobiinfer, models, runtime
 
 
 app = FastAPI(title="数据归家", version="0.1.0")
@@ -18,6 +18,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router, prefix="/api")
+app.include_router(mobile.router)
 app.include_router(models.router, prefix="/api/models", tags=["models"])
 app.include_router(mnn.router, prefix="/api/mnn", tags=["mnn"])
 app.include_router(mobiinfer.router, prefix="/api/mobiinfer", tags=["mobiinfer"])
@@ -33,7 +34,7 @@ def run() -> None:
     import uvicorn
 
     host = os.getenv("PC_SERVER_BACKEND_HOST", "127.0.0.1")
-    port = int(os.getenv("PC_SERVER_BACKEND_PORT", "8000"))
+    port = int(os.getenv("PC_SERVER_BACKEND_PORT", "18188"))
     uvicorn.run(app, host=host, port=port)
 
 

@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LLAMA_CPP_DIR="$ROOT_DIR/3rdparty/llama.cpp"
 BUILD_TYPE="${LLAMA_CPP_BUILD_TYPE:-Release}"
 BUILD_MODE="${LLAMA_CPP_BUILD_MODE:-cuda}"
-BUILD_JOBS="${LLAMA_CPP_BUILD_JOBS:-8}"
+BUILD_JOBS="${LLAMA_CPP_BUILD_JOBS:-16}"
 BUILD_DIR="${LLAMA_CPP_BUILD_DIR:-}"
 CUDA_ARCH="${LLAMA_CPP_CUDA_ARCH:-89}"
 TARGET="${LLAMA_CPP_TARGET:-llama-server}"
@@ -49,14 +49,21 @@ esac
 cmake -S "$LLAMA_CPP_DIR" -B "$BUILD_DIR" "${CMAKE_FLAGS[@]}" "$@"
 cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --target "$TARGET" -j "$BUILD_JOBS"
 
-SERVER_BIN="$BUILD_DIR/bin/llama-server"
-if [[ ! -x "$SERVER_BIN" ]]; then
-  SERVER_BIN="$BUILD_DIR/bin/server"
-fi
+case "$TARGET" in
+  llama-server)
+    OUTPUT_BIN="$BUILD_DIR/bin/llama-server"
+    if [[ ! -x "$OUTPUT_BIN" ]]; then
+      OUTPUT_BIN="$BUILD_DIR/bin/server"
+    fi
+    ;;
+  *)
+    OUTPUT_BIN="$BUILD_DIR/bin/$TARGET"
+    ;;
+esac
 
-if [[ ! -x "$SERVER_BIN" ]]; then
-  echo "llama.cpp server binary was not produced under $BUILD_DIR/bin." >&2
+if [[ ! -x "$OUTPUT_BIN" ]]; then
+  echo "llama.cpp target binary was not produced under $BUILD_DIR/bin: $TARGET" >&2
   exit 1
 fi
 
-echo "llama.cpp build output: $SERVER_BIN"
+echo "llama.cpp build output: $OUTPUT_BIN"
