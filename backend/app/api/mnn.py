@@ -25,7 +25,7 @@ def stop() -> MnnStatus:
 @router.post("/load-model", response_model=MnnStatus)
 def load_model(request: LoadModelRequest) -> MnnStatus:
     try:
-        return runtime_service.load_model(request.model_id, request.backend)
+        return runtime_service.load_model(request.model_id, "mnn")
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except KeyError as exc:

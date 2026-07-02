@@ -11,6 +11,17 @@
     "entry_file": "mobi0402_2B_halfimage_rl-f16-q4_k_m.gguf",
     "mmproj_file": "mmproj-mobi0402_2B_halfimage_rl-f16.gguf"
   },
+  {
+    "id": "mai-ui-2b-w8g128-mnn",
+    "name": "MAI-UI 2B W8G128 MNN",
+    "modelscope_id": "YYDH21/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100-w8g128-MNN",
+    "revision": "master",
+    "description": "MNN visual model for local MNN or MobiInfer runtime testing.",
+    "size": "unknown",
+    "runtime": "mnn",
+    "local_dir": "models/mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-w8g128-mnn",
+    "entry_file": "config.json"
+  },
 
   {
     "id": "qwen3.5-0.8b-q4-k-m-gguf",

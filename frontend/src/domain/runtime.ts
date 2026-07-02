@@ -25,6 +25,7 @@ const BACKEND_LABELS: Record<BackendId, string> = {
 export const BACKEND_OPTIONS: Array<{ id: BackendId; label: string }> = [
   { id: "llama_cpp", label: BACKEND_LABELS.llama_cpp },
   { id: "mobiinfer", label: BACKEND_LABELS.mobiinfer },
+  { id: "mnn", label: BACKEND_LABELS.mnn },
 ];
 
 export function statusLabel(status: string | undefined) {
@@ -45,6 +46,9 @@ export function normalizeBackend(runtime: string | null | undefined): BackendId 
   if (runtime === "mobiinfer") {
     return "mobiinfer";
   }
+  if (runtime === "mnn") {
+    return "mnn";
+  }
   return "llama_cpp";
 }
 
@@ -57,7 +61,10 @@ export function backendSupportsRuntime(backend: BackendId, runtime: string | nul
   if (backend === "llama_cpp") {
     return normalizedRuntime === "llama_cpp";
   }
-  return normalizedRuntime === "mobiinfer";
+  if (backend === "mobiinfer") {
+    return normalizedRuntime === "mobiinfer" || normalizedRuntime === "mnn";
+  }
+  return normalizedRuntime === "mobiinfer" || normalizedRuntime === "mnn";
 }
 
 export function modelSupportsImages(model: CatalogModel | null | undefined) {

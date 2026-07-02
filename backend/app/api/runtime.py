@@ -90,7 +90,10 @@ def _content_block_to_text(content: Any) -> Any:
     return "\n".join(parts)
 
 
-def _normalize_uploaded_images(payload: dict[str, Any]) -> dict[str, Any]:
+def _normalize_uploaded_images(payload: dict[str, Any], backend: str) -> dict[str, Any]:
+    if backend in {"llama_cpp", "mobiinfer"}:
+        return dict(payload)
+
     normalized = dict(payload)
     messages = normalized.get("messages")
     if not isinstance(messages, list):
@@ -133,7 +136,7 @@ def chat_completions(payload: dict[str, Any]) -> dict[str, Any]:
     if status.state != "running" or not status.port:
         raise HTTPException(status_code=409, detail="Inference server is not running.")
 
-    upstream_payload = _normalize_uploaded_images(payload)
+    upstream_payload = _normalize_uploaded_images(payload, status.backend)
     upstream_payload["stream"] = False
     data = json.dumps(upstream_payload).encode("utf-8")
     request = urllib.request.Request(

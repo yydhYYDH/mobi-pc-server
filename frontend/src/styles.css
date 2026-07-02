@@ -1036,6 +1036,21 @@ h2 {
   justify-content: flex-end;
 }
 
+.server-model-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.server-model-inline small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .command-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -336,6 +336,8 @@ class MnnServerService:
             return "llama_cpp"
         if runtime == "mobiinfer":
             return "mobiinfer"
+        if runtime == "mnn":
+            return "mnn"
         return "mobiinfer"
 
     def _find_backend_runtime(self, backend: InferenceBackend) -> Path | LlamaCppRuntime | None:

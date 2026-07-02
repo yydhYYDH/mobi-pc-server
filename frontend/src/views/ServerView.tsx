@@ -1,17 +1,45 @@
-import type { BackendId, MnnStatus, ServerBusy } from "../api/types";
-import { PanelTitle, StatusPill } from "../components";
+import type { BackendId, CatalogModel, DownloadStatus, MnnStatus, ServerBusy } from "../api/types";
+import { ActionButton, PanelTitle, StatusPill } from "../components";
 import { BACKEND_OPTIONS, serverOwnerLabel, statusLabel } from "../domain/runtime";
 
 export function ServerView(props: {
   activeModelName: string | undefined;
+  downloadStatus: (modelId: string) => DownloadStatus | undefined;
+  isDownloaded: (modelId: string) => boolean;
+  isDownloading: (modelId: string) => boolean;
+  loadModel: (modelId: string) => Promise<void>;
+  modelBusy: string | null;
   mnn: MnnStatus | null;
   onStartMnn: () => Promise<void>;
   onStopMnn: () => Promise<void>;
+  selectableModels: CatalogModel[];
+  selectedLaunchModelId: string;
   selectedBackend: BackendId;
+  setSelectedLaunchModelId: (modelId: string) => void;
   setSelectedBackend: (backend: BackendId) => void;
   serverState: string;
   serverBusy: "start" | "stop" | null;
 }) {
+  const selectedModel = props.selectableModels.find((model) => model.id === props.selectedLaunchModelId);
+  const selectedDownloaded = selectedModel ? props.isDownloaded(selectedModel.id) : false;
+  const selectedDownloading = selectedModel ? props.isDownloading(selectedModel.id) : false;
+  const selectedState = selectedModel
+    ? props.downloadStatus(selectedModel.id)?.state ?? (selectedDownloaded ? "downloaded" : "idle")
+    : "idle";
+  const modelHint =
+    props.selectableModels.length === 0
+      ? "当前后端没有可用模型配置"
+      : selectedModel ? selectedModel.modelscope_id : "未选择模型";
+  const runtimeActive = props.serverState === "running" || props.serverState === "starting";
+  const selectedModelRunning = runtimeActive && props.mnn?.active_model_id === selectedModel?.id;
+  const canLoadSelected =
+    Boolean(selectedModel) &&
+    selectedDownloaded &&
+    !selectedDownloading &&
+    !runtimeActive &&
+    props.modelBusy === null &&
+    props.serverBusy === null;
+
   return (
     <section className="detail-grid">
       <article className="panel">
@@ -35,6 +63,31 @@ export function ServerView(props: {
               ))}
             </select>
           </dd>
+          <dt>模型</dt>
+          <dd>
+            <select
+              disabled={props.serverBusy !== null || props.modelBusy !== null || runtimeActive || props.selectableModels.length === 0}
+              value={props.selectedLaunchModelId}
+              onChange={(event) => props.setSelectedLaunchModelId(event.target.value)}
+            >
+              {props.selectableModels.length > 0 ? (
+                props.selectableModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))
+              ) : (
+                <option value="">无可用模型</option>
+              )}
+            </select>
+          </dd>
+          <dt>模型状态</dt>
+          <dd>
+            <span className="server-model-inline">
+              <StatusPill tone={selectedState}>{statusLabel(selectedState)}</StatusPill>
+              <small>{modelHint}</small>
+            </span>
+          </dd>
           <dt>端口</dt>
           <dd>{props.mnn?.port ?? "未监听"}</dd>
           <dt>托管方式</dt>
@@ -45,6 +98,14 @@ export function ServerView(props: {
           <dd>{props.mnn?.message ?? "无"}</dd>
         </dl>
         <div className="actions">
+          <ActionButton
+            busy={Boolean(selectedModel && props.modelBusy === selectedModel.id)}
+            busyText="加载中..."
+            disabled={!canLoadSelected}
+            onClick={() => selectedModel && void props.loadModel(selectedModel.id)}
+          >
+            {selectedModelRunning ? "运行中" : "加载模型"}
+          </ActionButton>
           <button
             disabled={props.serverBusy !== null || props.serverState === "running"}
             onClick={() => void props.onStartMnn()}

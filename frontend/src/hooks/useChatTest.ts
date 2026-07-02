@@ -1,8 +1,11 @@
 import React from "react";
 
 import { completionText, sendChatCompletion, type ChatCompletionContent } from "../api/chat";
+import { getExampleImage } from "../api/exampleImages";
 import type { BackendId, CatalogModel, ChatImageAttachment, ChatMessage, MnnStatus } from "../api/types";
 import { backendLabel, modelSupportsImages, normalizeBackend } from "../domain/runtime";
+
+const DEFAULT_EXAMPLE_IMAGE_ID = "taobao_full_1.jpg";
 
 function buildChatContent(_backend: BackendId, prompt: string, image: ChatImageAttachment | null): ChatCompletionContent {
   if (!image) {
@@ -37,6 +40,7 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
   const [chatError, setChatError] = React.useState<string | null>(null);
   const [selectedImage, setSelectedImage] = React.useState<ChatImageAttachment | null>(null);
   const [imageBusy, setImageBusy] = React.useState(false);
+  const defaultImageLoadedForRef = React.useRef<string | null>(null);
   const runningBackend = normalizeBackend(mnn?.backend);
   const activeModel = React.useMemo(
     () => models.find((model) => model.id === mnn?.active_model_id) ?? null,
@@ -57,6 +61,43 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
       setSelectedImage(null);
     }
   }, [activeModelSupportsImages, selectedImage]);
+
+  React.useEffect(() => {
+    const activeModelKey = mnn?.active_model_id ?? "";
+    if (!activeModelSupportsImages || selectedImage || defaultImageLoadedForRef.current === activeModelKey) {
+      return;
+    }
+    let cancelled = false;
+    defaultImageLoadedForRef.current = activeModelKey;
+    setImageBusy(true);
+    setChatError(null);
+    getExampleImage(DEFAULT_EXAMPLE_IMAGE_ID)
+      .then((image) => {
+        if (cancelled) {
+          return;
+        }
+        setSelectedImage({
+          name: image.name,
+          mime_type: image.mime_type,
+          size_bytes: image.size_bytes,
+          data_uri: image.data_uri
+        });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          defaultImageLoadedForRef.current = null;
+          setChatError(error instanceof Error ? error.message : "默认测试图片加载失败。");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setImageBusy(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeModelSupportsImages, mnn?.active_model_id, selectedImage]);
 
   async function selectImageFile(file: File | null) {
     if (!file) {

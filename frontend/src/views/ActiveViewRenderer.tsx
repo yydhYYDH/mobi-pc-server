@@ -139,10 +139,18 @@ export function ActiveViewRenderer(props: {
       return (
         <ServerView
           activeModelName={props.activeModelName}
+          downloadStatus={props.downloadStatus}
+          isDownloaded={props.isDownloaded}
+          isDownloading={props.isDownloading}
+          loadModel={props.loadModel}
+          modelBusy={props.modelBusy}
           mnn={props.mnn}
           onStartMnn={props.startMnn}
           onStopMnn={props.stopMnn}
+          selectableModels={props.selectableModels}
+          selectedLaunchModelId={props.selectedLaunchModelId}
           selectedBackend={props.selectedBackend}
+          setSelectedLaunchModelId={props.setSelectedLaunchModelId}
           setSelectedBackend={props.setSelectedBackend}
           serverState={props.serverState}
           serverBusy={props.serverBusy}
