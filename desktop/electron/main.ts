@@ -395,10 +395,93 @@ function showClosingNotice(): void {
   }
   mainWindow.webContents
     .executeJavaScript(`
-      document.body.innerHTML = '<main style="font-family: system-ui, sans-serif; padding: 32px; color: #18202b;">' +
-        '<h2>正在关闭本地服务</h2>' +
-        '<p>正在停止推理服务并清理 HDC 端口转发，请稍候...</p>' +
-        '</main>';
+      document.title = '正在关闭';
+      document.body.innerHTML = \`
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background: #eef2f6;
+            color: #17202b;
+            font-family: "Microsoft YaHei", "Noto Sans CJK SC", Inter, system-ui, sans-serif;
+          }
+          main {
+            width: min(520px, calc(100vw - 48px));
+            padding: 28px;
+            border: 1px solid #d8e0e9;
+            border-radius: 10px;
+            background: #ffffff;
+            box-shadow: 0 18px 48px rgba(24, 32, 43, 0.12);
+          }
+          .status {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+          }
+          .spinner {
+            width: 34px;
+            height: 34px;
+            flex: 0 0 auto;
+            border: 3px solid #dce4ed;
+            border-top-color: #2f7d6d;
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+          }
+          h1 {
+            margin: 0;
+            font-size: 22px;
+            line-height: 1.25;
+            letter-spacing: 0;
+          }
+          p {
+            margin: 8px 0 0;
+            color: #607083;
+            line-height: 1.6;
+            font-size: 14px;
+          }
+          ul {
+            display: grid;
+            gap: 9px;
+            margin: 22px 0 0;
+            padding: 0;
+            list-style: none;
+          }
+          li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #334255;
+            font-size: 14px;
+          }
+          li::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #2f7d6d;
+          }
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        </style>
+        <main>
+          <div class="status">
+            <div class="spinner" aria-hidden="true"></div>
+            <div>
+              <h1>正在关闭本地服务</h1>
+              <p>正在安全停止推理服务并清理手机连接通道，完成后窗口会自动退出。</p>
+            </div>
+          </div>
+          <ul>
+            <li>停止本机推理进程</li>
+            <li>清理 HDC 端口转发</li>
+            <li>关闭前端和后端服务</li>
+          </ul>
+        </main>
+      \`;
     `)
     .catch(() => {});
 }
