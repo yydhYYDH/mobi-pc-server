@@ -1,0 +1,190 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: yydh <yydh@example.com>
+Date: Thu, 2 Jul 2026 16:55:00 +0800
+Subject: [PATCH] Fix Windows mnncli build with MSVC
+
+This patch fixes the remaining MSVC build issues for the mobiinfer
+`apps/mnncli` target after the Windows `ERROR` macro conflict is fixed.
+
+Changes:
+- build mnncli and model_downloader as C++20 for designated initializers
+- use the MSVC static runtime for consistency with the MNN static build
+- enable OpenSSL support for model_downloader on Windows
+- link mnncli against the OpenSSL VC/x64/MT static libraries explicitly
+- use /EHsc for model_downloader on MSVC
+- route LOG_ERROR through overloads that support both strings and printf-style calls
+- use _mkdir on Windows
+---
+ apps/frameworks/model_downloader/cpp/CMakeLists.txt  | 26 +++++++++++++++++---
+ .../cpp/include/log_utils.hpp                         | 18 +++-----------
+ apps/mnncli/CMakeLists.txt                            | 25 +++++++++++++++++--
+ apps/mnncli/src/mnncli_server.cpp                     |  7 +++++-
+ 4 files changed, 55 insertions(+), 21 deletions(-)
+
+diff --git a/apps/frameworks/model_downloader/cpp/CMakeLists.txt b/apps/frameworks/model_downloader/cpp/CMakeLists.txt
+index bb08ba40..4df5cd01 100644
+--- a/apps/frameworks/model_downloader/cpp/CMakeLists.txt
++++ b/apps/frameworks/model_downloader/cpp/CMakeLists.txt
+@@ -1,8 +1,14 @@
+ cmake_minimum_required(VERSION 3.6)
++if(POLICY CMP0091)
++    cmake_policy(SET CMP0091 NEW)
++endif()
+ project(mnn_model_downloader VERSION 1.0.0 LANGUAGES CXX C)
+ 
+-set(CMAKE_CXX_STANDARD 17)
++set(CMAKE_CXX_STANDARD 20)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
++if(MSVC)
++    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
++endif()
+ 
+ # Function to convert file to C++ array
+ function(embed_file_as_c_array input_file output_file symbol_name)
+@@ -66,6 +72,17 @@ if(APPLE)
+     target_compile_definitions(mnn_model_downloader PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+     # Don't need to link here for static lib, but good to know
+ elseif(UNIX AND NOT ANDROID)
++    find_package(OpenSSL REQUIRED)
++    set(OPENSSL_LIBRARIES "${OPENSSL_SSL_LIBRARY};${OPENSSL_CRYPTO_LIBRARY}")
++    if(OpenSSL_FOUND)
++        target_include_directories(mnn_model_downloader PRIVATE ${OPENSSL_INCLUDE_DIR})
++        target_compile_definitions(mnn_model_downloader PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
++    endif()
++elseif(WIN32)
++    if(OPENSSL_ROOT_DIR)
++        set(OPENSSL_SSL_LIBRARY "${OPENSSL_ROOT_DIR}/lib/VC/x64/MT/libssl_static.lib" CACHE FILEPATH "OpenSSL SSL library" FORCE)
++        set(OPENSSL_CRYPTO_LIBRARY "${OPENSSL_ROOT_DIR}/lib/VC/x64/MT/libcrypto_static.lib" CACHE FILEPATH "OpenSSL Crypto library" FORCE)
++    endif()
+     find_package(OpenSSL REQUIRED)
+     if(OpenSSL_FOUND)
+         target_include_directories(mnn_model_downloader PRIVATE ${OPENSSL_INCLUDE_DIR})
+@@ -88,7 +105,11 @@ if(ANDROID)
+ endif()
+ 
+ # Compiler options
+-target_compile_options(mnn_model_downloader PRIVATE -fexceptions)
++if(MSVC)
++    target_compile_options(mnn_model_downloader PRIVATE /EHsc)
++else()
++    target_compile_options(mnn_model_downloader PRIVATE -fexceptions)
++endif()
+ target_compile_definitions(mnn_model_downloader PRIVATE CPPHTTPLIB_NO_BROTLI)
+ target_compile_definitions(mnn_model_downloader PRIVATE CPPHTTPLIB_NO_EXCEPTIONS)
+ 
+diff --git a/apps/frameworks/model_downloader/cpp/include/log_utils.hpp b/apps/frameworks/model_downloader/cpp/include/log_utils.hpp
+index 1d609d74..fadf77ec 100644
+--- a/apps/frameworks/model_downloader/cpp/include/log_utils.hpp
++++ b/apps/frameworks/model_downloader/cpp/include/log_utils.hpp
+@@ -58,6 +58,9 @@ public:
+     
+     // Add formatted error method for printf-style formatting
+     static void ErrorFormatted(const char* format, ...);
++    static void ErrorFormatted(const std::string& message) {
++        Error(message);
++    }
+     
+     // Overloaded error method for const char* (for backward compatibility)
+     static void Error(const char* message, const std::string& tag = "");
+@@ -100,20 +103,8 @@ private:
+ #define LOG_INFO(msg) mnn::downloader::LogUtils::Info(msg)
+ #define LOG_WARNING(msg) mnn::downloader::LogUtils::Warning(msg)
+ 
+-// Smart LOG_ERROR macro that automatically chooses the right method based on argument count
+-#define LOG_ERROR_1(msg) mnn::downloader::LogUtils::Error(msg)
+-#define LOG_ERROR_2(msg, ...) mnn::downloader::LogUtils::ErrorFormatted(msg, ##__VA_ARGS__)
+-#define LOG_ERROR_3(msg, ...) mnn::downloader::LogUtils::ErrorFormatted(msg, ##__VA_ARGS__)
+-#define LOG_ERROR_4(msg, ...) mnn::downloader::LogUtils::ErrorFormatted(msg, ##__VA_ARGS__)
+-#define LOG_ERROR_5(msg, ...) mnn::downloader::LogUtils::ErrorFormatted(msg, ##__VA_ARGS__)
+-#define LOG_ERROR_6(msg, ...) mnn::downloader::LogUtils::ErrorFormatted(msg, ##__VA_ARGS__)
+-#define LOG_ERROR_7(msg, ...) mnn::downloader::LogUtils::ErrorFormatted(msg, ##__VA_ARGS__)
+-#define LOG_ERROR_8(msg, ...) mnn::downloader::LogUtils::ErrorFormatted(msg, ##__VA_ARGS__)
+-#define LOG_ERROR_9(msg, ...) mnn::downloader::LogUtils::ErrorFormatted(msg, ##__VA_ARGS__)
+-#define LOG_ERROR_10(msg, ...) mnn::downloader::LogUtils::ErrorFormatted(msg, ##__VA_ARGS__)
+-
+-#define GET_MACRO(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, NAME, ...) NAME
+-#define LOG_ERROR(...) GET_MACRO(__VA_ARGS__, LOG_ERROR_10, LOG_ERROR_9, LOG_ERROR_8, LOG_ERROR_7, LOG_ERROR_6, LOG_ERROR_5, LOG_ERROR_4, LOG_ERROR_3, LOG_ERROR_2, LOG_ERROR_1)(__VA_ARGS__)
++// Route both string-concatenation and printf-style calls through overloads.
++#define LOG_ERROR(...) mnn::downloader::LogUtils::ErrorFormatted(__VA_ARGS__)
+ 
+ // Special macro for string concatenation cases
+ #define LOG_ERROR_STR(msg) mnn::downloader::LogUtils::Error(msg)
+diff --git a/apps/mnncli/CMakeLists.txt b/apps/mnncli/CMakeLists.txt
+index f148fa82..8974173f 100644
+--- a/apps/mnncli/CMakeLists.txt
++++ b/apps/mnncli/CMakeLists.txt
+@@ -1,10 +1,16 @@
+ cmake_minimum_required(VERSION 3.6)
++if(POLICY CMP0091)
++    cmake_policy(SET CMP0091 NEW)
++endif()
+ project(mnncli VERSION 1.0.0 LANGUAGES CXX C ASM)
+ 
+ # C/C++ standards
+ set(CMAKE_C_STANDARD 99)
+-set(CMAKE_CXX_STANDARD 17)
++set(CMAKE_CXX_STANDARD 20)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
++if(MSVC)
++    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
++endif()
+ # set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version" FORCE)
+ 
+ 
+@@ -24,7 +30,18 @@ if(APPLE)
+     message(STATUS "  SSL: ${OPENSSL_SSL_LIBRARY}")
+     message(STATUS "  Crypto: ${OPENSSL_CRYPTO_LIBRARY}")
+ else()
++    if(WIN32 AND OPENSSL_ROOT_DIR)
++        set(OPENSSL_SSL_LIBRARY "${OPENSSL_ROOT_DIR}/lib/VC/x64/MT/libssl_static.lib" CACHE FILEPATH "OpenSSL SSL library" FORCE)
++        set(OPENSSL_CRYPTO_LIBRARY "${OPENSSL_ROOT_DIR}/lib/VC/x64/MT/libcrypto_static.lib" CACHE FILEPATH "OpenSSL Crypto library" FORCE)
++    endif()
+     find_package(OpenSSL REQUIRED)
++    if(WIN32 AND OPENSSL_ROOT_DIR)
++        set(MNNCLI_OPENSSL_LIBRARIES
++            "${OPENSSL_ROOT_DIR}/lib/VC/x64/MT/libssl_static.lib"
++            "${OPENSSL_ROOT_DIR}/lib/VC/x64/MT/libcrypto_static.lib")
++    else()
++        set(MNNCLI_OPENSSL_LIBRARIES ${OPENSSL_LIBRARIES})
++    endif()
+ endif()
+ 
+ # Use httplib from MNN transformers directory instead of fetching it
+@@ -153,7 +170,7 @@ if(OpenSSL_FOUND)
+     target_compile_definitions(mnncli PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+     
+     # Link OpenSSL static libraries - they were already configured as static at the beginning
+-    target_link_libraries(mnncli PRIVATE ${OPENSSL_LIBRARIES})
++    target_link_libraries(mnncli PRIVATE ${MNNCLI_OPENSSL_LIBRARIES})
+ endif()
+ 
+ # Disable exceptions in httplib since MNN is compiled with -fno-exceptions
+diff --git a/apps/mnncli/src/mnncli_server.cpp b/apps/mnncli/src/mnncli_server.cpp
+index 7a7deeda..b160a098 100644
+--- a/apps/mnncli/src/mnncli_server.cpp
++++ b/apps/mnncli/src/mnncli_server.cpp
+@@ -14,6 +14,9 @@
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ #include <vector>
++#ifdef _WIN32
++#include <direct.h>
++#endif
+ 
+ namespace mnncli {
+ 
+@@ -111,7 +114,11 @@ bool EnsureDirectory(const std::string& path) {
+     if (stat(path.c_str(), &st) == 0) {
+         return S_ISDIR(st.st_mode);
+     }
++#ifdef _WIN32
++    return _mkdir(path.c_str()) == 0;
++#else
+     return mkdir(path.c_str(), 0755) == 0;
++#endif
+ }
+ 
+ bool WriteFile(const std::string& path, const std::vector<uint8_t>& data) {
+-- 
+2.40.1.windows.1
+
