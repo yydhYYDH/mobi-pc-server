@@ -89,7 +89,7 @@ LLAMA_SERVER_BIN=/absolute/path/to/llama-server
 Runtime tuning:
 
 ```bash
-LLAMA_CPP_CTX_SIZE=2048
+LLAMA_CPP_CTX_SIZE=8192
 LLAMA_CPP_N_GPU_LAYERS=999
 LLAMA_CPP_MMPROJ=/absolute/path/to/mmproj.gguf
 LLAMA_CPP_MEDIA_PATH=/absolute/path/to/media-dir
@@ -124,7 +124,7 @@ Start the server:
   --model models/qwen3.5-0.8b-q4-k-m/Qwen3.5-0.8B-Q4_K_M.gguf \
   --host 127.0.0.1 \
   --port 8090 \
-  --ctx-size 2048 \
+  --ctx-size 8192 \
   --n-gpu-layers 999
 ```
 
