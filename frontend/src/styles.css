@@ -1431,6 +1431,8 @@ dd {
 
 .chat-window-wrap {
   position: relative;
+  width: min(100%, 880px);
+  margin: 0 auto;
 }
 
 .visually-hidden {
@@ -1600,9 +1602,10 @@ dd {
   display: flex;
   align-items: center;
   gap: 11px;
+  width: min(100%, 880px);
   min-width: 0;
   min-height: 68px;
-  margin-top: 12px;
+  margin: 12px auto 0;
   border-radius: 18px;
   background: var(--surface-soft);
   padding: 9px;
@@ -1653,7 +1656,8 @@ dd {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
-  margin-top: 14px;
+  width: min(100%, 880px);
+  margin: 14px auto 0;
   border-radius: 22px;
   background: var(--surface-soft);
   padding: 10px;
