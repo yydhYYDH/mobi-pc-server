@@ -39,13 +39,12 @@ export function useDashboardData(params: {
       setIsRefreshing(true);
     }
     try {
-      const shouldLoadDownloads = activeView === "models";
       const [mnnResponse, modelsResponse, localModelsResponse, downloadsResponse, hdcResponse, logsResponse] =
         await Promise.all([
           getRuntimeStatus(selectedBackend),
           getModelCatalog(),
           getLocalModels(),
-          shouldLoadDownloads ? getModelDownloads() : Promise.resolve(null),
+          getModelDownloads(),
           getHdcStatus(),
           getSoftwareLogs(LOG_LINES)
         ]);
@@ -54,7 +53,7 @@ export function useDashboardData(params: {
         readRuntimeStatus(mnnResponse),
         readModelCatalog(modelsResponse),
         readLocalModels(localModelsResponse),
-        downloadsResponse ? readModelDownloads(downloadsResponse) : Promise.resolve(null),
+        readModelDownloads(downloadsResponse),
         readHdcStatus(hdcResponse),
         readSoftwareLogs(logsResponse)
       ]);
@@ -62,9 +61,7 @@ export function useDashboardData(params: {
       setMnn(nextMnn);
       setModels(nextModels);
       setLocalModels(nextLocalModels);
-      if (nextDownloads) {
-        setDownloads(nextDownloads);
-      }
+      setDownloads(nextDownloads);
       setHdc(nextHdc);
       setLogs(nextLogs);
       setLastUpdatedAt(new Date());
@@ -114,14 +111,14 @@ export function useDashboardData(params: {
   );
 
   React.useEffect(() => {
-    if (activeView !== "models" || !hasActiveDownload) {
+    if (!hasActiveDownload) {
       return;
     }
     const intervalId = window.setInterval(() => {
       void refreshModelDownloads();
     }, 1500);
     return () => window.clearInterval(intervalId);
-  }, [activeView, hasActiveDownload, refreshModelDownloads]);
+  }, [hasActiveDownload, refreshModelDownloads]);
 
   React.useEffect(() => {
     const intervalId = window.setInterval(async () => {
@@ -143,6 +140,16 @@ export function useDashboardData(params: {
     }, 2000);
     return () => window.clearInterval(intervalId);
   }, [selectedBackend]);
+
+  React.useEffect(() => {
+    if (activeView !== "logs") {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      void refreshLogs();
+    }, 2000);
+    return () => window.clearInterval(intervalId);
+  }, [activeView, refreshLogs]);
 
 
   const lastUpdatedText = lastUpdatedAt

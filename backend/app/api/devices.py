@@ -28,3 +28,9 @@ def hdc_auto_connect(
 @router.post("/hdc/disconnect", response_model=HdcStatus)
 def hdc_disconnect(request: HdcConnectRequest) -> HdcStatus:
     return service.disconnect(request.target)
+
+
+@router.post("/hdc/cleanup")
+def hdc_cleanup() -> dict[str, str]:
+    service.cleanup_ports()
+    return {"status": "ok"}

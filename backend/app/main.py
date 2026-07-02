@@ -6,6 +6,7 @@ import time
 
 from app.api import devices, health, llama_cpp, logs, mnn, mobile, mobiinfer, models, runtime
 from app.services.logs import BACKEND_SERVER_LOG, LogService
+from app.services.runtime_state import runtime_service
 
 
 app = FastAPI(title="数据归家", version="0.1.0")
@@ -29,6 +30,14 @@ app.include_router(llama_cpp.router, prefix="/api/llama-cpp", tags=["llama.cpp"]
 app.include_router(runtime.router, prefix="/api/runtime", tags=["runtime"])
 app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(logs.router, prefix="/api/logs", tags=["logs"])
+
+
+@app.post("/api/shutdown")
+def shutdown() -> dict[str, str]:
+    log_service.append(BACKEND_SERVER_LOG, ">> [Backend] shutdown requested")
+    runtime_service.stop()
+    devices.service.cleanup_ports()
+    return {"status": "ok"}
 
 
 @app.middleware("http")

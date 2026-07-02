@@ -568,10 +568,11 @@ class HdcService:
         if target:
             args_prefix.extend(["-t", target])
 
-        self._run(
-            args_prefix + ["fport", "rm", f"tcp:{phone_port}", f"tcp:{pc_port}"],
-            timeout=5,
-        )
+        for command in ("fport", "rport"):
+            self._run(
+                args_prefix + [command, "rm", f"tcp:{phone_port}", f"tcp:{pc_port}"],
+                timeout=5,
+            )
         result = self._run(
             args_prefix + ["rport", f"tcp:{phone_port}", f"tcp:{pc_port}"],
             timeout=8,
@@ -607,24 +608,30 @@ class HdcService:
             hdc_path = self._hdc_path()
             if not hdc_path:
                 continue
-            args = [
-                hdc_path,
-                "-t",
-                target,
-                "fport",
-                "rm",
-                f"tcp:{phone_port}",
-                f"tcp:{pc_port}",
-            ]
-            result = self._run(args, timeout=5)
-            if result is None:
-                self._log_hdc(f"{label} rport cleanup timed out: phone tcp:{phone_port} -> PC tcp:{pc_port}")
-            elif result.returncode == 0:
-                self._log_hdc(f"{label} rport cleaned up: phone tcp:{phone_port} -> PC tcp:{pc_port}")
-            else:
-                message = result.stderr.strip() or result.stdout.strip() or "cleanup failed"
+            cleaned = False
+            last_error = ""
+            for command in ("fport", "rport"):
+                args = [
+                    hdc_path,
+                    "-t",
+                    target,
+                    command,
+                    "rm",
+                    f"tcp:{phone_port}",
+                    f"tcp:{pc_port}",
+                ]
+                result = self._run(args, timeout=5)
+                if result is None:
+                    last_error = "timed out"
+                    continue
+                if result.returncode == 0:
+                    cleaned = True
+                    self._log_hdc(f"{label} {command} cleaned up: phone tcp:{phone_port} -> PC tcp:{pc_port}")
+                    continue
+                last_error = result.stderr.strip() or result.stdout.strip() or "cleanup failed"
+            if not cleaned and last_error:
                 self._log_hdc(
-                    f"{label} rport cleanup failed: phone tcp:{phone_port} -> PC tcp:{pc_port}: {message}"
+                    f"{label} port cleanup failed: phone tcp:{phone_port} -> PC tcp:{pc_port}: {last_error}"
                 )
         self._llm_rport_ready = False
         self._pc_server_rport_ready = False

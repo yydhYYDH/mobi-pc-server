@@ -38,6 +38,7 @@ export function OverviewView(props: {
   selectedBackend: BackendId;
   serverState: string;
   serverBusy: "start" | "stop" | null;
+  stopMnn: () => Promise<void>;
   setHdcTarget: (target: string) => void;
   setSelectedLaunchModelId: (modelId: string) => void;
 }) {
@@ -48,11 +49,12 @@ export function OverviewView(props: {
   const selectedDownloadStatus = selectedModel ? props.downloadStatus(selectedModel.id) : undefined;
   const selectedProgress = selectedDownloadStatus?.progress ?? (selectedDownloaded ? 100 : 0);
   const selectedState = selectedDownloadStatus?.state ?? (selectedDownloaded ? "downloaded" : "idle");
-  const selectedModelRunning = props.serverState === "running" && props.mnn?.active_model_id === selectedModel?.id;
+  const runtimeActive = props.serverState === "running" || props.serverState === "starting";
+  const selectedModelRunning = runtimeActive && props.mnn?.active_model_id === selectedModel?.id;
   const canLaunchSelected =
     Boolean(selectedModel) &&
     selectedDownloaded &&
-    !selectedModelRunning &&
+    !runtimeActive &&
     props.serverBusy === null &&
     props.modelBusy === null &&
     !["starting", "stopping"].includes(props.serverState);
@@ -213,6 +215,16 @@ export function OverviewView(props: {
             </div>
             <ProgressBar active={selectedDownloading} value={selectedProgress} />
             <div className="overview-model-actions">
+              {runtimeActive ? (
+                <ActionButton
+                  busy={props.serverBusy === "stop"}
+                  busyText="停止中..."
+                  disabled={props.serverBusy !== null || props.modelBusy !== null}
+                  onClick={() => void props.stopMnn()}
+                >
+                  停止服务
+                </ActionButton>
+              ) : null}
               {selectedModel && selectedDownloading ? (
                 <ActionButton busy={props.modelBusy === selectedModel.id} busyText="暂停中..." disabled={props.serverBusy !== null} onClick={() => void props.pauseDownload(selectedModel.id)}>
                   暂停下载
@@ -229,10 +241,10 @@ export function OverviewView(props: {
               <ActionButton
                 busy={Boolean(selectedModel && props.modelBusy === selectedModel.id && selectedDownloaded)}
                 busyText="加载中..."
-                disabled={!selectedModel || !selectedDownloaded || selectedDownloading || selectedModelRunning || props.modelBusy !== null || props.serverBusy !== null}
+                disabled={!selectedModel || !selectedDownloaded || selectedDownloading || runtimeActive || props.modelBusy !== null || props.serverBusy !== null}
                 onClick={() => selectedModel && void props.onLoadModel(selectedModel.id)}
               >
-                {selectedModelRunning ? "运行中" : "加载模型"}
+                {selectedModelRunning ? "运行中" : props.serverState === "starting" ? "加载中" : "加载模型"}
               </ActionButton>
             </div>
           </>

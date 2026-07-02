@@ -37,7 +37,8 @@ export function ModelsView(props: {
           const busy = props.modelBusy === model.id;
           const anyBusy = props.modelBusy !== null || props.serverBusy !== null;
           const backendMatches = backendSupportsRuntime(props.selectedBackend, model.runtime);
-          const runningThisModel = props.serverState === "running" && props.activeModelId === model.id;
+          const runtimeActive = props.serverState === "running" || props.serverState === "starting";
+          const runningThisModel = runtimeActive && props.activeModelId === model.id;
           const progress = status?.progress ?? (downloaded ? 100 : 0);
           const state = status?.state ?? (downloaded ? "downloaded" : "idle");
 
@@ -67,8 +68,8 @@ export function ModelsView(props: {
                     {state === "paused" ? "继续" : "下载"}
                   </ActionButton>
                 )}
-                <ActionButton busy={busy && downloaded} busyText="加载中..." disabled={!backendMatches || !downloaded || downloading || anyBusy} onClick={() => void props.loadModel(model.id)}>
-                  加载
+                <ActionButton busy={busy && downloaded} busyText="加载中..." disabled={!backendMatches || !downloaded || downloading || anyBusy || runtimeActive} onClick={() => void props.loadModel(model.id)}>
+                  {runningThisModel ? (props.serverState === "starting" ? "加载中" : "运行中") : "加载"}
                 </ActionButton>
                 <ActionButton busy={busy && downloaded} disabled={!downloaded || downloading || anyBusy || runningThisModel} onClick={() => void props.deleteModel(model.id)}>
                   {runningThisModel ? "运行中" : "删除"}

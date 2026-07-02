@@ -111,6 +111,7 @@ export function ActiveViewRenderer(props: {
           selectedBackend={props.selectedBackend}
           serverState={props.serverState}
           serverBusy={props.serverBusy}
+          stopMnn={props.stopMnn}
           setHdcTarget={props.setHdcTarget}
           setSelectedLaunchModelId={props.setSelectedLaunchModelId}
         />
@@ -171,6 +172,7 @@ export function ActiveViewRenderer(props: {
           imageDisabledReason={props.imageDisabledReason}
           imageBusy={props.imageBusy}
           activeModelSupportsImages={props.activeModelSupportsImages}
+          activeModelName={props.activeModelName}
           mnn={props.mnn}
           runningBackendLabel={props.runningBackendLabel}
           selectedImage={props.selectedImage}

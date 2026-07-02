@@ -19,6 +19,7 @@ export function ChatView(props: {
   imageDisabledReason: string | null;
   imageBusy: boolean;
   activeModelSupportsImages: boolean;
+  activeModelName: string | undefined;
   mnn: MnnStatus | null;
   runningBackendLabel: string;
   selectedImage: ChatImageAttachment | null;
@@ -57,7 +58,7 @@ export function ChatView(props: {
             </button>
           </div>
         }
-        kicker="OpenAI-compatible endpoint"
+        kicker={props.activeModelName ?? props.mnn?.active_model_id ?? "OpenAI-compatible endpoint"}
         title="对话测试"
       />
       <div className="chat-window-wrap">

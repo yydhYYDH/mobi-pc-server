@@ -13,6 +13,7 @@ const SKIP_BACKEND = process.env.PC_SERVER_SKIP_BACKEND === "1";
 let backendProcess: ChildProcessWithoutNullStreams | undefined;
 let frontendProcess: ChildProcessWithoutNullStreams | undefined;
 let mainWindow: BrowserWindow | undefined;
+let isQuitting = false;
 
 function repoRoot(): string {
   return path.resolve(__dirname, "..", "..");
@@ -251,6 +252,22 @@ function urlCheck(url: string): Promise<boolean> {
   });
 }
 
+function postJson(url: string, timeoutMs = 5000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const request = http.request(url, { method: "POST" }, (response) => {
+      response.resume();
+      resolve(response.statusCode !== undefined && response.statusCode >= 200 && response.statusCode < 300);
+    });
+
+    request.on("error", () => resolve(false));
+    request.setTimeout(timeoutMs, () => {
+      request.destroy();
+      resolve(false);
+    });
+    request.end();
+  });
+}
+
 function healthCheck(): Promise<boolean> {
   return urlCheck(`${backendBaseUrl()}/api/health`);
 }
@@ -298,6 +315,14 @@ async function createWindow(): Promise<void> {
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
+  });
+
+  mainWindow.on("close", (event) => {
+    if (isQuitting) {
+      return;
+    }
+    event.preventDefault();
+    void quitGracefully();
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -364,6 +389,32 @@ npm run dev</code>
   }
 }
 
+function showClosingNotice(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents
+    .executeJavaScript(`
+      document.body.innerHTML = '<main style="font-family: system-ui, sans-serif; padding: 32px; color: #18202b;">' +
+        '<h2>正在关闭本地服务</h2>' +
+        '<p>正在停止推理服务并清理 HDC 端口转发，请稍候...</p>' +
+        '</main>';
+    `)
+    .catch(() => {});
+}
+
+async function quitGracefully(): Promise<void> {
+  if (isQuitting) {
+    return;
+  }
+  isQuitting = true;
+  showClosingNotice();
+  await postJson(`${backendBaseUrl()}/api/shutdown`, 8000);
+  stopFrontend();
+  stopBackend();
+  app.quit();
+}
+
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   await startFrontendDevServer();
@@ -398,11 +449,15 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
-    app.quit();
+    void quitGracefully();
   }
 });
 
 app.on("before-quit", () => {
+  if (!isQuitting) {
+    void quitGracefully();
+    return;
+  }
   stopFrontend();
   stopBackend();
 });
