@@ -12,22 +12,21 @@
     "mmproj_file": "mmproj-mobi0402_2B_halfimage_rl-f16.gguf"
   },
   {
-    "id": "mai-ui-2b-w8g128-mnn",
-    "name": "MAI-UI 2B W8G128 MNN",
-    "modelscope_id": "YYDH21/MAI-UI-2B-0422-instruct-1ep_RLv2_4NPUS_bs128_ds5050_step100-w8g128-MNN",
+    "id": "mnn-mobi-visual",
+    "name": "Mobi Visual 2B MNN",
+    "modelscope_id": "doulujiyao/mnn_mobi_gptq_new_sym_e2e_2B_w8a8_half_rl_n64_s512_visual",
     "revision": "master",
-    "description": "MNN visual model for local MNN or MobiInfer runtime testing.",
-    "size": "unknown",
+    "description": "大虎哥量化的模型",
+    "size": "3.4GB",
     "runtime": "mnn",
-    "local_dir": "models/mai-ui-2b-0422-instruct-1ep-rlv2-4npus-bs128-ds5050-step100-w8g128-mnn",
+    "local_dir": "models/mnn_mobi_gptq_new_sym_e2e_2B_w8a8_half_rl_n64_s512_visual",
     "entry_file": "config.json"
   },
-
   {
     "id": "qwen3.5-0.8b-q4-k-m-gguf",
     "name": "Qwen3.5 0.8B Q4_K_M GGUF",
-    "modelscope_id": "unsloth/Qwen3.5-0.8B-GGUF",
-    "revision": "main",
+    "modelscope_id": "YYDH21/qwen3.5-0.8b-q4-k-m",
+    "revision": "master",
     "description": "Qwen3.5 0.8B GGUF Q4_K_M for llama.cpp comparison.",
     "size": "508 MB",
     "runtime": "llama_cpp",

@@ -23,6 +23,8 @@ desktop/resources/backend/*
 !desktop/resources/backend/.gitkeep
 desktop/resources/mnn/*
 !desktop/resources/mnn/.gitkeep
+desktop/resources/mobiinfer/*
+!desktop/resources/mobiinfer/.gitkeep
 desktop/resources/hdc/*
 !desktop/resources/hdc/.gitkeep
 
@@ -57,4 +59,3 @@ Thumbs.db
 
 test/results
 tmp
-desktop/resources
