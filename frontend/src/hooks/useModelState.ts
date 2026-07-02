@@ -15,14 +15,23 @@ export function useModelState(params: {
   const { downloads, localModels, mnn, models, selectedBackend, selectedLaunchModelId, setSelectedLaunchModelId } =
     params;
 
-  const isDownloaded = React.useCallback(
-    (modelId: string) => localModels.some((model) => model.id === modelId && model.downloaded),
-    [localModels]
-  );
-
   const downloadStatus = React.useCallback(
     (modelId: string) => downloads.find((download) => download.model_id === modelId),
     [downloads]
+  );
+
+  const isDownloaded = React.useCallback(
+    (modelId: string) => {
+      const state = downloadStatus(modelId)?.state;
+      if (state === "downloaded") {
+        return true;
+      }
+      if (state && state !== "idle") {
+        return false;
+      }
+      return localModels.some((model) => model.id === modelId && model.downloaded);
+    },
+    [downloadStatus, localModels]
   );
 
   const isDownloading = React.useCallback(
@@ -31,8 +40,8 @@ export function useModelState(params: {
   );
 
   const downloadedCount = React.useMemo(
-    () => localModels.filter((model) => model.downloaded).length,
-    [localModels]
+    () => localModels.filter((model) => isDownloaded(model.id)).length,
+    [isDownloaded, localModels]
   );
 
   const selectableModels = React.useMemo(

@@ -69,7 +69,6 @@ class ModelScopeService:
         if existing.state in {"queued", "downloading", "verifying"}:
             return {"status": existing.state, "message": existing.message or "Download already running."}
 
-        self._remove_incomplete_model_files(item)
         self._set_status(model_id, "queued", 0, "Queued for download.")
         thread = threading.Thread(target=self._download_worker, args=(item,), daemon=True)
         thread.start()
@@ -167,6 +166,7 @@ class ModelScopeService:
         model_id = item.id
         model_dir = self._safe_model_dir(item)
         model_dir.mkdir(parents=True, exist_ok=True)
+        self._remove_incomplete_model_files(item)
         self._write_download_marker(item, "downloading")
         cache_dir = MODELS_DIR.parent / "modelscope-cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
