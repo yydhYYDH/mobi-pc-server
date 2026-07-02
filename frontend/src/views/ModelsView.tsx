@@ -63,11 +63,11 @@ export function ModelsView(props: {
                   <ActionButton busy={busy} busyText="暂停中..." disabled={props.serverBusy !== null} onClick={() => void props.pauseDownload(model.id)}>
                     暂停
                   </ActionButton>
-                ) : (
+                ) : !downloaded ? (
                   <ActionButton busy={busy && !downloaded} disabled={anyBusy} onClick={() => void props.downloadModel(model.id)}>
                     {state === "paused" ? "继续" : "下载"}
                   </ActionButton>
-                )}
+                ) : null}
                 <ActionButton busy={busy && downloaded} busyText="加载中..." disabled={!backendMatches || !downloaded || downloading || anyBusy || runtimeActive} onClick={() => void props.loadModel(model.id)}>
                   {runningThisModel ? (props.serverState === "starting" ? "加载中" : "运行中") : "加载"}
                 </ActionButton>

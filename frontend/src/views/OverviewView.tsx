@@ -210,10 +210,18 @@ export function OverviewView(props: {
               ))}
             </select>
             <div className="overview-model-meta">
-              <span>{selectedModel?.modelscope_id ?? `${props.downloadedCount}/${props.modelsCount} 已下载`}</span>
-              <strong>{selectedModel ? props.formatDownloadSize(selectedDownloadStatus, selectedDownloaded) : "尚未选择"}</strong>
+              <span>
+                {selectedDownloaded
+                  ? "模型已在本机"
+                  : selectedModel?.modelscope_id ?? `${props.downloadedCount}/${props.modelsCount} 已下载`}
+              </span>
+              <strong>
+                {selectedDownloaded
+                  ? "可直接加载"
+                  : selectedModel ? props.formatDownloadSize(selectedDownloadStatus, selectedDownloaded) : "尚未选择"}
+              </strong>
             </div>
-            <ProgressBar active={selectedDownloading} value={selectedProgress} />
+            {!selectedDownloaded ? <ProgressBar active={selectedDownloading} value={selectedProgress} /> : null}
             <div className="overview-model-actions">
               {runtimeActive ? (
                 <ActionButton
@@ -229,15 +237,15 @@ export function OverviewView(props: {
                 <ActionButton busy={props.modelBusy === selectedModel.id} busyText="暂停中..." disabled={props.serverBusy !== null} onClick={() => void props.pauseDownload(selectedModel.id)}>
                   暂停下载
                 </ActionButton>
-              ) : (
+              ) : selectedModel && !selectedDownloaded ? (
                 <ActionButton
-                  busy={Boolean(selectedModel && props.modelBusy === selectedModel.id && !selectedDownloaded)}
-                  disabled={!selectedModel || props.modelBusy !== null || props.serverBusy !== null}
-                  onClick={() => selectedModel && void props.downloadModel(selectedModel.id)}
+                  busy={props.modelBusy === selectedModel.id}
+                  disabled={props.modelBusy !== null || props.serverBusy !== null}
+                  onClick={() => void props.downloadModel(selectedModel.id)}
                 >
-                  {selectedState === "paused" ? "继续下载" : selectedDownloaded ? "重新检查" : "下载模型"}
+                  {selectedState === "paused" ? "继续下载" : "下载模型"}
                 </ActionButton>
-              )}
+              ) : null}
               <ActionButton
                 busy={Boolean(selectedModel && props.modelBusy === selectedModel.id && selectedDownloaded)}
                 busyText="加载中..."
