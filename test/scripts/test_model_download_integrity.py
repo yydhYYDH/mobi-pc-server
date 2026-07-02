@@ -32,6 +32,7 @@ def main() -> None:
 
         service._safe_model_dir = lambda _item: model_dir  # type: ignore[method-assign]
         service._remote_files = lambda _item: None  # type: ignore[method-assign]
+        service._find_model = lambda _model_id: item  # type: ignore[method-assign]
 
         for state in ("downloading", "paused", "failed"):
             (model_dir / ".pc-server-download.json").write_text(
@@ -39,6 +40,14 @@ def main() -> None:
                 encoding="utf-8",
             )
             assert not service._is_model_complete(item), state
+
+        (model_dir / ".pc-server-download.json").write_text(
+            json.dumps({"state": "paused", "sizes": {item.entry_file: entry_path.stat().st_size}}),
+            encoding="utf-8",
+        )
+        paused_status = service.download_status(item.id)
+        assert paused_status.state == "paused"
+        assert paused_status.progress == 0
 
         service._write_download_marker(item, "downloaded")
         assert service._is_model_complete(item)

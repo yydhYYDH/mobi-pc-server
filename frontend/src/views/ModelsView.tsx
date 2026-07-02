@@ -68,12 +68,16 @@ export function ModelsView(props: {
                     {state === "paused" ? "继续" : "下载"}
                   </ActionButton>
                 ) : null}
-                <ActionButton busy={busy && downloaded} busyText="加载中..." disabled={!backendMatches || !downloaded || downloading || anyBusy || runtimeActive} onClick={() => void props.loadModel(model.id)}>
-                  {runningThisModel ? (props.serverState === "starting" ? "加载中" : "运行中") : "加载"}
-                </ActionButton>
-                <ActionButton busy={busy && downloaded} disabled={!downloaded || downloading || anyBusy || runningThisModel} onClick={() => void props.deleteModel(model.id)}>
-                  {runningThisModel ? "运行中" : "删除"}
-                </ActionButton>
+                {downloaded ? (
+                  <>
+                    <ActionButton busy={busy} busyText="加载中..." disabled={!backendMatches || downloading || anyBusy || runtimeActive} onClick={() => void props.loadModel(model.id)}>
+                      {runningThisModel ? (props.serverState === "starting" ? "加载中" : "运行中") : "加载"}
+                    </ActionButton>
+                    <ActionButton busy={busy} disabled={downloading || anyBusy || runningThisModel} onClick={() => void props.deleteModel(model.id)}>
+                      {runningThisModel ? "运行中" : "删除"}
+                    </ActionButton>
+                  </>
+                ) : null}
               </div>
             </div>
           );

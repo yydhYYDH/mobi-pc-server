@@ -246,14 +246,16 @@ export function OverviewView(props: {
                   {selectedState === "paused" ? "继续下载" : "下载模型"}
                 </ActionButton>
               ) : null}
-              <ActionButton
-                busy={Boolean(selectedModel && props.modelBusy === selectedModel.id && selectedDownloaded)}
-                busyText="加载中..."
-                disabled={!selectedModel || !selectedDownloaded || selectedDownloading || runtimeActive || props.modelBusy !== null || props.serverBusy !== null}
-                onClick={() => selectedModel && void props.onLoadModel(selectedModel.id)}
-              >
-                {selectedModelRunning ? "运行中" : props.serverState === "starting" ? "加载中" : "加载模型"}
-              </ActionButton>
+              {selectedModel && selectedDownloaded ? (
+                <ActionButton
+                  busy={props.modelBusy === selectedModel.id}
+                  busyText="加载中..."
+                  disabled={selectedDownloading || runtimeActive || props.modelBusy !== null || props.serverBusy !== null}
+                  onClick={() => void props.onLoadModel(selectedModel.id)}
+                >
+                  {selectedModelRunning ? "运行中" : props.serverState === "starting" ? "加载中" : "加载模型"}
+                </ActionButton>
+              ) : null}
             </div>
           </>
         ) : (

@@ -135,6 +135,32 @@ class ModelScopeService:
                 total_bytes=downloaded_bytes,
                 message="Local model is ready.",
             )
+        marker = self._read_download_marker(item)
+        marker_state = marker.get("state") if marker else None
+        if marker_state in {"paused", "failed"}:
+            downloaded_bytes = self._directory_size(model_dir)
+            total_bytes = self._remote_model_size(item)
+            return ModelDownloadStatus(
+                model_id=model_id,
+                state=str(marker_state),
+                progress=self._download_progress(downloaded_bytes, total_bytes),
+                downloaded_bytes=downloaded_bytes,
+                total_bytes=total_bytes,
+                message="Download paused. Click download again to continue."
+                if marker_state == "paused"
+                else "Previous download failed. Click download to retry.",
+            )
+        if marker_state == "downloading":
+            downloaded_bytes = self._directory_size(model_dir)
+            total_bytes = self._remote_model_size(item)
+            return ModelDownloadStatus(
+                model_id=model_id,
+                state="paused",
+                progress=self._download_progress(downloaded_bytes, total_bytes),
+                downloaded_bytes=downloaded_bytes,
+                total_bytes=total_bytes,
+                message="Download was interrupted. Click download again to continue.",
+            )
         return ModelDownloadStatus(model_id=model_id, state="idle", progress=0, message=None)
 
     def _download_worker(self, item: ModelCatalogItem) -> None:
