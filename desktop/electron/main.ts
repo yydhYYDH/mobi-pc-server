@@ -268,6 +268,10 @@ function postJson(url: string, timeoutMs = 5000): Promise<boolean> {
   });
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function healthCheck(): Promise<boolean> {
   return urlCheck(`${backendBaseUrl()}/api/health`);
 }
@@ -389,12 +393,14 @@ npm run dev</code>
   }
 }
 
-function showClosingNotice(): void {
+async function showClosingNotice(): Promise<void> {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
-  mainWindow.webContents
-    .executeJavaScript(`
+  mainWindow.show();
+  mainWindow.focus();
+  try {
+    await mainWindow.webContents.executeJavaScript(`
       document.title = '正在关闭';
       document.body.innerHTML = \`
         <style>
@@ -482,8 +488,10 @@ function showClosingNotice(): void {
           </ul>
         </main>
       \`;
-    `)
-    .catch(() => {});
+    `);
+  } catch {
+    // The window may already be navigating or destroyed; shutdown should continue.
+  }
 }
 
 async function quitGracefully(): Promise<void> {
@@ -491,8 +499,16 @@ async function quitGracefully(): Promise<void> {
     return;
   }
   isQuitting = true;
-  showClosingNotice();
-  await postJson(`${backendBaseUrl()}/api/shutdown`, 8000);
+  const startedAt = Date.now();
+  await showClosingNotice();
+  const shutdownOk = await postJson(`${backendBaseUrl()}/api/shutdown`, 20000);
+  if (!shutdownOk) {
+    console.warn(`[backend] shutdown endpoint did not complete successfully at ${backendBaseUrl()}/api/shutdown`);
+  }
+  const visibleForMs = Date.now() - startedAt;
+  if (visibleForMs < 1200) {
+    await delay(1200 - visibleForMs);
+  }
   stopFrontend();
   stopBackend();
   app.quit();
