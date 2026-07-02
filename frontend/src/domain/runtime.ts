@@ -19,11 +19,14 @@ const STATUS_LABELS: Record<string, string> = {
 const BACKEND_LABELS: Record<BackendId, string> = {
   mnn: "MNN",
   mobiinfer: "MobiInfer",
-  llama_cpp: "llama.cpp"
+  llama_cpp: "llama.cpp",
+  llama_cpp_cuda: "llama.cpp CUDA",
+  llama_cpp_cpu: "llama.cpp CPU"
 };
 
 export const BACKEND_OPTIONS: Array<{ id: BackendId; label: string }> = [
-  { id: "llama_cpp", label: BACKEND_LABELS.llama_cpp },
+  { id: "llama_cpp_cuda", label: BACKEND_LABELS.llama_cpp_cuda },
+  { id: "llama_cpp_cpu", label: BACKEND_LABELS.llama_cpp_cpu },
   { id: "mobiinfer", label: BACKEND_LABELS.mobiinfer },
   { id: "mnn", label: BACKEND_LABELS.mnn },
 ];
@@ -40,6 +43,12 @@ export function serverOwnerLabel(mnn: MnnStatus | null) {
 }
 
 export function normalizeBackend(runtime: string | null | undefined): BackendId {
+  if (runtime === "llama_cpp_cuda") {
+    return "llama_cpp_cuda";
+  }
+  if (runtime === "llama_cpp_cpu") {
+    return "llama_cpp_cpu";
+  }
   if (runtime === "llama_cpp" || runtime === "llama.cpp") {
     return "llama_cpp";
   }
@@ -58,8 +67,10 @@ export function backendLabel(backend: BackendId | string | null | undefined) {
 
 export function backendSupportsRuntime(backend: BackendId, runtime: string | null | undefined) {
   const normalizedRuntime = normalizeBackend(runtime);
-  if (backend === "llama_cpp") {
-    return normalizedRuntime === "llama_cpp";
+  if (backend === "llama_cpp" || backend === "llama_cpp_cuda" || backend === "llama_cpp_cpu") {
+    return normalizedRuntime === "llama_cpp" ||
+      normalizedRuntime === "llama_cpp_cuda" ||
+      normalizedRuntime === "llama_cpp_cpu";
   }
   if (backend === "mobiinfer") {
     return normalizedRuntime === "mobiinfer" || normalizedRuntime === "mnn";
@@ -110,6 +121,9 @@ export function normalizePort(value: string, fallback = 8088) {
 
 export function defaultRuntimePort(backend: BackendId) {
   if (backend === "llama_cpp") {
+    return 8090;
+  }
+  if (backend === "llama_cpp_cuda" || backend === "llama_cpp_cpu") {
     return 8090;
   }
   if (backend === "mobiinfer") {

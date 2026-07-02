@@ -91,7 +91,7 @@ def _content_block_to_text(content: Any) -> Any:
 
 
 def _normalize_uploaded_images(payload: dict[str, Any], backend: str) -> dict[str, Any]:
-    if backend in {"llama_cpp", "mobiinfer"}:
+    if backend in {"llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu", "mobiinfer"}:
         return dict(payload)
 
     normalized = dict(payload)

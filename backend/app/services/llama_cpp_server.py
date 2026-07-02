@@ -19,7 +19,8 @@ class LlamaCppRuntime(NamedTuple):
 
 
 class LlamaCppServerAdapter:
-    def find_runtime(self) -> LlamaCppRuntime | None:
+    def find_runtime(self, accelerator: str | None = None) -> LlamaCppRuntime | None:
+        requested_accelerator = accelerator
         env_path = os.environ.get("LLAMA_SERVER_BIN")
         if env_path:
             path = Path(env_path).expanduser().resolve()
@@ -30,15 +31,17 @@ class LlamaCppServerAdapter:
         candidates = self._runtime_candidates()
         fallback: LlamaCppRuntime | None = None
         for accelerator, path in candidates:
+            if requested_accelerator and accelerator != requested_accelerator:
+                continue
             if not path.exists():
                 continue
             runtime = LlamaCppRuntime(path, accelerator)
-            if accelerator == "cuda" and not self._can_start(path):
+            if runtime.accelerator == "cuda" and not self._can_start(path):
                 continue
-            if accelerator == "auto":
+            if runtime.accelerator == "auto":
                 fallback = fallback or runtime
                 continue
-            if accelerator == "cpu":
+            if runtime.accelerator == "cpu" and not requested_accelerator:
                 fallback = fallback or runtime
                 continue
             return runtime

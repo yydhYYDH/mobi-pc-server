@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import "./styles.css";
 
 import { API_BASE } from "./api/client";
+import { getLlamaCppRuntimes } from "./api/runtime";
 import type { BackendId, ViewId } from "./api/types";
 import { BACKEND_OPTIONS, backendLabel, formatDownloadSize, normalizeBackend, statusLabel } from "./domain/runtime";
 import { useChatTest } from "./hooks/useChatTest";
@@ -16,11 +17,14 @@ import { DataState, SidebarNav, WorkspaceHeader, type NavItem } from "./componen
 import { ActiveViewRenderer } from "./views";
 
 
+const FALLBACK_LLAMA_BACKEND: { id: BackendId; label: string } = { id: "llama_cpp", label: "llama.cpp" };
+
 function App() {
   const [activeView, setActiveView] = React.useState<ViewId>("overview");
   const [selectedBackend, setSelectedBackend] = React.useState<BackendId>(
     () => normalizeBackend(window.localStorage.getItem("pc-server-backend"))
   );
+  const [backendOptions, setBackendOptions] = React.useState(BACKEND_OPTIONS);
   const [selectedLaunchModelId, setSelectedLaunchModelId] = React.useState("");
   const logRef = React.useRef<HTMLPreElement | null>(null);
 
@@ -101,6 +105,41 @@ function App() {
     window.localStorage.setItem("pc-server-backend", selectedBackend);
   }, [selectedBackend]);
 
+  React.useEffect(() => {
+    let cancelled = false;
+    getLlamaCppRuntimes()
+      .then((runtimes) => {
+        if (cancelled) {
+          return;
+        }
+        const availableLlamaOptions = runtimes
+          .filter((runtime) => runtime.available)
+          .map((runtime) => ({ id: runtime.id, label: runtime.label }));
+        const nonLlamaOptions = BACKEND_OPTIONS.filter((backend) => !backend.id.startsWith("llama_cpp"));
+        const nextOptions = [
+          ...(availableLlamaOptions.length > 0 ? availableLlamaOptions : [FALLBACK_LLAMA_BACKEND]),
+          ...nonLlamaOptions
+        ];
+        setBackendOptions(nextOptions);
+        setSelectedBackend((currentBackend) =>
+          nextOptions.some((backend) => backend.id === currentBackend)
+            ? currentBackend
+            : nextOptions[0]?.id ?? "llama_cpp"
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBackendOptions([
+            FALLBACK_LLAMA_BACKEND,
+            ...BACKEND_OPTIONS.filter((backend) => !backend.id.startsWith("llama_cpp"))
+          ]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const serverState = mnn?.state ?? "unknown";
   const hdcAvailable = hdc?.available ?? false;
   const connectedDevices = hdc?.devices.length ?? 0;
@@ -129,7 +168,7 @@ function App() {
       <main className="workspace">
         <WorkspaceHeader
           activeView={activeView}
-          backendOptions={BACKEND_OPTIONS}
+          backendOptions={backendOptions}
           hdcAvailable={hdcAvailable}
           isRefreshing={isRefreshing}
           lastUpdatedText={lastUpdatedText}
@@ -148,6 +187,7 @@ function App() {
           activeLog={activeLog}
           activeView={activeView}
           apiBase={API_BASE}
+          backendOptions={backendOptions}
           activeModelSupportsImages={activeModelSupportsImages}
           autoConnectHdc={autoConnectHdc}
           autoDiscovering={autoDiscovering}

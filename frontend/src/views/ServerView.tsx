@@ -1,9 +1,10 @@
 import type { BackendId, CatalogModel, DownloadStatus, MnnStatus, ServerBusy } from "../api/types";
 import { ActionButton, PanelTitle, StatusPill } from "../components";
-import { BACKEND_OPTIONS, serverOwnerLabel, statusLabel } from "../domain/runtime";
+import { serverOwnerLabel, statusLabel } from "../domain/runtime";
 
 export function ServerView(props: {
   activeModelName: string | undefined;
+  backendOptions: Array<{ id: BackendId; label: string }>;
   downloadStatus: (modelId: string) => DownloadStatus | undefined;
   isDownloaded: (modelId: string) => boolean;
   isDownloading: (modelId: string) => boolean;
@@ -56,7 +57,7 @@ export function ServerView(props: {
               value={props.selectedBackend}
               onChange={(event) => props.setSelectedBackend(event.target.value as BackendId)}
             >
-              {BACKEND_OPTIONS.map((backend) => (
+              {props.backendOptions.map((backend) => (
                 <option key={backend.id} value={backend.id}>
                   {backend.label}
                 </option>

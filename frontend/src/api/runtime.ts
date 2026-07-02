@@ -1,8 +1,15 @@
 import { API_BASE, apiErrorMessage, readApiJson } from "./client";
 import type { BackendId, MnnStatus } from "./types";
 
+export type RuntimeOption = {
+  id: BackendId;
+  label: string;
+  available: boolean;
+  path: string;
+};
+
 export function runtimeApiPrefix(backend: BackendId) {
-  if (backend === "llama_cpp") {
+  if (backend === "llama_cpp" || backend === "llama_cpp_cuda" || backend === "llama_cpp_cpu") {
     return "/api/llama-cpp";
   }
   if (backend === "mobiinfer") {
@@ -13,6 +20,14 @@ export function runtimeApiPrefix(backend: BackendId) {
 
 export function getRuntimeStatus(backend: BackendId) {
   return fetch(`${API_BASE}${runtimeApiPrefix(backend)}/status`);
+}
+
+export async function getLlamaCppRuntimes() {
+  const response = await fetch(`${API_BASE}/api/llama-cpp/runtimes`);
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response, "llama.cpp 后端检测失败"));
+  }
+  return response.json() as Promise<RuntimeOption[]>;
 }
 
 export async function startRuntime(backend: BackendId) {

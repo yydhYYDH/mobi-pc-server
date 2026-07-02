@@ -21,12 +21,16 @@ BACKEND_LABELS: dict[InferenceBackend, str] = {
     "mnn": "MNN",
     "mobiinfer": "MobiInfer",
     "llama_cpp": "llama.cpp",
+    "llama_cpp_cuda": "llama.cpp CUDA",
+    "llama_cpp_cpu": "llama.cpp CPU",
 }
 
 BACKEND_PORTS: dict[InferenceBackend, int] = {
     "mnn": DEFAULT_MNN_PORT,
     "mobiinfer": DEFAULT_MOBIINFER_PORT,
     "llama_cpp": DEFAULT_LLAMA_CPP_PORT,
+    "llama_cpp_cuda": DEFAULT_LLAMA_CPP_PORT,
+    "llama_cpp_cpu": DEFAULT_LLAMA_CPP_PORT,
 }
 PORT_SEARCH_LIMIT = 40
 
@@ -34,6 +38,8 @@ BACKEND_RUNTIME_COMPATIBILITY: dict[InferenceBackend, set[InferenceBackend]] = {
     "mnn": {"mnn", "mobiinfer"},
     "mobiinfer": {"mnn", "mobiinfer"},
     "llama_cpp": {"llama_cpp"},
+    "llama_cpp_cuda": {"llama_cpp"},
+    "llama_cpp_cpu": {"llama_cpp"},
 }
 
 
@@ -145,7 +151,7 @@ class MnnServerService:
     def load_model(self, model_id: str, backend: InferenceBackend = "llama_cpp") -> MnnStatus:
         self._append_log(backend, f"Load model requested: {model_id}.")
         entry_path = self._models.entry_path(model_id)
-        mmproj_path = self._models.mmproj_path(model_id) if backend == "llama_cpp" else None
+        mmproj_path = self._models.mmproj_path(model_id) if backend in {"llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"} else None
         runtime = self._normalize_runtime(self._models.runtime(model_id))
         if runtime not in BACKEND_RUNTIME_COMPATIBILITY[backend]:
             label = BACKEND_LABELS[backend]
@@ -288,7 +294,7 @@ class MnnServerService:
     def _runtime_ready(self, backend: InferenceBackend, port: int | None) -> bool:
         if not port:
             return False
-        if backend == "llama_cpp":
+        if backend in {"llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"}:
             return self._llama_cpp_ready(port)
         return self._is_port_open(port)
 
@@ -314,7 +320,7 @@ class MnnServerService:
         port: int,
         mmproj_path: Path | None = None,
     ) -> list[str]:
-        if backend == "llama_cpp":
+        if backend in {"llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"}:
             if not isinstance(runtime, LlamaCppRuntime):
                 runtime = LlamaCppRuntime(runtime, "auto")
             return self._llama_cpp.build_command(runtime, entry_path, port, mmproj_path)
@@ -343,6 +349,10 @@ class MnnServerService:
     def _find_backend_runtime(self, backend: InferenceBackend) -> Path | LlamaCppRuntime | None:
         if backend == "llama_cpp":
             return self._llama_cpp.find_runtime()
+        if backend == "llama_cpp_cuda":
+            return self._llama_cpp.find_runtime("cuda")
+        if backend == "llama_cpp_cpu":
+            return self._llama_cpp.find_runtime("cpu")
         if backend == "mobiinfer":
             return self._find_mobiinfer()
         return self._find_mnncli()
@@ -394,7 +404,7 @@ class MnnServerService:
         return None
 
     def _missing_binary_message(self, backend: InferenceBackend) -> str:
-        if backend == "llama_cpp":
+        if backend in {"llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"}:
             return self._llama_cpp.missing_binary_message()
         if backend == "mobiinfer":
             return (

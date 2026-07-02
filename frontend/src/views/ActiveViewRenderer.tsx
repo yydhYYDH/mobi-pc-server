@@ -16,6 +16,7 @@ export function ActiveViewRenderer(props: {
   activeModelName: string | undefined;
   activeView: ViewId;
   apiBase: string;
+  backendOptions: Array<{ id: BackendId; label: string }>;
   autoConnectHdc: () => Promise<void>;
   autoDiscovering: boolean;
   autoScrollLogs: boolean;
@@ -150,6 +151,7 @@ export function ActiveViewRenderer(props: {
           selectableModels={props.selectableModels}
           selectedLaunchModelId={props.selectedLaunchModelId}
           selectedBackend={props.selectedBackend}
+          backendOptions={props.backendOptions}
           setSelectedLaunchModelId={props.setSelectedLaunchModelId}
           setSelectedBackend={props.setSelectedBackend}
           serverState={props.serverState}
