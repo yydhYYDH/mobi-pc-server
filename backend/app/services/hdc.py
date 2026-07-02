@@ -451,6 +451,7 @@ class HdcService:
         llm_rport_ready: bool | None = None,
         pc_server_rport_ready: bool | None = None,
     ) -> HdcStatus:
+        current_llm_port = self._current_llm_port()
         mobile_snapshot = mobile_event_state.snapshot()
         return HdcStatus(
             available=available,
@@ -461,7 +462,7 @@ class HdcService:
             hdc_server_port=HDC_SERVER_PORT,
             hdc_server_url=HDC_SERVER_URL,
             hdc_server_message=self._origin_server_message,
-            llm_port=self._last_llm_port,
+            llm_port=current_llm_port,
             phone_llm_url=PHONE_LLM_URL,
             llm_rport_ready=self._llm_rport_ready if llm_rport_ready is None else llm_rport_ready,
             pc_server_port=self._pc_server_port,
@@ -476,6 +477,12 @@ class HdcService:
             mobile_event_type=mobile_snapshot.last_event_type,
             mobile_event_client=mobile_snapshot.last_client,
         )
+
+    def _current_llm_port(self) -> int:
+        status = runtime_service.status()
+        if status.port:
+            self._last_llm_port = status.port
+        return self._last_llm_port
 
     def _with_llm_rport(
         self,

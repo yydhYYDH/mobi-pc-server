@@ -5,7 +5,7 @@ import "./styles.css";
 import { API_BASE } from "./api/client";
 import { getLlamaCppRuntimes } from "./api/runtime";
 import type { BackendId, ViewId } from "./api/types";
-import { BACKEND_OPTIONS, backendLabel, formatDownloadSize, normalizeBackend, statusLabel } from "./domain/runtime";
+import { BACKEND_OPTIONS, backendLabel, formatDownloadSize, isSelectableBackend, normalizeBackend, statusLabel } from "./domain/runtime";
 import { useChatTest } from "./hooks/useChatTest";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { useHdcActions } from "./hooks/useHdcActions";
@@ -19,11 +19,14 @@ import { ActiveViewRenderer } from "./views";
 
 const FALLBACK_LLAMA_BACKEND: { id: BackendId; label: string } = { id: "llama_cpp", label: "llama.cpp" };
 
+function initialBackend(): BackendId {
+  const storedBackend = normalizeBackend(window.localStorage.getItem("pc-server-backend"));
+  return isSelectableBackend(storedBackend) ? storedBackend : "mobiinfer";
+}
+
 function App() {
   const [activeView, setActiveView] = React.useState<ViewId>("overview");
-  const [selectedBackend, setSelectedBackend] = React.useState<BackendId>(
-    () => normalizeBackend(window.localStorage.getItem("pc-server-backend"))
-  );
+  const [selectedBackend, setSelectedBackend] = React.useState<BackendId>(initialBackend);
   const [backendOptions, setBackendOptions] = React.useState(BACKEND_OPTIONS);
   const [selectedLaunchModelId, setSelectedLaunchModelId] = React.useState("");
   const logRef = React.useRef<HTMLPreElement | null>(null);
@@ -81,7 +84,7 @@ function App() {
     hdcTarget,
     recentHdcTargets,
     setHdcTarget
-  } = useHdcActions({ hdc, selectedBackend, setHdc });
+  } = useHdcActions({ hdc, mnn, selectedBackend, setHdc });
 
   const {
     activeModelSupportsImages,
