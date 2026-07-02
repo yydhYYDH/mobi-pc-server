@@ -21,8 +21,10 @@ desktop/resources/frontend/*
 !desktop/resources/frontend/.gitkeep
 desktop/resources/backend/*
 !desktop/resources/backend/.gitkeep
+desktop/resources/configs/*
 desktop/resources/mnn/*
 !desktop/resources/mnn/.gitkeep
+desktop/resources/llama-cpp/*
 desktop/resources/mobiinfer/*
 !desktop/resources/mobiinfer/.gitkeep
 desktop/resources/hdc/*
