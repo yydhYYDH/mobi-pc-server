@@ -11,6 +11,11 @@ from app.services.modelscope import ModelScopeService
 
 def main() -> None:
     service = ModelScopeService()
+    assert service._download_progress(91 * 1024 * 1024, int(3.2 * 1024 * 1024 * 1024)) == 2
+    assert service._download_progress(0, int(3.2 * 1024 * 1024 * 1024)) == 0
+    assert service._download_progress(5, 0) == 0
+    assert service._download_progress(100, 100) == 99
+
     item = ModelCatalogItem(
         id="integrity-test",
         name="Integrity Test",

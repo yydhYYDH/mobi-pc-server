@@ -22,6 +22,7 @@ desktop/resources/frontend/*
 desktop/resources/backend/*
 !desktop/resources/backend/.gitkeep
 desktop/resources/configs/*
+desktop/resources/example-images/*
 desktop/resources/mnn/*
 !desktop/resources/mnn/.gitkeep
 desktop/resources/llama-cpp/*

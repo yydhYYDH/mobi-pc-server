@@ -12,10 +12,16 @@ extraResources:
     to: frontend
   - from: resources/configs
     to: configs
+  - from: resources/example-images
+    to: example-images
   - from: resources/backend
     to: backend
   - from: resources/mnn
     to: mnn
+    filter:
+      - "**/*"
+  - from: resources/mobiinfer
+    to: mobiinfer
     filter:
       - "**/*"
   - from: resources/llama-cpp

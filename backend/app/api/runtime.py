@@ -10,27 +10,31 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from app.core.paths import REPO_ROOT
+from app.core.paths import REPO_ROOT, RESOURCES_DIR
 from app.services.runtime_state import runtime_service
 
 
 router = APIRouter()
 LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-EXAMPLE_IMAGE_DIR = (REPO_ROOT / "test/data/example/pics").resolve()
+EXAMPLE_IMAGE_DIRS = [
+    (RESOURCES_DIR / "example-images").resolve(),
+    (REPO_ROOT / "test/data/example/pics").resolve(),
+]
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 UPLOAD_IMAGE_DIR = Path(tempfile.gettempdir()) / "pc_server_chat_images"
 DATA_IMAGE_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.*)$", re.DOTALL)
 
 
 def _example_image_path(image_id: str) -> Path:
-    path = (EXAMPLE_IMAGE_DIR / image_id).resolve()
-    if (
-        EXAMPLE_IMAGE_DIR not in path.parents
-        or path.suffix.lower() not in SUPPORTED_IMAGE_SUFFIXES
-        or not path.is_file()
-    ):
-        raise HTTPException(status_code=404, detail="Example image not found.")
-    return path
+    for image_dir in EXAMPLE_IMAGE_DIRS:
+        path = (image_dir / image_id).resolve()
+        if (
+            image_dir in path.parents
+            and path.suffix.lower() in SUPPORTED_IMAGE_SUFFIXES
+            and path.is_file()
+        ):
+            return path
+    raise HTTPException(status_code=404, detail="Example image not found.")
 
 
 def _example_image_summary(path: Path) -> dict[str, Any]:
@@ -112,13 +116,14 @@ def _normalize_uploaded_images(payload: dict[str, Any], backend: str) -> dict[st
 
 @router.get("/example-images")
 def example_images() -> list[dict[str, Any]]:
-    if not EXAMPLE_IMAGE_DIR.is_dir():
-        return []
-    return [
-        _example_image_summary(path)
-        for path in sorted(EXAMPLE_IMAGE_DIR.iterdir())
-        if path.is_file() and path.suffix.lower() in SUPPORTED_IMAGE_SUFFIXES
-    ]
+    images: dict[str, dict[str, Any]] = {}
+    for image_dir in EXAMPLE_IMAGE_DIRS:
+        if not image_dir.is_dir():
+            continue
+        for path in sorted(image_dir.iterdir()):
+            if path.is_file() and path.suffix.lower() in SUPPORTED_IMAGE_SUFFIXES:
+                images.setdefault(path.name, _example_image_summary(path))
+    return list(images.values())
 
 
 @router.get("/example-images/{image_id}")

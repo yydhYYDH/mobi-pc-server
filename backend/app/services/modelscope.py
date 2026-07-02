@@ -179,7 +179,7 @@ class ModelScopeService:
             self._set_status(
                 model_id,
                 "downloading",
-                8,
+                self._download_progress(self._directory_size(model_dir), total_bytes),
                 f"Downloading {item.modelscope_id}.",
                 downloaded_bytes=self._directory_size(model_dir),
                 total_bytes=total_bytes,
@@ -197,7 +197,7 @@ class ModelScopeService:
             self._set_status(
                 model_id,
                 "verifying",
-                92,
+                self._download_progress(downloaded_bytes, total_bytes, cap=99),
                 "Verifying downloaded files.",
                 downloaded_bytes=downloaded_bytes,
                 total_bytes=total_bytes,
@@ -324,9 +324,7 @@ class ModelScopeService:
         model_dir = self._safe_model_dir(item)
         while not stop_event.wait(1):
             downloaded_bytes = self._directory_size(model_dir)
-            progress = 8
-            if total_bytes:
-                progress = min(90, max(8, int(downloaded_bytes / total_bytes * 90)))
+            progress = self._download_progress(downloaded_bytes, total_bytes)
             self._set_status(
                 item.id,
                 "downloading",
@@ -335,6 +333,13 @@ class ModelScopeService:
                 downloaded_bytes=downloaded_bytes,
                 total_bytes=total_bytes,
             )
+
+    def _download_progress(self, downloaded_bytes: int, total_bytes: int | None, cap: int = 99) -> int:
+        if not total_bytes or total_bytes <= 0:
+            return 0
+        if downloaded_bytes <= 0:
+            return 0
+        return min(cap, max(0, int(downloaded_bytes / total_bytes * 100)))
 
     def _directory_size(self, directory: Path) -> int:
         if not directory.exists():

@@ -6,11 +6,13 @@ const desktopRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(desktopRoot, "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const configsRoot = path.join(repoRoot, "configs");
+const exampleImagesRoot = path.join(repoRoot, "test", "data", "example", "pics");
 const resourcesRoot = path.join(desktopRoot, "resources");
 const frontendDist = path.join(frontendRoot, "dist");
 const packagedFrontend = path.join(resourcesRoot, "frontend");
 const packagedBackend = path.join(resourcesRoot, "backend");
 const packagedConfigs = path.join(resourcesRoot, "configs");
+const packagedExampleImages = path.join(resourcesRoot, "example-images");
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, {
@@ -54,8 +56,12 @@ if (!fs.existsSync(frontendDist)) {
 
 copyDir(frontendDist, packagedFrontend);
 copyDir(configsRoot, packagedConfigs);
+fs.rmSync(packagedExampleImages, { recursive: true, force: true });
+fs.mkdirSync(packagedExampleImages, { recursive: true });
+fs.copyFileSync(path.join(exampleImagesRoot, "taobao_full_1.jpg"), path.join(packagedExampleImages, "taobao_full_1.jpg"));
 fs.mkdirSync(packagedBackend, { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "mnn"), { recursive: true });
+fs.mkdirSync(path.join(resourcesRoot, "mobiinfer"), { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "llama-cpp"), { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "llama-cpp", "cpu"), { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "llama-cpp", "cuda"), { recursive: true });
@@ -76,7 +82,15 @@ const mnnExecutable = path.join(resourcesRoot, "mnn", expectedExecutableName("mn
 if (!fs.existsSync(mnnExecutable)) {
   const message =
     `MNN executable not found: ${mnnExecutable}\n` +
-    "Build Windows mnncli and copy it to desktop/resources/mnn before packaging.";
+    "Build MNN mnncli and copy it to desktop/resources/mnn before packaging.";
+  console.warn(message);
+}
+
+const mobiinferExecutable = path.join(resourcesRoot, "mobiinfer", expectedExecutableName("mnncli"));
+if (!fs.existsSync(mobiinferExecutable)) {
+  const message =
+    `MobiInfer executable not found: ${mobiinferExecutable}\n` +
+    "Build MobiInfer mnncli and copy it to desktop/resources/mobiinfer before packaging.";
   console.warn(message);
 }
 
@@ -106,3 +120,4 @@ if (!fs.existsSync(llamaCppCudaExecutable)) {
 
 console.log(`Prepared frontend resources at ${packagedFrontend}`);
 console.log(`Prepared configs resources at ${packagedConfigs}`);
+console.log(`Prepared example images at ${packagedExampleImages}`);
