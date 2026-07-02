@@ -2,6 +2,7 @@ import base64
 import json
 import mimetypes
 import re
+import sys
 import tempfile
 import urllib.error
 import urllib.request
@@ -16,10 +17,31 @@ from app.services.runtime_state import runtime_service
 
 router = APIRouter()
 LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-EXAMPLE_IMAGE_DIRS = [
-    (RESOURCES_DIR / "example-images").resolve(),
-    (REPO_ROOT / "test/data/example/pics").resolve(),
-]
+def _unique_paths(paths: list[Path]) -> list[Path]:
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for path in paths:
+        resolved = path.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique.append(resolved)
+    return unique
+
+
+def _example_image_dirs() -> list[Path]:
+    executable_dir = Path(sys.executable).resolve().parent
+    return _unique_paths(
+        [
+            RESOURCES_DIR / "example-images",
+            Path.cwd() / "example-images",
+            executable_dir / "example-images",
+            executable_dir.parent / "example-images",
+            REPO_ROOT / "test/data/example/pics",
+        ]
+    )
+
+
+EXAMPLE_IMAGE_DIRS = _example_image_dirs()
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 UPLOAD_IMAGE_DIR = Path(tempfile.gettempdir()) / "pc_server_chat_images"
 DATA_IMAGE_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.*)$", re.DOTALL)
@@ -34,7 +56,8 @@ def _example_image_path(image_id: str) -> Path:
             and path.is_file()
         ):
             return path
-    raise HTTPException(status_code=404, detail="Example image not found.")
+    searched = ", ".join(str(path) for path in EXAMPLE_IMAGE_DIRS)
+    raise HTTPException(status_code=404, detail=f"Example image not found. Searched: {searched}")
 
 
 def _example_image_summary(path: Path) -> dict[str, Any]:
