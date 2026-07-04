@@ -357,6 +357,25 @@ def get_main_ability_for_bundle(bundle):
         print(f">> [启动警告] 查询 {bundle} 主 Ability 失败: {ex}")
     return ""
 
+APP_ABILITY_CANDIDATES = {
+    "com.huawei.hmos.browser": ("MainAbility",),
+}
+
+def ability_candidates_for_bundle(bundle, discovered_ability=""):
+    candidates = []
+    if discovered_ability:
+        candidates.append(discovered_ability)
+    candidates.extend(APP_ABILITY_CANDIDATES.get(bundle, ()))
+
+    deduped = []
+    seen = set()
+    for ability in candidates:
+        ability = str(ability or "").strip()
+        if ability and ability not in seen:
+            deduped.append(ability)
+            seen.add(ability)
+    return deduped
+
 def start_app_with_explicit_ability(bundle, ability_name):
     if not ability_name:
         return False
@@ -1409,8 +1428,9 @@ def _launch_app_impl(app_name, reset_first=True):
         ability_name = get_main_ability_for_bundle(bundle)
         if reset_first:
             stop_app_before_launch(bundle)
-        if start_app_with_explicit_ability(bundle, ability_name):
-            return True
+        for candidate in ability_candidates_for_bundle(bundle, ability_name):
+            if start_app_with_explicit_ability(bundle, candidate):
+                return True
 
         if ensure_driver_available():
             print(f">> 执行启动命令 (hmdriver2 fallback): force_start_app({bundle})")
