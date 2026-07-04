@@ -162,7 +162,7 @@ function startBackend(): void {
 }
 
 function childEnv(): NodeJS.ProcessEnv {
-  const resourcesPath = app.isPackaged ? process.resourcesPath : repoRoot();
+  const resourcesPath = app.isPackaged ? process.resourcesPath : path.join(repoRoot(), "desktop", "resources");
   const dataRoot = app.isPackaged ? appDataRoot() : repoRoot();
   const hdcDir = path.join(resourcesPath, "hdc");
   const pathValue = [hdcDir, process.env.PATH ?? ""].filter(Boolean).join(path.delimiter);
