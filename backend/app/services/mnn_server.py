@@ -86,15 +86,31 @@ class MnnServerService:
                     return self._status
             self._status.managed_by_backend = True
             return self._status
-        if self._is_port_open(self._status.port or BACKEND_PORTS[self._status.backend]):
-            return MnnStatus(
+        port = self._status.port or BACKEND_PORTS[self._status.backend]
+        if self._is_port_open(port):
+            if self._status.state != "running" or self._status.managed_by_backend is not False:
+                self._append_log(
+                    self._status.backend,
+                    (
+                        f"Detected an existing {BACKEND_LABELS[self._status.backend]}-compatible "
+                        f"service on port {port}. Its stdout/stderr are not managed by PC Server."
+                    ),
+                )
+            self._status = MnnStatus(
                 state="running",
                 backend=self._status.backend,
                 active_model_id=self._status.active_model_id,
-                port=self._status.port or BACKEND_PORTS[self._status.backend],
+                port=port,
                 message=f"Detected an existing {BACKEND_LABELS[self._status.backend]}-compatible service on this port.",
                 managed_by_backend=False,
             )
+            return self._status
+        if self._status.state == "running" and self._status.managed_by_backend is False:
+            self._append_log(
+                self._status.backend,
+                f"External {BACKEND_LABELS[self._status.backend]} service on port {port} is no longer reachable.",
+            )
+            self._status = MnnStatus(state="stopped", backend=self._status.backend)
         return self._status
 
     def start(self) -> MnnStatus:
