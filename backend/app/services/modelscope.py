@@ -166,7 +166,6 @@ class ModelScopeService:
         model_id = item.id
         model_dir = self._safe_model_dir(item)
         model_dir.mkdir(parents=True, exist_ok=True)
-        self._remove_incomplete_model_files(item)
         self._write_download_marker(item, "downloading")
         cache_dir = MODELS_DIR.parent / "modelscope-cache"
         cache_dir.mkdir(parents=True, exist_ok=True)

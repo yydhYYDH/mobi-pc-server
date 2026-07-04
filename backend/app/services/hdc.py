@@ -139,7 +139,16 @@ class HdcService:
             lambda: self._connect_sync(target, llm_port=llm_port),
         )
 
-    def auto_connect(self, llm_port: int | None = None) -> HdcStatus:
+    def auto_connect(self, llm_port: int | None = None, manual: bool = False) -> HdcStatus:
+        hdc_path = self._hdc_path()
+        if not hdc_path:
+            return self._status_response(available=False, message="hdc was not found on PATH.")
+        if self._shutdown_event.is_set() and not manual:
+            return self._status_response(
+                available=True,
+                path=hdc_path,
+                message="HDC service is shut down. Manual connect is required to start it again.",
+            )
         self._ensure_active()
         return self._start_connect_task(
             "auto",

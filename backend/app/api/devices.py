@@ -22,7 +22,7 @@ def hdc_connect(request: HdcConnectRequest) -> HdcStatus:
 def hdc_auto_connect(
     request: HdcAutoConnectRequest = Body(default_factory=HdcAutoConnectRequest),
 ) -> HdcStatus:
-    return service.auto_connect(llm_port=request.llm_port)
+    return service.auto_connect(llm_port=request.llm_port, manual=request.manual)
 
 
 @router.post("/hdc/disconnect", response_model=HdcStatus)

@@ -42,3 +42,4 @@ class HdcConnectRequest(BaseModel):
 
 class HdcAutoConnectRequest(BaseModel):
     llm_port: int | None = None
+    manual: bool = False

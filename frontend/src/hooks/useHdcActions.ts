@@ -121,7 +121,7 @@ export function useHdcActions(params: {
       setDeviceNotice("正在自动搜索 HarmonyOS 设备，可能需要十几秒...");
     }
     try {
-      const nextStatus = await autoConnectHdcTarget(expectedLlmPort);
+      const nextStatus = await autoConnectHdcTarget(expectedLlmPort, !options.silent);
       setHdc(nextStatus);
       const connectedTarget = nextStatus.devices[0]?.serial;
       if (connectedTarget) {

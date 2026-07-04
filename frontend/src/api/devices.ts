@@ -21,11 +21,11 @@ export async function connectHdcTarget(target: string, llmPort?: number) {
   return response.json() as Promise<HdcStatus>;
 }
 
-export async function autoConnectHdcTarget(llmPort?: number) {
+export async function autoConnectHdcTarget(llmPort?: number, manual = false) {
   const response = await fetch(`${API_BASE}/api/devices/hdc/auto-connect`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ llm_port: llmPort })
+    body: JSON.stringify({ llm_port: llmPort, manual })
   });
   if (!response.ok) {
     throw new Error(await apiErrorMessage(response, "自动搜索失败"));
