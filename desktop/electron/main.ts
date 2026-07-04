@@ -98,13 +98,22 @@ function devPythonCommand(): string {
     return override;
   }
 
-  const venvPython =
+  const backendRoot = path.join(repoRoot(), "backend");
+  const candidates =
     process.platform === "win32"
-      ? path.join(repoRoot(), "backend", ".venv", "Scripts", "python.exe")
-      : path.join(repoRoot(), "backend", ".venv", "bin", "python");
+      ? [
+          path.join(backendRoot, ".venv-win", "Scripts", "python.exe"),
+          path.join(backendRoot, ".venv", "Scripts", "python.exe")
+        ]
+      : [
+          path.join(backendRoot, ".venv", "bin", "python"),
+          path.join(backendRoot, ".venv-linux", "bin", "python")
+        ];
 
-  if (fs.existsSync(venvPython)) {
-    return venvPython;
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
   }
 
   return process.platform === "win32" ? "python" : "python3";
@@ -553,8 +562,9 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
   if (!isQuitting) {
+    event.preventDefault();
     void quitGracefully();
     return;
   }

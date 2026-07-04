@@ -69,6 +69,7 @@ class HdcService:
         self._origin_http_server: ThreadingHTTPServer | None = None
 
     def status(self) -> HdcStatus:
+        self._ensure_active()
         hdc_path = self._hdc_path()
         if not hdc_path:
             return self._status_response(available=False, message="hdc was not found on PATH.")
@@ -127,12 +128,14 @@ class HdcService:
         return status
 
     def connect(self, target: str, llm_port: int | None = None) -> HdcStatus:
+        self._ensure_active()
         return self._start_connect_task(
             "manual",
             lambda: self._connect_sync(target, llm_port=llm_port),
         )
 
     def auto_connect(self, llm_port: int | None = None) -> HdcStatus:
+        self._ensure_active()
         return self._start_connect_task(
             "auto",
             lambda: self._auto_connect_sync(llm_port=llm_port),
@@ -298,6 +301,12 @@ class HdcService:
             server.shutdown()
             server.server_close()
             self._origin_http_server = None
+            self._origin_server_started = False
+            self._origin_server_health_cache = False
+
+    def _ensure_active(self) -> None:
+        if self._shutdown_event.is_set():
+            self._shutdown_event.clear()
 
     def _ensure_connection_monitor(self) -> None:
         with self._connection_monitor_lock:
