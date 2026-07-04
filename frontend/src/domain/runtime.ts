@@ -28,8 +28,11 @@ export const BACKEND_OPTIONS: Array<{ id: BackendId; label: string }> = [
   { id: "llama_cpp_cuda", label: BACKEND_LABELS.llama_cpp_cuda },
   { id: "llama_cpp_cpu", label: BACKEND_LABELS.llama_cpp_cpu },
   { id: "mobiinfer", label: BACKEND_LABELS.mobiinfer },
-  { id: "mnn", label: BACKEND_LABELS.mnn },
 ];
+
+export function isSelectableBackend(backend: BackendId) {
+  return BACKEND_OPTIONS.some((option) => option.id === backend);
+}
 
 export function statusLabel(status: string | undefined) {
   return STATUS_LABELS[status ?? "unknown"] ?? status ?? "未知";
