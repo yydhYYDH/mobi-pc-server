@@ -458,7 +458,14 @@ class MnnServerService:
             return False
         if backend in {"llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"}:
             return self._llama_cpp_ready(port)
-        return self._is_port_open(port)
+        return self._http_health_ready(port)
+
+    def _http_health_ready(self, port: int) -> bool:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=1.5) as response:
+                return response.status == 200
+        except Exception:
+            return False
 
     def _llama_cpp_ready(self, port: int) -> bool:
         try:
@@ -491,6 +498,7 @@ class MnnServerService:
             str(runtime),
             "serve",
             model_id,
+            "--verbose",
             "--config",
             str(entry_path),
             "--host",
@@ -523,7 +531,8 @@ class MnnServerService:
         env_path = os.environ.get("MNNCLI_BIN")
         if env_path:
             path = Path(env_path).expanduser().resolve()
-            return path if path.exists() else None
+            if path.exists():
+                return path
 
         candidates = [
             RESOURCES_DIR / "mnn/mnncli",
@@ -544,7 +553,8 @@ class MnnServerService:
         env_path = os.environ.get("MOBIINFER_BIN")
         if env_path:
             path = Path(env_path).expanduser().resolve()
-            return path if path.exists() else None
+            if path.exists():
+                return path
 
         candidates = [
             RESOURCES_DIR / "mobiinfer/mnncli",
