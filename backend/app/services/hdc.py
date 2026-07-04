@@ -65,6 +65,8 @@ class HdcService:
         self._last_observed_connected_target = ""
         self._status_cache_lock = threading.RLock()
         self._status_cache: HdcStatus | None = None
+        self._shutdown_event = threading.Event()
+        self._origin_http_server: ThreadingHTTPServer | None = None
 
     def status(self) -> HdcStatus:
         hdc_path = self._hdc_path()
@@ -270,6 +272,7 @@ class HdcService:
         if not hdc_path:
             return self._status_response(available=False, message="hdc was not found on PATH.")
 
+        self.cleanup_ports(target=target)
         result = self._run([hdc_path, "tdisconn", target], timeout=10)
         if result is None:
             return self._status_response(
@@ -287,6 +290,15 @@ class HdcService:
         current.message = result.stdout.strip() or f"Disconnected from {target}."
         return current
 
+    def shutdown(self) -> None:
+        self._shutdown_event.set()
+        self.cleanup_ports()
+        server = self._origin_http_server
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+            self._origin_http_server = None
+
     def _ensure_connection_monitor(self) -> None:
         with self._connection_monitor_lock:
             if self._connection_monitor_thread and self._connection_monitor_thread.is_alive():
@@ -299,7 +311,7 @@ class HdcService:
             self._connection_monitor_thread.start()
 
     def _run_connection_monitor(self) -> None:
-        while True:
+        while not self._shutdown_event.is_set():
             try:
                 status = self._status_live()
                 targets = [device.serial for device in status.devices]
@@ -320,7 +332,7 @@ class HdcService:
                     self._last_device_connected_broadcast_target = ""
             except Exception as exc:
                 self._log_hdc(f"HDC monitor failed: {exc}")
-            time.sleep(HDC_STATUS_REFRESH_INTERVAL)
+            self._shutdown_event.wait(HDC_STATUS_REFRESH_INTERVAL)
 
     def _cached_status(self) -> HdcStatus | None:
         with self._status_cache_lock:
@@ -403,6 +415,7 @@ class HdcService:
 
             module.LEGACY_LOOP_ENABLED = False
             server = ThreadingHTTPServer(("0.0.0.0", module.SERVER_PORT), module.HDCServerHandler)
+            self._origin_http_server = server
             self._origin_server_started = True
             self._origin_server_health_cache = True
             self._origin_server_message = f"HDC server started on port {module.SERVER_PORT}."
@@ -414,6 +427,11 @@ class HdcService:
         except Exception as exc:
             self._origin_server_message = f"HDC server exited: {exc}"
             self._log_hdc_server(self._origin_server_message)
+        finally:
+            server = self._origin_http_server
+            if server is not None:
+                server.server_close()
+                self._origin_http_server = None
 
     def _log_hdc_server(self, message: str) -> None:
         text = f">> [HDC] {message}"
@@ -594,7 +612,7 @@ class HdcService:
         self._log_hdc(f"{label} rport succeeded: phone tcp:{phone_port} -> PC tcp:{pc_port}")
         return True, message
 
-    def cleanup_ports(self) -> None:
+    def cleanup_ports(self, target: str | None = None) -> None:
         cleanup_specs = [
             (
                 self._llm_rport_target,
@@ -609,33 +627,11 @@ class HdcService:
                 "PC Server",
             ),
         ]
-        for target, phone_port, pc_port, label in cleanup_specs:
-            if not target or not pc_port:
+        for known_target, phone_port, pc_port, label in cleanup_specs:
+            cleanup_target = (target or known_target).strip()
+            if not cleanup_target or not pc_port:
                 continue
-            hdc_path = self._hdc_path()
-            if not hdc_path:
-                continue
-            cleaned = False
-            last_error = ""
-            for command in ("fport", "rport"):
-                args = [
-                    hdc_path,
-                    "-t",
-                    target,
-                    command,
-                    "rm",
-                    f"tcp:{phone_port}",
-                    f"tcp:{pc_port}",
-                ]
-                result = self._run(args, timeout=5)
-                if result is None:
-                    last_error = "timed out"
-                    continue
-                if result.returncode == 0:
-                    cleaned = True
-                    self._log_hdc(f"{label} {command} cleaned up: phone tcp:{phone_port} -> PC tcp:{pc_port}")
-                    continue
-                last_error = result.stderr.strip() or result.stdout.strip() or "cleanup failed"
+            cleaned, last_error = self._cleanup_port_mapping(cleanup_target, phone_port, pc_port, label)
             if not cleaned and last_error:
                 self._log_hdc(
                     f"{label} port cleanup failed: phone tcp:{phone_port} -> PC tcp:{pc_port}: {last_error}"
@@ -646,6 +642,39 @@ class HdcService:
         self._pc_server_rport_target = ""
         self._llm_rport_pc_port = 0
         self._pc_server_rport_pc_port = 0
+
+    def _cleanup_port_mapping(
+        self,
+        target: str,
+        phone_port: int,
+        pc_port: int,
+        label: str,
+    ) -> tuple[bool, str]:
+        hdc_path = self._hdc_path()
+        if not hdc_path:
+            return False, ""
+        cleaned = False
+        last_error = ""
+        for command in ("fport", "rport"):
+            args = [
+                hdc_path,
+                "-t",
+                target,
+                command,
+                "rm",
+                f"tcp:{phone_port}",
+                f"tcp:{pc_port}",
+            ]
+            result = self._run(args, timeout=5)
+            if result is None:
+                last_error = "timed out"
+                continue
+            if result.returncode == 0:
+                cleaned = True
+                self._log_hdc(f"{label} {command} cleaned up: phone tcp:{phone_port} -> PC tcp:{pc_port}")
+                continue
+            last_error = result.stderr.strip() or result.stdout.strip() or "cleanup failed"
+        return cleaned, last_error
 
     def _normalize_port(self, port: int | None) -> int:
         if port is None:

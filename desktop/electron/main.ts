@@ -311,6 +311,7 @@ async function createWindow(): Promise<void> {
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
+      additionalArguments: [`--pc-server-backend-base-url=${backendBaseUrl()}`],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false

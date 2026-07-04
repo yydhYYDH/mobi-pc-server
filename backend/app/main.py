@@ -33,11 +33,29 @@ app.include_router(logs.router, prefix="/api/logs", tags=["logs"])
 
 
 @app.post("/api/shutdown")
-def shutdown() -> dict[str, str]:
+def shutdown() -> dict[str, object]:
     log_service.append(BACKEND_SERVER_LOG, ">> [Backend] shutdown requested")
-    runtime_service.stop()
-    devices.service.cleanup_ports()
-    return {"status": "ok"}
+    steps: dict[str, str] = {}
+    errors: dict[str, str] = {}
+
+    try:
+        runtime_service.stop()
+        steps["runtime"] = "ok"
+    except Exception as exc:
+        steps["runtime"] = "error"
+        errors["runtime"] = str(exc)
+        log_service.append(BACKEND_SERVER_LOG, f">> [Backend] runtime shutdown failed: {exc}")
+
+    try:
+        devices.service.shutdown()
+        steps["hdc"] = "ok"
+    except Exception as exc:
+        steps["hdc"] = "error"
+        errors["hdc"] = str(exc)
+        log_service.append(BACKEND_SERVER_LOG, f">> [Backend] HDC shutdown failed: {exc}")
+
+    status = "ok" if not errors else "partial"
+    return {"status": status, "steps": steps, "errors": errors}
 
 
 @app.middleware("http")
