@@ -1,4 +1,4 @@
-import type { BackendId, CatalogModel, DownloadStatus, MnnStatus, ServerBusy } from "../api/types";
+import type { BackendId, CatalogModel, DownloadStatus, MnnStatus, ModelBusy, ServerBusy } from "../api/types";
 import { ActionButton, PanelTitle, StatusPill } from "../components";
 import { serverOwnerLabel, statusLabel } from "../domain/runtime";
 
@@ -9,7 +9,7 @@ export function ServerView(props: {
   isDownloaded: (modelId: string) => boolean;
   isDownloading: (modelId: string) => boolean;
   loadModel: (modelId: string) => Promise<void>;
-  modelBusy: string | null;
+  modelBusy: ModelBusy;
   mnn: MnnStatus | null;
   onStartMnn: () => Promise<void>;
   onStopMnn: () => Promise<void>;
@@ -100,7 +100,7 @@ export function ServerView(props: {
         </dl>
         <div className="actions">
           <ActionButton
-            busy={Boolean(selectedModel && props.modelBusy === selectedModel.id)}
+            busy={Boolean(selectedModel && props.modelBusy?.modelId === selectedModel.id && props.modelBusy.action === "load")}
             busyText="加载中..."
             disabled={!canLoadSelected}
             onClick={() => selectedModel && void props.loadModel(selectedModel.id)}

@@ -90,6 +90,8 @@ export type ExampleImageDetail = ExampleImage & {
 
 export type ServerBusy = "start" | "stop" | null;
 export type DeviceBusy = "auto" | "connect" | "disconnect" | null;
+export type ModelBusyAction = "download" | "pause" | "delete" | "load";
+export type ModelBusy = { modelId: string; action: ModelBusyAction } | null;
 
 declare global {
   interface Window {

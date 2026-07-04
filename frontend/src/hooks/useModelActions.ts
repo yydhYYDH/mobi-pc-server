@@ -1,7 +1,7 @@
 import React from "react";
 
 import { deleteModelById, downloadModelById, pauseModelDownloadById } from "../api/models";
-import type { CatalogModel, MnnStatus } from "../api/types";
+import type { CatalogModel, MnnStatus, ModelBusyAction } from "../api/types";
 
 export function useModelActions(params: {
   load: () => Promise<void>;
@@ -10,10 +10,17 @@ export function useModelActions(params: {
   setError: (error: string | null) => void;
 }) {
   const { load, mnn, models, setError } = params;
-  const [modelBusy, setModelBusy] = React.useState<string | null>(null);
+  const [modelBusy, setModelBusyState] = React.useState<{
+    modelId: string;
+    action: ModelBusyAction;
+  } | null>(null);
+
+  function setModelBusy(modelId: string | null, action: ModelBusyAction = "load") {
+    setModelBusyState(modelId ? { modelId, action } : null);
+  }
 
   async function downloadModel(modelId: string) {
-    setModelBusy(modelId);
+    setModelBusy(modelId, "download");
     try {
       await downloadModelById(modelId);
       await load();
@@ -33,7 +40,7 @@ export function useModelActions(params: {
     if (!window.confirm(`确认删除本地模型 ${targetModel?.name ?? modelId}？`)) {
       return;
     }
-    setModelBusy(modelId);
+    setModelBusy(modelId, "delete");
     try {
       await deleteModelById(modelId);
       await load();
@@ -45,7 +52,7 @@ export function useModelActions(params: {
   }
 
   async function pauseDownload(modelId: string) {
-    setModelBusy(modelId);
+    setModelBusy(modelId, "pause");
     try {
       await pauseModelDownloadById(modelId);
       await load();

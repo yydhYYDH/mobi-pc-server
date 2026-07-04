@@ -1,4 +1,4 @@
-import type { BackendId, CatalogModel, DownloadStatus, ServerBusy } from "../api/types";
+import type { BackendId, CatalogModel, DownloadStatus, ModelBusy, ServerBusy } from "../api/types";
 import { ActionButton, CountPill, DataState, PanelTitle, ProgressBar, StatusPill } from "../components";
 import { backendLabel, backendSupportsRuntime, statusLabel } from "../domain/runtime";
 
@@ -11,7 +11,7 @@ export function ModelsView(props: {
   isDownloaded: (modelId: string) => boolean;
   isDownloading: (modelId: string) => boolean;
   loadModel: (modelId: string) => Promise<void>;
-  modelBusy: string | null;
+  modelBusy: ModelBusy;
   models: CatalogModel[];
   pauseDownload: (modelId: string) => Promise<void>;
   selectedBackend: BackendId;
@@ -34,7 +34,11 @@ export function ModelsView(props: {
           const status = props.downloadStatus(model.id);
           const downloaded = props.isDownloaded(model.id);
           const downloading = props.isDownloading(model.id);
-          const busy = props.modelBusy === model.id;
+          const busy = props.modelBusy?.modelId === model.id;
+          const downloadBusy = busy && props.modelBusy?.action === "download";
+          const pauseBusy = busy && props.modelBusy?.action === "pause";
+          const deleteBusy = busy && props.modelBusy?.action === "delete";
+          const loadBusy = busy && props.modelBusy?.action === "load";
           const anyBusy = props.modelBusy !== null || props.serverBusy !== null;
           const backendMatches = backendSupportsRuntime(props.selectedBackend, model.runtime);
           const runtimeActive = props.serverState === "running" || props.serverState === "starting";
@@ -60,20 +64,20 @@ export function ModelsView(props: {
               </div>
               <div className="row-actions">
                 {downloading ? (
-                  <ActionButton busy={busy} busyText="暂停中..." disabled={props.serverBusy !== null} onClick={() => void props.pauseDownload(model.id)}>
+                  <ActionButton busy={pauseBusy} busyText="暂停中..." disabled={props.serverBusy !== null || downloadBusy} onClick={() => void props.pauseDownload(model.id)}>
                     暂停
                   </ActionButton>
                 ) : !downloaded ? (
-                  <ActionButton busy={busy && !downloaded} disabled={anyBusy} onClick={() => void props.downloadModel(model.id)}>
+                  <ActionButton busy={downloadBusy} disabled={anyBusy} onClick={() => void props.downloadModel(model.id)}>
                     {state === "paused" ? "继续" : "下载"}
                   </ActionButton>
                 ) : null}
                 {downloaded ? (
                   <>
-                    <ActionButton busy={busy} busyText="加载中..." disabled={!backendMatches || downloading || anyBusy || runtimeActive} onClick={() => void props.loadModel(model.id)}>
+                    <ActionButton busy={loadBusy} busyText="加载中..." disabled={!backendMatches || downloading || anyBusy || runtimeActive} onClick={() => void props.loadModel(model.id)}>
                       {runningThisModel ? (props.serverState === "starting" ? "加载中" : "运行中") : "加载"}
                     </ActionButton>
-                    <ActionButton busy={busy} disabled={downloading || anyBusy || runningThisModel} onClick={() => void props.deleteModel(model.id)}>
+                    <ActionButton busy={deleteBusy} disabled={downloading || anyBusy || runningThisModel} onClick={() => void props.deleteModel(model.id)}>
                       {runningThisModel ? "运行中" : "删除"}
                     </ActionButton>
                   </>

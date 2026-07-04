@@ -1,6 +1,6 @@
 import React from "react";
 
-import type { BackendId, CatalogModel, DeviceBusy, DownloadStatus, HdcStatus, MnnStatus, ServerBusy } from "../api/types";
+import type { BackendId, CatalogModel, DeviceBusy, DownloadStatus, HdcStatus, MnnStatus, ModelBusy, ServerBusy } from "../api/types";
 import { ActionButton, ProgressBar, StatusPill } from "../components";
 import { backendLabel, statusLabel } from "../domain/runtime";
 
@@ -20,7 +20,7 @@ export function OverviewView(props: {
   hdcTarget: string;
   isDownloaded: (modelId: string) => boolean;
   isDownloading: (modelId: string) => boolean;
-  modelBusy: string | null;
+  modelBusy: ModelBusy;
   models: CatalogModel[];
   modelsCount: number;
   mnn: MnnStatus | null;
@@ -44,6 +44,10 @@ export function OverviewView(props: {
 }) {
   const [manualOpen, setManualOpen] = React.useState(false);
   const selectedModel = props.selectableModels.find((model) => model.id === props.selectedLaunchModelId);
+  const selectedBusy = selectedModel ? props.modelBusy?.modelId === selectedModel.id : false;
+  const selectedDownloadBusy = selectedBusy && props.modelBusy?.action === "download";
+  const selectedPauseBusy = selectedBusy && props.modelBusy?.action === "pause";
+  const selectedLoadBusy = selectedBusy && props.modelBusy?.action === "load";
   const selectedDownloaded = selectedModel ? props.isDownloaded(selectedModel.id) : false;
   const selectedDownloading = selectedModel ? props.isDownloading(selectedModel.id) : false;
   const selectedDownloadStatus = selectedModel ? props.downloadStatus(selectedModel.id) : undefined;
@@ -234,12 +238,12 @@ export function OverviewView(props: {
                 </ActionButton>
               ) : null}
               {selectedModel && selectedDownloading ? (
-                <ActionButton busy={props.modelBusy === selectedModel.id} busyText="暂停中..." disabled={props.serverBusy !== null} onClick={() => void props.pauseDownload(selectedModel.id)}>
+                <ActionButton busy={selectedPauseBusy} busyText="暂停中..." disabled={props.serverBusy !== null || selectedDownloadBusy} onClick={() => void props.pauseDownload(selectedModel.id)}>
                   暂停下载
                 </ActionButton>
               ) : selectedModel && !selectedDownloaded ? (
                 <ActionButton
-                  busy={props.modelBusy === selectedModel.id}
+                  busy={selectedDownloadBusy}
                   disabled={props.modelBusy !== null || props.serverBusy !== null}
                   onClick={() => void props.downloadModel(selectedModel.id)}
                 >
@@ -248,7 +252,7 @@ export function OverviewView(props: {
               ) : null}
               {selectedModel && selectedDownloaded ? (
                 <ActionButton
-                  busy={props.modelBusy === selectedModel.id}
+                  busy={selectedLoadBusy}
                   busyText="加载中..."
                   disabled={selectedDownloading || runtimeActive || props.modelBusy !== null || props.serverBusy !== null}
                   onClick={() => void props.onLoadModel(selectedModel.id)}

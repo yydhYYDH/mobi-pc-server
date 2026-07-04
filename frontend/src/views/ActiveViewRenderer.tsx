@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 
 import type { SoftwareLogKey } from "../api/logs";
-import type { BackendId, CatalogModel, ChatImageAttachment, ChatMessage, DeviceBusy, DownloadStatus, HdcStatus, MnnStatus, ServerBusy, ViewId } from "../api/types";
+import type { BackendId, CatalogModel, ChatImageAttachment, ChatMessage, DeviceBusy, DownloadStatus, HdcStatus, MnnStatus, ModelBusy, ServerBusy, ViewId } from "../api/types";
 import { ChatView } from "./ChatView";
 import { DevicesView } from "./DevicesView";
 import { LogsView } from "./LogsView";
@@ -47,7 +47,7 @@ export function ActiveViewRenderer(props: {
   logFilter: string;
   logRef: RefObject<HTMLPreElement | null>;
   mnn: MnnStatus | null;
-  modelBusy: string | null;
+  modelBusy: ModelBusy;
   models: CatalogModel[];
   onOpenDevices: () => void;
   onOpenChat: () => void;
