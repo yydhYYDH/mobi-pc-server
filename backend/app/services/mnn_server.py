@@ -1,4 +1,6 @@
 import os
+import platform
+import signal
 import socket
 import subprocess
 import time
@@ -132,6 +134,7 @@ class MnnServerService:
     def stop(self) -> MnnStatus:
         backend = self._status.backend
         label = BACKEND_LABELS[backend]
+        port = self._status.port or BACKEND_PORTS[backend]
         if self._process and self._process.poll() is None:
             self._append_log(backend, f"Stopping managed {label} process pid={self._process.pid}.")
             self._process.terminate()
@@ -145,16 +148,23 @@ class MnnServerService:
                 self._append_log(backend, f"{label} process killed with code {self._process.returncode}.")
 
         self._process = None
-        if self._is_port_open(self._status.port or BACKEND_PORTS[backend]):
+        if self._is_port_open(port) and self._stop_known_runtime_on_port(backend, port):
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if not self._is_port_open(port):
+                    break
+                time.sleep(0.2)
+
+        if self._is_port_open(port):
             self._append_log(
                 backend,
-                f"Port {self._status.port or BACKEND_PORTS[backend]} is still open after stop; treating as external service.",
+                f"Port {port} is still open after stop; treating as external service.",
             )
             self._status = MnnStatus(
                 state="running",
                 backend=backend,
                 active_model_id=self._status.active_model_id,
-                port=self._status.port or BACKEND_PORTS[backend],
+                port=port,
                 message=f"{label} service is online, but it was not started by this backend.",
                 managed_by_backend=False,
             )
@@ -296,6 +306,142 @@ class MnnServerService:
                     )
                 return port
         return None
+
+    def _stop_known_runtime_on_port(self, backend: InferenceBackend, port: int) -> bool:
+        pids = self._pids_listening_on_port(port)
+        if not pids:
+            return False
+
+        stopped = False
+        for pid in pids:
+            if not self._is_known_runtime_process(backend, pid):
+                self._append_log(
+                    backend,
+                    f"Port {port} is owned by pid={pid}, but it does not look like a managed runtime; leaving it running.",
+                )
+                continue
+            self._append_log(backend, f"Stopping orphaned {BACKEND_LABELS[backend]} process pid={pid} on port {port}.")
+            if self._terminate_pid(pid):
+                stopped = True
+        return stopped
+
+    def _pids_listening_on_port(self, port: int) -> list[int]:
+        if platform.system() == "Windows":
+            return self._windows_pids_listening_on_port(port)
+        return self._procfs_pids_listening_on_port(port)
+
+    def _windows_pids_listening_on_port(self, port: int) -> list[int]:
+        try:
+            result = subprocess.run(
+                ["netstat", "-ano", "-p", "tcp"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+
+        pids: set[int] = set()
+        port_suffix = f":{port}"
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if len(parts) < 5 or parts[0].upper() != "TCP":
+                continue
+            local_address = parts[1]
+            state = parts[3].upper()
+            if state != "LISTENING" or not local_address.endswith(port_suffix):
+                continue
+            try:
+                pids.add(int(parts[-1]))
+            except ValueError:
+                continue
+        return sorted(pids)
+
+    def _procfs_pids_listening_on_port(self, port: int) -> list[int]:
+        proc_root = Path("/proc")
+        if not proc_root.exists():
+            return []
+
+        inodes: set[str] = set()
+        for path in (Path("/proc/net/tcp"), Path("/proc/net/tcp6")):
+            if not path.exists():
+                continue
+            try:
+                lines = path.read_text(encoding="utf-8", errors="replace").splitlines()[1:]
+            except OSError:
+                continue
+            for line in lines:
+                parts = line.split()
+                if len(parts) < 10 or parts[3] != "0A":
+                    continue
+                try:
+                    local_port = int(parts[1].rsplit(":", 1)[1], 16)
+                except (IndexError, ValueError):
+                    continue
+                if local_port == port:
+                    inodes.add(parts[9])
+
+        pids: set[int] = set()
+        if not inodes:
+            return []
+        for proc_dir in proc_root.iterdir():
+            if not proc_dir.name.isdigit():
+                continue
+            fd_dir = proc_dir / "fd"
+            try:
+                for fd in fd_dir.iterdir():
+                    try:
+                        target = os.readlink(fd)
+                    except OSError:
+                        continue
+                    if target.startswith("socket:[") and target[8:-1] in inodes:
+                        pids.add(int(proc_dir.name))
+                        break
+            except OSError:
+                continue
+        return sorted(pids)
+
+    def _is_known_runtime_process(self, backend: InferenceBackend, pid: int) -> bool:
+        command_line = self._process_command_line(pid).lower()
+        if not command_line:
+            return False
+        if backend in {"llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"}:
+            return "llama-server" in command_line or "llama.cpp" in command_line or "llama-cpp" in command_line
+        if backend == "mobiinfer":
+            return "mobiinfer" in command_line or "mnncli" in command_line
+        return "mnncli" in command_line
+
+    def _process_command_line(self, pid: int) -> str:
+        if platform.system() == "Windows":
+            command = (
+                f"Get-CimInstance Win32_Process -Filter 'ProcessId = {pid}' "
+                "| Select-Object -ExpandProperty CommandLine"
+            )
+            try:
+                result = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", command],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                return ""
+            return result.stdout.strip()
+
+        cmdline = Path("/proc") / str(pid) / "cmdline"
+        try:
+            return cmdline.read_bytes().replace(b"\x00", b" ").decode("utf-8", errors="replace").strip()
+        except OSError:
+            return ""
+
+    def _terminate_pid(self, pid: int) -> bool:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            return False
+        return True
 
     def _wait_until_runtime_ready(self, backend: InferenceBackend, port: int) -> bool:
         deadline = time.monotonic() + float(os.environ.get("LLM_STARTUP_READY_TIMEOUT", "90"))
