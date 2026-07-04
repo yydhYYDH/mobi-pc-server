@@ -69,10 +69,15 @@ class HdcService:
         self._origin_http_server: ThreadingHTTPServer | None = None
 
     def status(self) -> HdcStatus:
-        self._ensure_active()
         hdc_path = self._hdc_path()
         if not hdc_path:
             return self._status_response(available=False, message="hdc was not found on PATH.")
+        if self._shutdown_event.is_set():
+            return self._status_response(
+                available=True,
+                path=hdc_path,
+                message="HDC service is shut down. Connect a device to start it again.",
+            )
         self._ensure_origin_hdc_server()
         self._ensure_connection_monitor()
 
