@@ -21,7 +21,7 @@ $MnnCliDir = Join-Path $MobiInferDir "apps\mnncli"
 $MnnCliBuildDir = Join-Path $MnnCliDir "build_mnncli_win"
 
 if (-not $InstallDir) {
-  $InstallDir = Join-Path $RootDir "desktop\resources\mnn"
+  $InstallDir = Join-Path $RootDir "desktop\resources\mobiinfer"
 }
 
 if (-not $OpenSslRoot -and $env:OPENSSL_ROOT_DIR) {

@@ -172,20 +172,20 @@ cd E:\WAIC\pc_server
 并把产物复制到：
 
 ```text
-desktop/resources/mnn/
+desktop/resources/mobiinfer/
 ```
 
 至少需要：
 
 ```text
-desktop/resources/mnn/
+desktop/resources/mobiinfer/
   mnncli.exe
 ```
 
 如果构建生成了 DLL，脚本也会一起复制：
 
 ```text
-desktop/resources/mnn/
+desktop/resources/mobiinfer/
   MNN.dll
   *.dll
 ```
@@ -196,7 +196,7 @@ desktop/resources/mnn/
 .\scripts\windows\build-mobiinfer.ps1 -Clean
 .\scripts\windows\build-mobiinfer.ps1 -SkipSmokeTest
 .\scripts\windows\build-mobiinfer.ps1 -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
-.\scripts\windows\build-mobiinfer.ps1 -InstallDir E:\WAIC\pc_server\desktop\resources\mnn
+.\scripts\windows\build-mobiinfer.ps1 -InstallDir E:\WAIC\pc_server\desktop\resources\mobiinfer
 ```
 
 如果脚本失败，通常是缺少 MSVC、CMake、Ninja 或 OpenSSL。可以先检查：
