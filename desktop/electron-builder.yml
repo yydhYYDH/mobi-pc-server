@@ -9,27 +9,27 @@ files:
 asar: true
 afterPack: scripts/after-pack.js
 extraResources:
-  - from: resources/frontend
+  - from: ${env.PC_SERVER_DESKTOP_RESOURCES}/frontend
     to: frontend
-  - from: resources/configs
+  - from: ${env.PC_SERVER_DESKTOP_RESOURCES}/configs
     to: configs
-  - from: resources/example-images
+  - from: ${env.PC_SERVER_DESKTOP_RESOURCES}/example-images
     to: example-images
-  - from: resources/backend
+  - from: ${env.PC_SERVER_DESKTOP_RESOURCES}/backend
     to: backend
-  - from: resources/mnn
+  - from: ${env.PC_SERVER_DESKTOP_RESOURCES}/mnn
     to: mnn
     filter:
       - "**/*"
-  - from: resources/mobiinfer
+  - from: ${env.PC_SERVER_DESKTOP_RESOURCES}/mobiinfer
     to: mobiinfer
     filter:
       - "**/*"
-  - from: resources/llama-cpp
+  - from: ${env.PC_SERVER_DESKTOP_RESOURCES}/llama-cpp
     to: llama-cpp
     filter:
       - "**/*"
-  - from: resources/hdc
+  - from: ${env.PC_SERVER_DESKTOP_RESOURCES}/hdc
     to: hdc
     filter:
       - "**/*"

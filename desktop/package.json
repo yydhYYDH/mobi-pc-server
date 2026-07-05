@@ -10,9 +10,9 @@
     "build": "npm run check-node && tsc -p tsconfig.json",
     "dev": "npm run check-node && tsc -p tsconfig.json && electron .",
     "prepare:resources": "npm run check-node && node scripts/prepare-resources.js",
-    "package": "npm run build && npm run prepare:resources && electron-builder --dir",
-    "dist:linux": "npm run build && npm run prepare:resources && electron-builder --linux",
-    "dist:win": "npm run build && npm run prepare:resources && electron-builder --win",
+    "package": "node scripts/package-desktop.js --dir",
+    "dist:linux": "node scripts/package-desktop.js --linux",
+    "dist:win": "node scripts/package-desktop.js --win",
     "start": "electron ."
   },
   "engines": {

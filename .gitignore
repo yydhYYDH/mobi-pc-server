@@ -1,5 +1,6 @@
 # Python
 .venv*/
+.venv-win/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -17,19 +18,10 @@ desktop/node_modules/
 desktop/tsconfig.tsbuildinfo
 desktop/release/
 desktop/out/
-desktop/resources/frontend/*
-!desktop/resources/frontend/.gitkeep
-desktop/resources/backend/*
-!desktop/resources/backend/.gitkeep
-desktop/resources/configs/*
-desktop/resources/example-images/*
-desktop/resources/mnn/*
-!desktop/resources/mnn/.gitkeep
-desktop/resources/llama-cpp/*
-desktop/resources/mobiinfer/*
-!desktop/resources/mobiinfer/.gitkeep
-desktop/resources/hdc/*
-!desktop/resources/hdc/.gitkeep
+desktop/resources/
+desktop/resources-win/
+desktop/resources-linux/
+.electron-builder-cache/
 
 # Runtime data
 models/*

@@ -31,9 +31,9 @@ if (-not $BuildDir) {
 
 if (-not $InstallDir) {
   if ($Mode -eq "cuda") {
-    $InstallDir = Join-Path $RootDir "desktop\resources\llama-cpp\cuda"
+    $InstallDir = Join-Path $RootDir "desktop\resources-win\llama-cpp\cuda"
   } else {
-    $InstallDir = Join-Path $RootDir "desktop\resources\llama-cpp\cpu"
+    $InstallDir = Join-Path $RootDir "desktop\resources-win\llama-cpp\cpu"
   }
 }
 

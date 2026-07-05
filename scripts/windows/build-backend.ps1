@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = Resolve-Path "$PSScriptRoot\..\.."
 $BackendDir = Join-Path $RootDir "backend"
-$DesktopBackendDir = Join-Path $RootDir "desktop\resources\backend"
+$DesktopBackendDir = Join-Path $RootDir "desktop\resources-win\backend"
 $PythonBin = $env:PC_SERVER_PYTHON
 
 if (-not $PythonBin) {

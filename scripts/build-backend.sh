@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
-DESKTOP_BACKEND_DIR="$ROOT_DIR/desktop/resources/backend"
+DESKTOP_BACKEND_DIR="$ROOT_DIR/desktop/resources-linux/backend"
 PYTHON_BIN="${PC_SERVER_PYTHON:-$BACKEND_DIR/.venv/bin/python}"
 
 if [ ! -x "$PYTHON_BIN" ]; then

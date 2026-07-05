@@ -53,15 +53,15 @@ class LlamaCppServerAdapter:
         if platform.system() == "Windows":
             return [
                 ("cuda", RESOURCES_DIR / "llama-cpp/cuda/llama-server.exe"),
-                ("cuda", REPO_ROOT / "desktop/resources/llama-cpp/cuda/llama-server.exe"),
+                ("cuda", REPO_ROOT / "desktop/resources-win/llama-cpp/cuda/llama-server.exe"),
                 ("cuda", REPO_ROOT / "3rdparty/llama.cpp/build-cuda-windows/bin/llama-server.exe"),
                 ("cpu", RESOURCES_DIR / "llama-cpp/cpu/llama-server.exe"),
-                ("cpu", REPO_ROOT / "desktop/resources/llama-cpp/cpu/llama-server.exe"),
+                ("cpu", REPO_ROOT / "desktop/resources-win/llama-cpp/cpu/llama-server.exe"),
                 ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-windows/bin/llama-server.exe"),
                 ("auto", RESOURCES_DIR / "llama-cpp/llama-server.exe"),
                 ("auto", RESOURCES_DIR / "mnn/llama-server.exe"),
-                ("auto", REPO_ROOT / "desktop/resources/llama-cpp/llama-server.exe"),
-                ("auto", REPO_ROOT / "desktop/resources/mnn/llama-server.exe"),
+                ("auto", REPO_ROOT / "desktop/resources-win/llama-cpp/llama-server.exe"),
+                ("auto", REPO_ROOT / "desktop/resources-win/mnn/llama-server.exe"),
                 ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server.exe"),
                 ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/server.exe"),
                 ("auto", REPO_ROOT / "3rdparty/llama.cpp/llama-server.exe"),
@@ -69,15 +69,15 @@ class LlamaCppServerAdapter:
 
         return [
             ("cuda", RESOURCES_DIR / "llama-cpp/cuda/llama-server"),
-            ("cuda", REPO_ROOT / "desktop/resources/llama-cpp/cuda/llama-server"),
+            ("cuda", REPO_ROOT / "desktop/resources-linux/llama-cpp/cuda/llama-server"),
             ("cuda", REPO_ROOT / "3rdparty/llama.cpp/build-cuda-native/bin/llama-server"),
             ("cpu", RESOURCES_DIR / "llama-cpp/cpu/llama-server"),
-            ("cpu", REPO_ROOT / "desktop/resources/llama-cpp/cpu/llama-server"),
+            ("cpu", REPO_ROOT / "desktop/resources-linux/llama-cpp/cpu/llama-server"),
             ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-cpu-native/bin/llama-server"),
             ("auto", RESOURCES_DIR / "llama-cpp/llama-server"),
             ("auto", RESOURCES_DIR / "mnn/llama-server"),
-            ("auto", REPO_ROOT / "desktop/resources/llama-cpp/llama-server"),
-            ("auto", REPO_ROOT / "desktop/resources/mnn/llama-server"),
+            ("auto", REPO_ROOT / "desktop/resources-linux/llama-cpp/llama-server"),
+            ("auto", REPO_ROOT / "desktop/resources-linux/mnn/llama-server"),
             ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server"),
             ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/server"),
             ("auto", REPO_ROOT / "3rdparty/llama.cpp/llama-server"),
@@ -161,5 +161,5 @@ class LlamaCppServerAdapter:
         return (
             "llama.cpp server binary was not found. Set LLAMA_SERVER_BIN or build "
             "3rdparty/llama.cpp with the llama-server target. For CPU fallback, "
-            "package a CPU build under resources/llama-cpp/cpu."
+            "package a CPU build under the platform resources/llama-cpp/cpu directory."
         )

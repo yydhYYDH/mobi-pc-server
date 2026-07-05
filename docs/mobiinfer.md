@@ -54,8 +54,8 @@ The backend checks these paths in order:
 3rdparty/mobiinfer/apps/mnncli/build/mnncli.exe
 3rdparty/mobiinfer/build/apps/mnncli/mnncli
 3rdparty/mobiinfer/build/apps/mnncli/mnncli.exe
-desktop/resources/mobiinfer/mnncli
-desktop/resources/mobiinfer/mnncli.exe
+desktop/resources-linux/mobiinfer/mnncli
+desktop/resources-win/mobiinfer/mnncli.exe
 ```
 
 If your local build output is elsewhere, set:

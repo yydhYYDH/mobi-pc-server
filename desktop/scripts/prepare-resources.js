@@ -7,7 +7,9 @@ const repoRoot = path.resolve(desktopRoot, "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const configsRoot = path.join(repoRoot, "configs");
 const exampleImagesRoot = path.join(repoRoot, "test", "data", "example", "pics");
-const resourcesRoot = path.join(desktopRoot, "resources");
+const targetPlatform = process.env.PC_SERVER_DESKTOP_TARGET_PLATFORM || process.platform;
+const defaultResourcesDir = targetPlatform === "win32" ? "resources-win" : "resources-linux";
+const resourcesRoot = path.resolve(desktopRoot, process.env.PC_SERVER_DESKTOP_RESOURCES || defaultResourcesDir);
 const frontendDist = path.join(frontendRoot, "dist");
 const packagedFrontend = path.join(resourcesRoot, "frontend");
 const packagedBackend = path.join(resourcesRoot, "backend");
@@ -41,11 +43,11 @@ function npmCommand() {
 }
 
 function expectedBackendName() {
-  return process.platform === "win32" ? "pc-server-backend.exe" : "pc-server-backend";
+  return targetPlatform === "win32" ? "pc-server-backend.exe" : "pc-server-backend";
 }
 
 function expectedExecutableName(baseName) {
-  return process.platform === "win32" ? `${baseName}.exe` : baseName;
+  return targetPlatform === "win32" ? `${baseName}.exe` : baseName;
 }
 
 function copyFileIfExists(source, target) {
@@ -109,6 +111,61 @@ function ensureGitkeep(directory) {
   fs.writeFileSync(path.join(directory, ".gitkeep"), "");
 }
 
+function removeLinuxRuntimeFiles(directory) {
+  if (!fs.existsSync(directory)) {
+    return;
+  }
+
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      removeLinuxRuntimeFiles(entryPath);
+      continue;
+    }
+
+    if (!entry.isFile() && !entry.isSymbolicLink()) {
+      continue;
+    }
+
+    const extension = path.extname(entry.name);
+    const isLinuxSharedObject = entry.name.includes(".so");
+    const isLinuxExecutable = !extension && entry.name !== ".gitkeep";
+    if (isLinuxSharedObject || isLinuxExecutable) {
+      fs.rmSync(entryPath, { force: true });
+    }
+  }
+}
+
+function cleanPlatformRuntimeResources() {
+  if (targetPlatform !== "win32") {
+    return;
+  }
+
+  for (const directory of [
+    packagedBackend,
+    path.join(resourcesRoot, "mnn"),
+    path.join(resourcesRoot, "mobiinfer"),
+    path.join(resourcesRoot, "llama-cpp"),
+    path.join(resourcesRoot, "hdc")
+  ]) {
+    removeLinuxRuntimeFiles(directory);
+  }
+}
+
+function seedBackendExecutable() {
+  const backendName = expectedBackendName();
+  const sourceCandidates = [
+    path.join(repoRoot, "backend", "dist", backendName)
+  ];
+  const target = path.join(packagedBackend, backendName);
+
+  for (const source of sourceCandidates) {
+    if (copyFileIfExists(source, target)) {
+      return;
+    }
+  }
+}
+
 function prepareLinuxRuntimeResources() {
   const mnnDir = path.join(resourcesRoot, "mnn");
   const mobiinferDir = path.join(resourcesRoot, "mobiinfer");
@@ -163,16 +220,20 @@ fs.mkdirSync(path.join(resourcesRoot, "llama-cpp", "cpu"), { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "llama-cpp", "cuda"), { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "hdc"), { recursive: true });
 
-if (process.platform === "linux") {
+seedBackendExecutable();
+
+if (targetPlatform === "linux") {
   prepareLinuxRuntimeResources();
 }
+
+cleanPlatformRuntimeResources();
 
 const backendExecutable = path.join(packagedBackend, expectedBackendName());
 if (!fs.existsSync(backendExecutable)) {
   const message =
     `Backend executable not found: ${backendExecutable}\n` +
     "Build it first with scripts/build-backend.sh on Linux or scripts/windows/build-backend.ps1 on Windows.";
-  if (process.platform === "win32") {
+  if (targetPlatform === "win32") {
     throw new Error(message);
   }
   console.warn(message);
@@ -182,7 +243,7 @@ const mnnExecutable = path.join(resourcesRoot, "mnn", expectedExecutableName("mn
 if (!fs.existsSync(mnnExecutable)) {
   const message =
     `MNN executable not found: ${mnnExecutable}\n` +
-    "Build MNN mnncli and copy it to desktop/resources/mnn before packaging.";
+    `Build MNN mnncli and copy it to ${path.relative(desktopRoot, path.join(resourcesRoot, "mnn"))} before packaging.`;
   console.warn(message);
 }
 
@@ -190,7 +251,7 @@ const mobiinferExecutable = path.join(resourcesRoot, "mobiinfer", expectedExecut
 if (!fs.existsSync(mobiinferExecutable)) {
   const message =
     `MobiInfer executable not found: ${mobiinferExecutable}\n` +
-    "Build MobiInfer mnncli and copy it to desktop/resources/mobiinfer before packaging.";
+    `Build MobiInfer mnncli and copy it to ${path.relative(desktopRoot, path.join(resourcesRoot, "mobiinfer"))} before packaging.`;
   console.warn(message);
 }
 
@@ -205,10 +266,14 @@ if (!fs.existsSync(hdcExecutable)) {
 const llamaCppCpuExecutable = path.join(resourcesRoot, "llama-cpp", "cpu", expectedExecutableName("llama-server"));
 const llamaCppCudaExecutable = path.join(resourcesRoot, "llama-cpp", "cuda", expectedExecutableName("llama-server"));
 const legacyLlamaCppExecutable = path.join(resourcesRoot, "llama-cpp", expectedExecutableName("llama-server"));
-if (!fs.existsSync(llamaCppCpuExecutable) && !fs.existsSync(legacyLlamaCppExecutable)) {
+if (
+  !fs.existsSync(llamaCppCpuExecutable) &&
+  !fs.existsSync(llamaCppCudaExecutable) &&
+  !fs.existsSync(legacyLlamaCppExecutable)
+) {
   console.warn(
-    `CPU llama.cpp server executable not found: ${llamaCppCpuExecutable}\n` +
-      "Build it with scripts/windows/build-llama-cpp.ps1 -Mode cpu if you want CPU fallback."
+    `llama.cpp server executable not found under ${path.join(resourcesRoot, "llama-cpp")}\n` +
+      "Build it with scripts/windows/build-llama-cpp.ps1 -Mode cuda or -Mode cpu."
   );
 }
 if (!fs.existsSync(llamaCppCudaExecutable)) {

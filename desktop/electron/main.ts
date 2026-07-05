@@ -171,7 +171,10 @@ function startBackend(): void {
 }
 
 function childEnv(): NodeJS.ProcessEnv {
-  const resourcesPath = app.isPackaged ? process.resourcesPath : path.join(repoRoot(), "desktop", "resources");
+  const devResourcesPath = process.env.PC_SERVER_DESKTOP_RESOURCES
+    ? path.resolve(repoRoot(), "desktop", process.env.PC_SERVER_DESKTOP_RESOURCES)
+    : path.join(repoRoot(), "desktop", process.platform === "win32" ? "resources-win" : "resources-linux");
+  const resourcesPath = app.isPackaged ? process.resourcesPath : devResourcesPath;
   const dataRoot = app.isPackaged ? appDataRoot() : repoRoot();
   const hdcDir = path.join(resourcesPath, "hdc");
   const pathValue = [hdcDir, process.env.PATH ?? ""].filter(Boolean).join(path.delimiter);
