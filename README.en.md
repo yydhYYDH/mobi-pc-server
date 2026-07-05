@@ -1,13 +1,13 @@
 # 数据归家
 
-PC-side control application for running an MNN server, downloading models from ModelScope, and connecting to HarmonyOS phones through `hdc`.
+PC-side control application for running local inference services, downloading models from ModelScope, and connecting to HarmonyOS phones through `hdc`.
 
 ## Stack
 
 - Frontend: React + Vite + TypeScript
 - Backend: FastAPI
 - Desktop shell: Electron
-- Native runtime: MNN under `3rdparty/MNN`, MobiInfer under `3rdparty/mobiinfer`, llama.cpp under `3rdparty/llama.cpp`
+- Native runtime: MobiInfer under `3rdparty/mobiinfer`, llama.cpp under `3rdparty/llama.cpp`
 - Model source: ModelScope
 - Device bridge: HarmonyOS `hdc`
 
@@ -20,7 +20,6 @@ desktop/         Electron shell for desktop launch
 configs/         Model catalog and static config
 models/          Downloaded model files, ignored by Git
 logs/            Runtime logs, ignored by Git
-3rdparty/MNN     MNN upstream source as a Git submodule
 3rdparty/mobiinfer  MobiInfer upstream source as a Git submodule
 3rdparty/llama.cpp  llama.cpp upstream source as a Git submodule
 docs/            Project documentation
@@ -97,33 +96,19 @@ See the dedicated packaging docs:
 - Windows: `docs/packaging-windows.md`
 - Linux/WSL: `docs/packaging-linux.md`
 
-## MNN
+## Runtime Backends
 
-MNN should be added as:
+The current selectable runtime backends are:
 
-```bash
-git submodule add https://github.com/alibaba/MNN.git 3rdparty/MNN
-```
+- llama.cpp CUDA
+- llama.cpp CPU
+- MobiInfer
 
-Build instructions and local binary configuration should be documented in `docs/mnn.md`.
-
-After the submodule is present, try:
-
-```bash
-./scripts/build-mnncli.sh
-```
-
-This runs MNN's two-stage `apps/mnncli/build.sh` flow: first building the static MNN library, then building `mnncli`. The expected binary is:
-
-```text
-3rdparty/MNN/apps/mnncli/build_mnncli/mnncli
-```
-
-If the binary is built elsewhere, set `MNNCLI_BIN=/absolute/path/to/mnncli` before starting the backend.
+MNN is no longer exposed as a standalone selectable backend. Catalog entries with `runtime: "mnn"` still mean an MNN-compatible model format; those models are loaded through the MobiInfer backend. Historical MNN build and patch notes remain in `docs/mnn.md` as archive and experiment references.
 
 ## MobiInfer
 
-MobiInfer is currently integrated as an MNN-compatible fork without removing the original MNN flow.
+MobiInfer is integrated as an MNN-compatible fork for loading MNN-compatible model configs.
 
 The repository currently pins the `3rdparty/mobiinfer` submodule to:
 
@@ -142,7 +127,7 @@ git -C 3rdparty/mobiinfer checkout --detach 798dbf4deddbb592bdf3ba07938fb31406d1
 To initialize all third-party runtimes in one step:
 
 ```bash
-git submodule update --init 3rdparty/MNN 3rdparty/mobiinfer 3rdparty/llama.cpp
+git submodule update --init 3rdparty/mobiinfer 3rdparty/llama.cpp
 ```
 
 After the submodule is present, try:
@@ -178,6 +163,8 @@ git submodule update --init 3rdparty/llama.cpp
 git -C 3rdparty/llama.cpp fetch --depth 1 origin 6eab47181cbd3532c88a105682b81b4729ab809b
 git -C 3rdparty/llama.cpp checkout --detach 6eab47181cbd3532c88a105682b81b4729ab809b
 ```
+
+The frontend defaults to the generic llama.cpp fallback backend. The header and runtime service page can switch between llama.cpp CUDA, llama.cpp CPU, and MobiInfer; CUDA/CPU options are shown only when the backend detects the corresponding binaries.
 
 ## Models
 

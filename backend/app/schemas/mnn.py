@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 MnnState = Literal["stopped", "starting", "running", "stopping", "error"]
-InferenceBackend = Literal["mnn", "mobiinfer", "llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"]
+InferenceBackend = Literal["mobiinfer", "llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"]
 
 
 class MnnStatus(BaseModel):

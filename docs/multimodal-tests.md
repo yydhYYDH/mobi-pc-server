@@ -2,9 +2,9 @@
 
 These scripts send one image plus one text prompt through the local backend.
 
-## MNN
+## MobiInfer
 
-PC `mnncli_server` currently accepts `messages[].content` as a string. For image input, use MNN's inline local image marker:
+MobiInfer uses the MNN-compatible `mnncli serve` entrypoint. For image input, use the inline local image marker:
 
 ```text
 <img>/absolute/path/to/image.jpg</img>请描述这张图片。
@@ -14,13 +14,14 @@ Run:
 
 ```bash
 python scripts/test_mnn_multimodal.py /absolute/path/to/image.jpg \
-  --model MNN/Qwen3.5-0.8B-MNN
+  --model mnn-mobi-visual \
+  --backend mobiinfer
 ```
 
 The script calls:
 
 ```text
-POST /api/mnn/load-model
+POST /api/mobiinfer/load-model
 POST /api/runtime/chat/completions
 ```
 
@@ -30,7 +31,7 @@ Equivalent request shape:
 curl -sS http://127.0.0.1:8000/api/runtime/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "MNN/Qwen3.5-0.8B-MNN",
+    "model": "mnn-mobi-visual",
     "messages": [
       {
         "role": "user",

@@ -11,7 +11,6 @@ Measured on 2026-07-01 against the local backend at `127.0.0.1:18188` after a ba
 | Local model status | `GET /api/models/local` | 181.7 ms | 264.1 ms | Acceptable, but avoid very high-frequency polling. |
 | Model download status | `GET /api/models/downloads` | 1287.2 ms | 1526.3 ms | Slow. Should be event-driven or cached. |
 | MobiInfer runtime status | `GET /api/mobiinfer/status` | 11.3 ms | 54.8 ms | Fast. Suitable for UI refresh. |
-| MNN runtime status | `GET /api/mnn/status` | 9.2 ms | 13.3 ms | Fast. |
 | llama.cpp runtime status | `GET /api/llama-cpp/status` | 7.6 ms | 33.3 ms | Fast. |
 | HDC device status | `GET /api/devices/hdc` | 1382.2 ms | 1825.1 ms | Old behavior. Before caching, each request called `hdc list targets`. |
 | Mobile status | `GET /status` | 15.0 ms | 23.1 ms | Fast path. Does not run slow HDC checks. |
@@ -57,5 +56,6 @@ For detailed endpoint timings, use a short local script that repeatedly requests
 - `/api/models/local`
 - `/api/models/downloads`
 - `/api/mobiinfer/status`
+- `/api/llama-cpp/status`
 - `/api/devices/hdc`
 - `/status`

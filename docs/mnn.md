@@ -1,5 +1,7 @@
 # MNN Integration
 
+This document is retained as an archive for historical MNN experiments, patches, and benchmark diagnosis. The current application no longer exposes MNN as a selectable runtime backend; MNN-compatible catalog entries are loaded through the MobiInfer backend.
+
 MNN is expected to live at `3rdparty/MNN`.
 
 The submodule is pinned by this repository to the upstream MNN baseline commit:
@@ -51,7 +53,7 @@ git -C 3rdparty/MNN apply --check ../../patches/MNN/0002-link-cuda-backend-for-l
 
 Do not commit downloaded third-party source drops such as `3rdparty/MNN/3rd_party/cutlass/` into this repository. Keep those as submodule/upstream setup steps unless a small, reviewable patch is needed.
 
-The backend is designed to launch MNN's existing `mnncli serve` command.
+The current backend no longer launches upstream MNN's `mnncli serve` command directly. The following build notes are historical and useful only for reproducing older experiments.
 
 Build the runtime with:
 
@@ -64,15 +66,11 @@ The script delegates to MNN's upstream `apps/mnncli/build.sh`, which performs th
 1. Build the static MNN library in `3rdparty/MNN/build_mnn_static`.
 2. Build `mnncli` in `3rdparty/MNN/apps/mnncli/build_mnncli`.
 
-The backend checks `3rdparty/MNN/apps/mnncli/build_mnncli/mnncli` by default. If you build the binary somewhere else, set `MNNCLI_BIN`.
-
 Expected runtime command shape:
 
 ```bash
 mnncli serve <model-id> --config <models/model-id/config.json> --host 127.0.0.1 --port 8088
 ```
-
-Set `MNNCLI_BIN=/absolute/path/to/mnncli` if the binary is not in one of the default build locations checked by `backend/app/services/mnn_server.py`.
 
 ## CUDA `llm_bench` Caveat
 

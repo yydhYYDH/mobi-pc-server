@@ -27,7 +27,7 @@ git -C 3rdparty/mobiinfer checkout --detach 798dbf4deddbb592bdf3ba07938fb31406d1
 If you want all inference runtimes locally in one step:
 
 ```bash
-git submodule update --init 3rdparty/MNN 3rdparty/mobiinfer 3rdparty/llama.cpp
+git submodule update --init 3rdparty/mobiinfer 3rdparty/llama.cpp
 ```
 
 ## Backend API
@@ -41,7 +41,7 @@ POST /api/mobiinfer/stop
 POST /api/mobiinfer/load-model
 ```
 
-The legacy `/api/mnn/*` API is still kept as-is.
+The legacy upstream MNN runtime API is no longer exposed by the backend.
 
 ## Binary Discovery
 
@@ -80,7 +80,7 @@ This simply delegates to:
 
 ## Model Runtime Tag
 
-To run a catalog model with MobiInfer from the UI, set its runtime in `configs/models.json` to:
+To run a catalog model with MobiInfer from the UI, set its runtime in `configs/models.json` to either:
 
 ```json
 {
@@ -88,4 +88,4 @@ To run a catalog model with MobiInfer from the UI, set its runtime in `configs/m
 }
 ```
 
-Existing `runtime: "mnn"` entries are unchanged and will continue to route to the old MNN backend.
+Existing `runtime: "mnn"` entries are treated as MNN-compatible model configs and are loaded through the MobiInfer backend.

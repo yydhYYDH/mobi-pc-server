@@ -1,5 +1,5 @@
 export type ViewId = "overview" | "models" | "server" | "devices" | "chat" | "logs" | "settings";
-export type BackendId = "mnn" | "mobiinfer" | "llama_cpp" | "llama_cpp_cuda" | "llama_cpp_cpu";
+export type BackendId = "mobiinfer" | "llama_cpp" | "llama_cpp_cuda" | "llama_cpp_cpu";
 
 export type MnnStatus = {
   state: string;

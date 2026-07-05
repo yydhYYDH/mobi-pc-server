@@ -1,6 +1,6 @@
 # 数据归家
 
-PC 侧控制台应用，用于启动和管理本地 MNN server、从 ModelScope 下载模型，并通过 `hdc` 连接 HarmonyOS 设备。
+PC 侧控制台应用，用于启动和管理本地推理服务、从 ModelScope 下载模型，并通过 `hdc` 连接 HarmonyOS 设备。
 
 英文版 README 保留在 [README.en.md](README.en.md)。
 
@@ -9,7 +9,7 @@ PC 侧控制台应用，用于启动和管理本地 MNN server、从 ModelScope 
 - 前端：React + Vite + TypeScript
 - 后端：FastAPI
 - 桌面壳：Electron
-- 原生运行时：`3rdparty/MNN` 下的 MNN，`3rdparty/mobiinfer` 下的 MobiInfer，`3rdparty/llama.cpp` 下的 llama.cpp
+- 原生运行时：`3rdparty/mobiinfer` 下的 MobiInfer，`3rdparty/llama.cpp` 下的 llama.cpp
 - 模型来源：ModelScope
 - 设备桥接：HarmonyOS `hdc`
 
@@ -22,7 +22,6 @@ desktop/         Electron 桌面启动壳
 configs/         模型目录和静态配置
 models/          下载后的模型文件，不提交到 Git
 logs/            运行日志，不提交到 Git
-3rdparty/MNN     作为 Git submodule 引入的 MNN 上游源码
 3rdparty/mobiinfer  作为 Git submodule 引入的 mobiinfer 上游源码
 3rdparty/llama.cpp 作为 Git submodule 引入的 llama.cpp 上游源码
 docs/            项目文档
@@ -102,55 +101,19 @@ PC_SERVER_SKIP_FRONTEND=1
 - Windows：[docs/packaging-windows.md](docs/packaging-windows.md)
 - Linux/WSL：[docs/packaging-linux.md](docs/packaging-linux.md)
 
-## MNN
+## 运行时后端
 
-MNN 作为 submodule 固定在项目记录的上游基线 commit：
+当前产品可选后端为：
 
-```text
-2106d00b967c95d35661623c52e26cab238812cf
-```
+- llama.cpp CUDA
+- llama.cpp CPU
+- MobiInfer
 
-不要用 `--depth 1` 只拉远端默认分支最新提交；远端更新后可能拿不到这个历史 commit。初始化或重置 MNN 时，显式 shallow fetch 这个 commit：
-
-```bash
-git submodule update --init 3rdparty/MNN
-git -C 3rdparty/MNN fetch --depth 1 origin 2106d00b967c95d35661623c52e26cab238812cf
-git -C 3rdparty/MNN checkout --detach 2106d00b967c95d35661623c52e26cab238812cf
-```
-
-MNN 的构建步骤和本地二进制配置应记录在 [docs/mnn.md](docs/mnn.md)。
-
-MNN 本地补丁存放在 `patches/MNN/`，用于记录本项目需要但不直接提交到上游源码的改动。初始化或重置 MNN submodule 后，按顺序应用：
-
-```bash
-git -C 3rdparty/MNN apply --check ../../patches/MNN/0001-enable-cuda-backend-for-mnncli-serve.patch
-git -C 3rdparty/MNN apply ../../patches/MNN/0001-enable-cuda-backend-for-mnncli-serve.patch
-git -C 3rdparty/MNN apply --check ../../patches/MNN/0002-link-cuda-backend-for-llm-bench.patch
-git -C 3rdparty/MNN apply ../../patches/MNN/0002-link-cuda-backend-for-llm-bench.patch
-```
-
-
-submodule 准备好后，可以尝试：
-
-```bash
-./scripts/build-mnncli.sh
-```
-
-该脚本会执行 MNN `apps/mnncli/build.sh` 的两阶段流程：先构建 MNN 静态库，再构建 `mnncli`。默认期望的二进制路径是：
-
-```text
-3rdparty/MNN/apps/mnncli/build_mnncli/mnncli
-```
-
-如果二进制在其他位置，启动后端前设置：
-
-```bash
-MNNCLI_BIN=/absolute/path/to/mnncli
-```
+MNN 不再作为独立可选后端暴露。`runtime: "mnn"` 的模型配置仍表示 MNN-compatible 模型格式，这类模型由 MobiInfer 后端加载。历史 MNN 构建和补丁说明保留在 [docs/mnn.md](docs/mnn.md)，仅作为归档和实验参考。
 
 ## MobiInfer
 
-MobiInfer 目前按 MNN-compatible fork 接入，保留独立后端选择，不影响现有 MNN 流程。
+MobiInfer 目前按 MNN-compatible fork 接入，用于加载 MNN-compatible 模型配置。
 
 MobiInfer 作为 submodule 固定在当前仓库记录的 commit：
 
@@ -169,7 +132,7 @@ git -C 3rdparty/mobiinfer checkout --detach 798dbf4deddbb592bdf3ba07938fb31406d1
 如果你是第一次完整初始化第三方依赖，也可以一次性执行：
 
 ```bash
-git submodule update --init 3rdparty/MNN 3rdparty/mobiinfer 3rdparty/llama.cpp
+git submodule update --init 3rdparty/mobiinfer 3rdparty/llama.cpp
 ```
 
 后端默认查找：
@@ -216,7 +179,7 @@ git -C 3rdparty/llama.cpp fetch --depth 1 origin 6eab47181cbd3532c88a105682b81b4
 git -C 3rdparty/llama.cpp checkout --detach 6eab47181cbd3532c88a105682b81b4729ab809b
 ```
 
-前端默认选择 MNN，可在推理服务页或页面顶部切换到 MobiInfer 或 llama.cpp。后端默认查找：
+前端默认使用 llama.cpp 兜底后端。页面顶部和推理服务页可在 llama.cpp CUDA、llama.cpp CPU、MobiInfer 之间切换；CUDA/CPU 选项会按后端探测到的二进制动态显示。后端默认查找：
 
 ```text
 3rdparty/llama.cpp/build/bin/llama-server

@@ -17,7 +17,6 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const BACKEND_LABELS: Record<BackendId, string> = {
-  mnn: "MNN",
   mobiinfer: "MobiInfer",
   llama_cpp: "llama.cpp",
   llama_cpp_cuda: "llama.cpp CUDA",
@@ -60,7 +59,7 @@ export function normalizeBackend(runtime: string | null | undefined): BackendId 
     return "mobiinfer";
   }
   if (runtime === "mnn") {
-    return "mnn";
+    return "mobiinfer";
   }
   return "llama_cpp";
 }
@@ -77,9 +76,9 @@ export function backendSupportsRuntime(backend: BackendId, runtime: string | nul
       normalizedRuntime === "llama_cpp_cpu";
   }
   if (backend === "mobiinfer") {
-    return normalizedRuntime === "mobiinfer" || normalizedRuntime === "mnn";
+    return normalizedRuntime === "mobiinfer";
   }
-  return normalizedRuntime === "mobiinfer" || normalizedRuntime === "mnn";
+  return normalizedRuntime === "mobiinfer";
 }
 
 export function modelSupportsImages(model: CatalogModel | null | undefined) {
@@ -133,5 +132,5 @@ export function defaultRuntimePort(backend: BackendId) {
   if (backend === "mobiinfer") {
     return 8089;
   }
-  return 8088;
+  return 8090;
 }

@@ -25,7 +25,7 @@ POST /api/llama-cpp/stop
 POST /api/llama-cpp/load-model
 ```
 
-The older `/api/mnn/*` API is kept for compatibility. The shared runtime manager ensures only one managed inference server process is controlled at a time.
+The shared runtime manager ensures only one managed inference server process is controlled at a time.
 
 ## CUDA Build
 

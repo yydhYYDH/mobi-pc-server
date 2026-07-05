@@ -15,7 +15,7 @@ export function runtimeApiPrefix(backend: BackendId) {
   if (backend === "mobiinfer") {
     return "/api/mobiinfer";
   }
-  return "/api/mnn";
+  return "/api/llama-cpp";
 }
 
 export function getRuntimeStatus(backend: BackendId) {

@@ -7,6 +7,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Literal
 
 from app.core.paths import LOGS_DIR, REPO_ROOT, RESOURCES_DIR
 from app.schemas.mnn import InferenceBackend, MnnStatus
@@ -15,20 +16,23 @@ from app.services.logs import LLM_SERVER_LOG, LogService
 from app.services.modelscope import ModelScopeService
 
 
-DEFAULT_MNN_PORT = 8088
 DEFAULT_MOBIINFER_PORT = 8089
 DEFAULT_LLAMA_CPP_PORT = 8090
+ModelRuntime = Literal["mnn", "mobiinfer", "llama_cpp"]
 
 BACKEND_LABELS: dict[InferenceBackend, str] = {
-    "mnn": "MNN",
     "mobiinfer": "MobiInfer",
     "llama_cpp": "llama.cpp",
     "llama_cpp_cuda": "llama.cpp CUDA",
     "llama_cpp_cpu": "llama.cpp CPU",
 }
+MODEL_RUNTIME_LABELS: dict[ModelRuntime, str] = {
+    "mnn": "MNN-compatible",
+    "mobiinfer": "MobiInfer",
+    "llama_cpp": "llama.cpp",
+}
 
 BACKEND_PORTS: dict[InferenceBackend, int] = {
-    "mnn": DEFAULT_MNN_PORT,
     "mobiinfer": DEFAULT_MOBIINFER_PORT,
     "llama_cpp": DEFAULT_LLAMA_CPP_PORT,
     "llama_cpp_cuda": DEFAULT_LLAMA_CPP_PORT,
@@ -36,8 +40,7 @@ BACKEND_PORTS: dict[InferenceBackend, int] = {
 }
 PORT_SEARCH_LIMIT = 40
 
-BACKEND_RUNTIME_COMPATIBILITY: dict[InferenceBackend, set[InferenceBackend]] = {
-    "mnn": {"mnn", "mobiinfer"},
+BACKEND_RUNTIME_COMPATIBILITY: dict[InferenceBackend, set[ModelRuntime]] = {
     "mobiinfer": {"mnn", "mobiinfer"},
     "llama_cpp": {"llama_cpp"},
     "llama_cpp_cuda": {"llama_cpp"},
@@ -181,13 +184,15 @@ class MnnServerService:
         runtime = self._normalize_runtime(self._models.runtime(model_id))
         if runtime not in BACKEND_RUNTIME_COMPATIBILITY[backend]:
             label = BACKEND_LABELS[backend]
-            compatible = ", ".join(BACKEND_LABELS[item] for item in sorted(BACKEND_RUNTIME_COMPATIBILITY[backend]))
+            compatible = ", ".join(
+                MODEL_RUNTIME_LABELS[item] for item in sorted(BACKEND_RUNTIME_COMPATIBILITY[backend])
+            )
             self._status = MnnStatus(
                 state="error",
                 backend=backend,
                 active_model_id=model_id,
                 message=(
-                    f"Model {model_id} is configured for {BACKEND_LABELS[runtime]}. "
+                    f"Model {model_id} is configured for {MODEL_RUNTIME_LABELS[runtime]}. "
                     f"{label} accepts: {compatible}."
                 ),
             )
@@ -408,9 +413,7 @@ class MnnServerService:
             return False
         if backend in {"llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"}:
             return "llama-server" in command_line or "llama.cpp" in command_line or "llama-cpp" in command_line
-        if backend == "mobiinfer":
-            return "mobiinfer" in command_line or "mnncli" in command_line
-        return "mnncli" in command_line
+        return "mobiinfer" in command_line or "mnncli" in command_line
 
     def _process_command_line(self, pid: int) -> str:
         if platform.system() == "Windows":
@@ -507,7 +510,7 @@ class MnnServerService:
             str(port),
         ]
 
-    def _normalize_runtime(self, runtime: str) -> InferenceBackend:
+    def _normalize_runtime(self, runtime: str) -> ModelRuntime:
         if runtime in {"llama_cpp", "llama.cpp"}:
             return "llama_cpp"
         if runtime == "mobiinfer":
@@ -525,28 +528,6 @@ class MnnServerService:
             return self._llama_cpp.find_runtime("cpu")
         if backend == "mobiinfer":
             return self._find_mobiinfer()
-        return self._find_mnncli()
-
-    def _find_mnncli(self) -> Path | None:
-        env_path = os.environ.get("MNNCLI_BIN")
-        if env_path:
-            path = Path(env_path).expanduser().resolve()
-            if path.exists():
-                return path
-
-        candidates = [
-            RESOURCES_DIR / "mnn/mnncli",
-            RESOURCES_DIR / "mnn/mnncli.exe",
-            REPO_ROOT / "3rdparty/MNN/apps/mnncli/build_mnncli/mnncli",
-            REPO_ROOT / "3rdparty/MNN/apps/mnncli/build_mnncli/mnncli.exe",
-            REPO_ROOT / "3rdparty/MNN/apps/mnncli/build/mnncli",
-            REPO_ROOT / "3rdparty/MNN/apps/mnncli/build/mnncli.exe",
-            REPO_ROOT / "3rdparty/MNN/build/apps/mnncli/mnncli",
-            REPO_ROOT / "3rdparty/MNN/build/apps/mnncli/mnncli.exe",
-        ]
-        for path in candidates:
-            if path.exists():
-                return path
         return None
 
     def _find_mobiinfer(self) -> Path | None:
@@ -583,7 +564,4 @@ class MnnServerService:
                 "MobiInfer binary was not found. Set MOBIINFER_BIN or build "
                 "3rdparty/mobiinfer/apps/mnncli."
             )
-        return (
-            "mnncli binary was not found. Set MNNCLI_BIN or build "
-            "3rdparty/MNN/apps/mnncli."
-        )
+        return "Unsupported runtime backend."
