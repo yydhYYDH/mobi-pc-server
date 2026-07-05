@@ -48,6 +48,102 @@ function expectedExecutableName(baseName) {
   return process.platform === "win32" ? `${baseName}.exe` : baseName;
 }
 
+function copyFileIfExists(source, target) {
+  if (!source || !fs.existsSync(source)) {
+    return false;
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.copyFileSync(source, target);
+  fs.chmodSync(target, 0o755);
+  return true;
+}
+
+function copyRuntimeDir(source, target) {
+  if (!source || !fs.existsSync(source)) {
+    return false;
+  }
+  fs.mkdirSync(target, { recursive: true });
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    copyRuntimeEntry(path.join(source, entry.name), path.join(target, entry.name));
+  }
+  return true;
+}
+
+function copyRuntimeEntry(source, target) {
+  const stats = fs.lstatSync(source);
+  fs.rmSync(target, { recursive: true, force: true });
+
+  if (stats.isSymbolicLink()) {
+    fs.symlinkSync(fs.readlinkSync(source), target);
+    return;
+  }
+
+  if (stats.isDirectory()) {
+    fs.mkdirSync(target, { recursive: true });
+    for (const entry of fs.readdirSync(source)) {
+      copyRuntimeEntry(path.join(source, entry), path.join(target, entry));
+    }
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.copyFileSync(source, target);
+  fs.chmodSync(target, stats.mode);
+}
+
+function findOnPath(executable) {
+  for (const segment of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (!segment) {
+      continue;
+    }
+    const candidate = path.join(segment, executable);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return "";
+}
+
+function ensureGitkeep(directory) {
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, ".gitkeep"), "");
+}
+
+function prepareLinuxRuntimeResources() {
+  const mnnDir = path.join(resourcesRoot, "mnn");
+  const mobiinferDir = path.join(resourcesRoot, "mobiinfer");
+  const llamaCppDir = path.join(resourcesRoot, "llama-cpp");
+  const hdcDir = path.join(resourcesRoot, "hdc");
+
+  copyFileIfExists(
+    path.join(repoRoot, "3rdparty", "MNN", "apps", "mnncli", "build_mnncli", "mnncli"),
+    path.join(mnnDir, "mnncli")
+  );
+  copyFileIfExists(
+    path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", "build_mnncli", "mnncli"),
+    path.join(mobiinferDir, "mnncli")
+  );
+  copyRuntimeDir(
+    path.join(repoRoot, "3rdparty", "llama.cpp", "build-cpu-native", "bin"),
+    path.join(llamaCppDir, "cpu")
+  );
+  copyRuntimeDir(
+    path.join(repoRoot, "3rdparty", "llama.cpp", "build-cuda-native", "bin"),
+    path.join(llamaCppDir, "cuda")
+  );
+
+  const hdcSource = process.env.HDC_BIN || findOnPath("hdc");
+  if (hdcSource && !hdcSource.endsWith(".exe")) {
+    copyFileIfExists(hdcSource, path.join(hdcDir, "hdc"));
+  } else {
+    fs.mkdirSync(hdcDir, { recursive: true });
+  }
+
+  for (const directory of [mnnDir, mobiinferDir, hdcDir]) {
+    ensureGitkeep(directory);
+  }
+}
+
 run(npmCommand(), ["run", "build"], frontendRoot);
 
 if (!fs.existsSync(frontendDist)) {
@@ -66,6 +162,10 @@ fs.mkdirSync(path.join(resourcesRoot, "llama-cpp"), { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "llama-cpp", "cpu"), { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "llama-cpp", "cuda"), { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "hdc"), { recursive: true });
+
+if (process.platform === "linux") {
+  prepareLinuxRuntimeResources();
+}
 
 const backendExecutable = path.join(packagedBackend, expectedBackendName());
 if (!fs.existsSync(backendExecutable)) {

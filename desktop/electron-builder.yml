@@ -7,6 +7,7 @@ files:
   - dist/**/*
   - package.json
 asar: true
+afterPack: scripts/after-pack.js
 extraResources:
   - from: resources/frontend
     to: frontend
