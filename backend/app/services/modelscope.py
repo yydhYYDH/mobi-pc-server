@@ -5,6 +5,7 @@ import os
 import shutil
 import threading
 import time
+import traceback
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,17 +14,32 @@ from app.core.paths import MODEL_CATALOG_PATH, MODELS_DIR, REPO_ROOT
 from app.schemas.models import LocalModel, ModelCatalogItem, ModelDownloadStatus
 
 
-def _snapshot_download_worker(modelscope_id: str, revision: str, model_dir: str, cache_dir: str) -> None:
+def _snapshot_download_worker(
+    modelscope_id: str,
+    revision: str,
+    model_dir: str,
+    cache_dir: str,
+    error_path: str,
+) -> None:
     os.environ.setdefault("MODELSCOPE_CACHE", cache_dir)
     os.environ.setdefault("MODELSCOPE_CACHE_HOME", cache_dir)
 
     from modelscope import snapshot_download
 
-    snapshot_download(
-        model_id=modelscope_id,
-        revision=revision,
-        local_dir=model_dir,
-    )
+    try:
+        snapshot_download(
+            model_id=modelscope_id,
+            revision=revision,
+            local_dir=model_dir,
+        )
+    except BaseException as exc:
+        payload = {
+            "type": type(exc).__name__,
+            "message": str(exc),
+            "traceback": traceback.format_exc(),
+        }
+        Path(error_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        raise
 
 
 @dataclass
@@ -167,6 +183,11 @@ class ModelScopeService:
         model_dir = self._safe_model_dir(item)
         model_dir.mkdir(parents=True, exist_ok=True)
         self._write_download_marker(item, "downloading")
+        worker_error_path = model_dir / ".pc-server-download-error.json"
+        try:
+            worker_error_path.unlink()
+        except FileNotFoundError:
+            pass
         cache_dir = MODELS_DIR.parent / "modelscope-cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("MODELSCOPE_CACHE", str(cache_dir))
@@ -194,7 +215,7 @@ class ModelScopeService:
                 return
             process = multiprocessing.Process(
                 target=_snapshot_download_worker,
-                args=(item.modelscope_id, item.revision, str(model_dir), str(cache_dir)),
+                args=(item.modelscope_id, item.revision, str(model_dir), str(cache_dir), str(worker_error_path)),
                 daemon=True,
             )
             with self._lock:
@@ -217,7 +238,7 @@ class ModelScopeService:
             if self.download_status(model_id).state == "paused":
                 return
             if process.exitcode != 0:
-                raise RuntimeError(f"ModelScope download process exited with code {process.exitcode}.")
+                raise RuntimeError(self._download_process_error(process.exitcode, worker_error_path))
             downloaded_bytes = self._directory_size(model_dir)
             self._set_status(
                 model_id,
@@ -385,6 +406,22 @@ class ModelScopeService:
             return None
         total = sum(int(metadata.get("size") or 0) for metadata in files.values())
         return total or None
+
+    def _download_process_error(self, exitcode: int | None, error_path: Path) -> str:
+        if error_path.exists():
+            try:
+                payload = json.loads(error_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                payload = None
+            if isinstance(payload, dict):
+                error_type = str(payload.get("type") or "Error")
+                message = str(payload.get("message") or "").strip()
+                details = f"{error_type}: {message}" if message else error_type
+                traceback_text = str(payload.get("traceback") or "").strip()
+                if traceback_text:
+                    return f"ModelScope download failed: {details}\n{traceback_text}"
+                return f"ModelScope download failed: {details}"
+        return f"ModelScope download process exited with code {exitcode}."
 
     def _is_model_complete(self, item: ModelCatalogItem, allow_state_marker: bool = False) -> bool:
         model_dir = self._safe_model_dir(item)

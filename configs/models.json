@@ -31,6 +31,7 @@
     "size": "508 MB",
     "runtime": "llama_cpp",
     "local_dir": "models/qwen3.5-0.8b-q4-k-m",
-    "entry_file": "Qwen3.5-0.8B-Q4_K_M.gguf"
+    "entry_file": "Qwen3.5-0.8B-Q4_K_M.gguf",
+    "mmproj_file": "mmproj-F16.gguf"
   }
 ]
