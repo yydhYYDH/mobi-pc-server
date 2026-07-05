@@ -32,6 +32,8 @@ export function ServerView(props: {
       ? "当前后端没有可用模型配置"
       : selectedModel ? selectedModel.modelscope_id : "未选择模型";
   const runtimeActive = props.serverState === "running" || props.serverState === "starting";
+  const managedRuntimeActive =
+    Boolean(props.mnn?.managed_by_backend) && ["starting", "running", "stopping"].includes(props.serverState);
   const selectedModelRunning = runtimeActive && props.mnn?.active_model_id === selectedModel?.id;
   const canLoadSelected =
     Boolean(selectedModel) &&
@@ -53,7 +55,7 @@ export function ServerView(props: {
           <dt>后端</dt>
           <dd>
             <select
-              disabled={props.serverBusy !== null || props.serverState === "running"}
+              disabled={props.serverBusy !== null || managedRuntimeActive}
               value={props.selectedBackend}
               onChange={(event) => props.setSelectedBackend(event.target.value as BackendId)}
             >

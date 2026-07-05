@@ -25,6 +25,7 @@ const BACKEND_LABELS: Record<BackendId, string> = {
 };
 
 export const BACKEND_OPTIONS: Array<{ id: BackendId; label: string }> = [
+  { id: "llama_cpp", label: BACKEND_LABELS.llama_cpp },
   { id: "llama_cpp_cuda", label: BACKEND_LABELS.llama_cpp_cuda },
   { id: "llama_cpp_cpu", label: BACKEND_LABELS.llama_cpp_cpu },
   { id: "mobiinfer", label: BACKEND_LABELS.mobiinfer },

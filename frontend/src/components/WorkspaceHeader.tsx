@@ -11,10 +11,15 @@ export function WorkspaceHeader(props: {
   navItems: NavItem[];
   onBackendChange: (backend: BackendId) => void;
   onRefresh: () => Promise<void>;
+  runtimeManagedByBackend: boolean;
   selectedBackend: BackendId;
   serverBusy: string | null;
   serverState: string;
 }) {
+  const backendSwitchDisabled =
+    props.serverBusy !== null ||
+    (props.runtimeManagedByBackend && ["starting", "running", "stopping"].includes(props.serverState));
+
   return (
     <header className="workspace-header">
       <div>
@@ -25,7 +30,7 @@ export function WorkspaceHeader(props: {
       <div className="header-actions">
         <select
           className="backend-select"
-          disabled={props.serverBusy !== null || props.serverState === "running"}
+          disabled={backendSwitchDisabled}
           aria-label="选择推理后端"
           value={props.selectedBackend}
           onChange={(event) => props.onBackendChange(event.target.value as BackendId)}

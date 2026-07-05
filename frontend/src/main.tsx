@@ -179,6 +179,7 @@ function App() {
           onBackendChange={setSelectedBackend}
           onRefresh={load}
           selectedBackend={selectedBackend}
+          runtimeManagedByBackend={mnn?.managed_by_backend ?? false}
           serverBusy={serverBusy}
           serverState={serverState}
         />
