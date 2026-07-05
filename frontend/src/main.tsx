@@ -21,7 +21,7 @@ const FALLBACK_LLAMA_BACKEND: { id: BackendId; label: string } = { id: "llama_cp
 
 function initialBackend(): BackendId {
   const storedBackend = normalizeBackend(window.localStorage.getItem("pc-server-backend"));
-  return isSelectableBackend(storedBackend) ? storedBackend : "mobiinfer";
+  return isSelectableBackend(storedBackend) ? storedBackend : "llama_cpp";
 }
 
 function App() {
