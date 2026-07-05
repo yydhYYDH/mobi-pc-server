@@ -1,7 +1,7 @@
 {
   "name": "pc-mnn-server-desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "WAIC",
   "description": "Electron shell for 数据归家",
   "main": "dist/main.js",

@@ -9,7 +9,7 @@ from app.services.logs import BACKEND_SERVER_LOG, LogService
 from app.services.runtime_state import runtime_service
 
 
-app = FastAPI(title="数据归家", version="0.1.0")
+app = FastAPI(title="数据归家", version="0.2.0")
 log_service = LogService()
 
 app.add_middleware(
