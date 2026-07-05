@@ -12,11 +12,15 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from app.core.paths import REPO_ROOT, RESOURCES_DIR
+from app.services.modelscope import ModelScopeService
 from app.services.runtime_state import runtime_service
 
 
 router = APIRouter()
 LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+model_service = ModelScopeService()
+
+
 def _unique_paths(paths: list[Path]) -> list[Path]:
     unique: list[Path] = []
     seen: set[Path] = set()
@@ -45,6 +49,14 @@ EXAMPLE_IMAGE_DIRS = _example_image_dirs()
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 UPLOAD_IMAGE_DIR = Path(tempfile.gettempdir()) / "pc_server_chat_images"
 DATA_IMAGE_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.*)$", re.DOTALL)
+OPENAI_IMAGE_BLOCK_BACKENDS = {
+    "llama_cpp",
+    "llama_cpp_cuda",
+    "llama_cpp_cpu",
+    "llama.cpp",
+    "llama.cpp cuda",
+    "llama.cpp cpu",
+}
 
 
 def _example_image_path(image_id: str) -> Path:
@@ -117,8 +129,27 @@ def _content_block_to_text(content: Any) -> Any:
     return "\n".join(parts)
 
 
-def _normalize_uploaded_images(payload: dict[str, Any], backend: str) -> dict[str, Any]:
-    if backend in {"llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu", "mobiinfer"}:
+def _backend_accepts_openai_image_blocks(backend: str | None) -> bool:
+    normalized = (backend or "").strip().lower().replace("-", "_")
+    return (
+        normalized in OPENAI_IMAGE_BLOCK_BACKENDS
+        or normalized.startswith("llama_cpp")
+        or ("llama" in normalized and "cpp" in normalized)
+    )
+
+
+def _payload_targets_llama_cpp_model(payload: dict[str, Any]) -> bool:
+    model_id = payload.get("model")
+    if not isinstance(model_id, str) or not model_id:
+        return False
+    try:
+        return model_service.runtime(model_id).strip().lower().replace("-", "_") == "llama_cpp"
+    except (KeyError, ValueError):
+        return False
+
+
+def _normalize_uploaded_images(payload: dict[str, Any], backend: str | None) -> dict[str, Any]:
+    if _backend_accepts_openai_image_blocks(backend) or _payload_targets_llama_cpp_model(payload):
         return dict(payload)
 
     normalized = dict(payload)
