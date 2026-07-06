@@ -2,6 +2,7 @@ import React from "react";
 
 import type { BackendId, CatalogModel, DeviceBusy, DownloadStatus, HdcStatus, MnnStatus, ModelBusy, ServerBusy } from "../api/types";
 import { ActionButton, ProgressBar, StatusPill } from "../components";
+import { getConnectedHdcTargetAction, normalizeHdcTarget } from "../domain/hdcTarget";
 import { backendLabel, statusLabel } from "../domain/runtime";
 
 type ReadinessState = "hdc-missing" | "device-missing" | "ai-missing" | "ready";
@@ -65,6 +66,11 @@ export function OverviewView(props: {
   const primaryDevice = props.hdc?.devices[0];
   const hdcAvailable = props.hdc?.available ?? false;
   const hdcConnected = Boolean(props.hdc?.pc_server_rport_ready);
+  const manualTargetAction = getConnectedHdcTargetAction({
+    devices: props.hdc?.devices ?? [],
+    pcServerRportReady: props.hdc?.pc_server_rport_ready ?? false,
+    target: props.hdcTarget
+  });
   const hdcServerRunning = props.hdc?.hdc_server_running ?? false;
   const aiReady = props.serverState === "running";
   const deviceName = primaryDevice
@@ -270,25 +276,25 @@ export function OverviewView(props: {
         )}
       </div>
 
-      {manualOpen && hdcAvailable && !hdcConnected ? (
+      {manualOpen && hdcAvailable ? (
         <div className="readiness-manual">
           <p>自动连接失败了？请打开手机无线调试，确认手机和电脑在同一网络，然后输入设备地址。</p>
           <div className="readiness-manual-form">
             <input
               aria-label="设备序列号或 host:port"
               value={props.hdcTarget}
-              onChange={(event) => props.setHdcTarget(event.target.value)}
+              onChange={(event) => props.setHdcTarget(normalizeHdcTarget(event.target.value))}
               placeholder="设备地址，例如 192.168.61.99:5555"
             />
-            <button className="product-primary-button" disabled={props.deviceBusy !== null || !props.hdcTarget.trim()} onClick={() => void props.connectHdc()}>
-              {props.deviceBusy === "connect" ? "连接中" : "连接"}
+            <button className="product-primary-button" disabled={props.deviceBusy !== null || manualTargetAction.disabled} onClick={() => void props.connectHdc()}>
+              {props.deviceBusy === "connect" ? "连接中" : manualTargetAction.label}
             </button>
           </div>
           {props.recentHdcTargets.length > 0 ? (
             <div className="recent-targets">
               <span>最近连接</span>
               {props.recentHdcTargets.slice(0, 3).map((target) => (
-                <button className="recent-target" key={target} onClick={() => props.setHdcTarget(target)}>
+                <button className="recent-target" key={target} onClick={() => props.setHdcTarget(normalizeHdcTarget(target))}>
                   {target}
                 </button>
               ))}
@@ -298,7 +304,7 @@ export function OverviewView(props: {
       ) : null}
 
       <div className="readiness-links">
-        {hdcAvailable && !hdcConnected ? <button onClick={() => setManualOpen((open) => !open)}>手动连接</button> : null}
+        {hdcAvailable ? <button onClick={() => setManualOpen((open) => !open)}>{hdcConnected ? "切换连接" : "手动连接"}</button> : null}
         {hdcConnected ? <button onClick={props.onOpenDevices}>设备详情</button> : null}
         <button onClick={props.onOpenModels}>管理模型</button>
         <button onClick={props.onOpenServer}>AI 详情</button>

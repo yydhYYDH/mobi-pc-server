@@ -2,13 +2,10 @@ import { useState } from "react";
 
 import type { DeviceBusy, HdcStatus } from "../api/types";
 import { EmptyState, InlineNotice, PanelTitle, StatusPill } from "../components";
-
-function normalizeManualTarget(value: string) {
-  return value.trim().replace("：", ":");
-}
+import { getConnectedHdcTargetAction, normalizeHdcTarget } from "../domain/hdcTarget";
 
 function validateManualTarget(value: string) {
-  const target = normalizeManualTarget(value);
+  const target = normalizeHdcTarget(value);
   if (!target) {
     return "请输入无线调试 IP 和端口。";
   }
@@ -36,17 +33,22 @@ export function DevicesView(props: {
   setHdcTarget: (value: string) => void;
 }) {
   const [manualError, setManualError] = useState<string | null>(null);
-  const deviceConnected = Boolean(
-    props.hdc?.pc_server_rport_ready || props.hdc?.devices.some((device) => device.state === "connected")
-  );
+  const manualTargetAction = getConnectedHdcTargetAction({
+    devices: props.hdc?.devices ?? [],
+    pcServerRportReady: props.hdc?.pc_server_rport_ready ?? false,
+    target: props.hdcTarget
+  });
 
   function updateManualTarget(value: string) {
-    props.setHdcTarget(normalizeManualTarget(value));
+    props.setHdcTarget(normalizeHdcTarget(value));
     setManualError(null);
   }
 
   function connectManualTarget() {
-    const normalizedTarget = normalizeManualTarget(props.hdcTarget);
+    if (manualTargetAction.connected) {
+      return;
+    }
+    const normalizedTarget = normalizeHdcTarget(props.hdcTarget);
     const error = validateManualTarget(normalizedTarget);
     if (error) {
       setManualError(error);
@@ -119,8 +121,8 @@ export function DevicesView(props: {
           </div>
           {manualError ? <InlineNotice variant="device">{manualError}</InlineNotice> : null}
           <div className="actions">
-            <button disabled={props.deviceBusy !== null || deviceConnected} onClick={connectManualTarget}>
-              {deviceConnected ? "已连接" : props.deviceBusy === "connect" ? "连接中..." : "连接"}
+            <button disabled={props.deviceBusy !== null || manualTargetAction.disabled} onClick={connectManualTarget}>
+              {props.deviceBusy === "connect" ? "连接中..." : manualTargetAction.label}
             </button>
             <button disabled={props.deviceBusy !== null} onClick={() => void props.disconnectHdc()}>
               {props.deviceBusy === "disconnect" ? "断开中..." : "断开"}

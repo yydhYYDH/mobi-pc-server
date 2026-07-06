@@ -2,6 +2,11 @@ import React from "react";
 
 import { autoConnectHdcTarget, connectHdcTarget, disconnectHdcTarget } from "../api/devices";
 import type { BackendId, HdcStatus, MnnStatus } from "../api/types";
+import {
+  getPreferredDetectedHdcTarget,
+  nextAutoFilledHdcTarget,
+  shouldPollHdcDiscovery
+} from "../domain/hdcTarget";
 import { defaultRuntimePort } from "../domain/runtime";
 
 const RECENT_HDC_TARGETS_KEY = "pc-server-recent-hdc-targets";
@@ -44,29 +49,50 @@ export function useHdcActions(params: {
 }) {
   const { hdc, mnn, selectedBackend, setHdc } = params;
   const [recentHdcTargets, setRecentHdcTargets] = React.useState<string[]>(() => readRecentHdcTargets());
-  const [hdcTarget, setHdcTarget] = React.useState(() => readRecentHdcTargets()[0] ?? "");
+  const [hdcTarget, setHdcTargetState] = React.useState(() => readRecentHdcTargets()[0] ?? "");
   const [deviceBusy, setDeviceBusy] = React.useState<"auto" | "connect" | "disconnect" | null>(null);
   const [deviceNotice, setDeviceNotice] = React.useState<string | null>(null);
   const autoDiscoverInFlightRef = React.useRef(false);
   const deviceBusyRef = React.useRef<typeof deviceBusy>(null);
+  const hdcTargetUserEditedRef = React.useRef(false);
+  const lastAutoHdcTargetRef = React.useRef("");
   const expectedLlmPort = mnn?.state === "running" && mnn.port ? mnn.port : defaultRuntimePort(selectedBackend);
-  const autoDiscovering = Boolean(hdc?.available && !hdc?.pc_server_rport_ready);
+  const autoDiscovering = shouldPollHdcDiscovery({
+    available: hdc?.available ?? false,
+    devices: hdc?.devices ?? []
+  });
 
   React.useEffect(() => {
     deviceBusyRef.current = deviceBusy;
   }, [deviceBusy]);
 
-  React.useEffect(() => {
-    const connectedTarget = hdc?.devices[0]?.serial;
-    if (!connectedTarget) {
+  const autoFillHdcTarget = React.useCallback((detectedTarget: string) => {
+    if (!detectedTarget) {
       return;
     }
-    setHdcTarget((currentTarget) => currentTarget || connectedTarget);
-  }, [hdc?.devices]);
+    setHdcTargetState((currentTarget) => {
+      const nextTarget = nextAutoFilledHdcTarget({
+        currentTarget,
+        detectedTarget,
+        lastAutoTarget: lastAutoHdcTargetRef.current,
+        userEdited: hdcTargetUserEditedRef.current
+      });
+      lastAutoHdcTargetRef.current = nextTarget.lastAutoTarget;
+      return nextTarget.target;
+    });
+  }, []);
+
+  const setHdcTarget = React.useCallback((target: string) => {
+    hdcTargetUserEditedRef.current = true;
+    setHdcTargetState(target);
+  }, []);
 
   React.useEffect(() => {
-    const connected = Boolean(hdc?.pc_server_rport_ready);
-    if (!hdc?.available || connected) {
+    autoFillHdcTarget(getPreferredDetectedHdcTarget(hdc?.devices ?? []));
+  }, [autoFillHdcTarget, hdc?.devices]);
+
+  React.useEffect(() => {
+    if (!autoDiscovering) {
       return;
     }
 
@@ -77,10 +103,7 @@ export function useHdcActions(params: {
       void autoConnectHdc({ silent: true });
     }, 5000);
     return () => window.clearInterval(intervalId);
-  }, [
-    hdc?.available,
-    hdc?.pc_server_rport_ready
-  ]);
+  }, [autoDiscovering]);
 
   React.useEffect(() => {
     if (!hdc?.available || !hdc.pc_server_rport_ready || hdc.llm_port === expectedLlmPort) {
@@ -123,9 +146,9 @@ export function useHdcActions(params: {
     try {
       const nextStatus = await autoConnectHdcTarget(expectedLlmPort, !options.silent);
       setHdc(nextStatus);
-      const connectedTarget = nextStatus.devices[0]?.serial;
+      const connectedTarget = getPreferredDetectedHdcTarget(nextStatus.devices);
       if (connectedTarget) {
-        setHdcTarget((currentTarget) => currentTarget || connectedTarget);
+        autoFillHdcTarget(connectedTarget);
         setRecentHdcTargets(writeRecentHdcTarget(connectedTarget));
       }
       if (!options.silent) {
@@ -175,6 +198,6 @@ export function useHdcActions(params: {
     hdcLlmPort: String(expectedLlmPort),
     hdcTarget,
     recentHdcTargets,
-    setHdcTarget: (target: string) => setHdcTarget(target)
+    setHdcTarget
   };
 }

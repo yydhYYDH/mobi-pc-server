@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test:hdc-target": "node scripts/run-hdc-target-tests.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },
