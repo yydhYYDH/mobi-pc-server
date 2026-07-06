@@ -110,3 +110,34 @@ def test_disconnect_network_target_uses_tconn_remove(
     assert status.message == "ok"
     assert ["hdc", "tconn", target, "-remove"] in calls
     assert not any(args[1] == "tdisconn" for args in calls)
+
+
+def test_install_legacy_log_bridge_writes_to_hdc_server_log() -> None:
+    class FakeLogs:
+        def __init__(self) -> None:
+            self.lines: list[tuple[str, str]] = []
+
+        def append(self, filename: str, line: str) -> None:
+            self.lines.append((filename, line))
+
+    class FakeLegacyModule:
+        sink = None
+
+        @classmethod
+        def set_log_sink(cls, sink) -> None:
+            cls.sink = sink
+
+    service = HdcService()
+    fake_logs = FakeLogs()
+    service._logs = fake_logs  # noqa: SLF001
+
+    service._install_legacy_log_bridge(FakeLegacyModule)  # noqa: SLF001
+    assert FakeLegacyModule.sink is not None
+    FakeLegacyModule.sink(">> [Workflow] request action=gui_action payload={action=click}")
+
+    assert fake_logs.lines == [
+        (
+            "hdc-server.log",
+            ">> [Workflow] request action=gui_action payload={action=click}",
+        )
+    ]

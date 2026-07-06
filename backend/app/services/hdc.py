@@ -559,6 +559,7 @@ class HdcService:
             from app.legacy import hdc_server as module
 
             module.LEGACY_LOOP_ENABLED = False
+            self._install_legacy_log_bridge(module)
             server = ThreadingHTTPServer(("0.0.0.0", module.SERVER_PORT), module.HDCServerHandler)
             self._origin_http_server = server
             self._origin_server_started = True
@@ -577,6 +578,16 @@ class HdcService:
             if server is not None:
                 server.server_close()
                 self._origin_http_server = None
+
+    def _install_legacy_log_bridge(self, module) -> None:
+        set_log_sink = getattr(module, "set_log_sink", None)
+        if not callable(set_log_sink):
+            return
+
+        def append_legacy_log(line: str) -> None:
+            self._logs.append(HDC_SERVER_LOG, line)
+
+        set_log_sink(append_legacy_log)
 
     def _log_hdc_server(self, message: str) -> None:
         text = f">> [HDC] {message}"

@@ -376,10 +376,100 @@ def ability_candidates_for_bundle(bundle, discovered_ability=""):
             seen.add(ability)
     return deduped
 
-def start_app_with_explicit_ability(bundle, ability_name):
+def _clean_bm_dump_value(value):
+    text = str(value or "").strip().strip("\"'")
+    text = text.strip().rstrip(",;]}").strip().strip("\"'")
+    return text
+
+def _bm_dump_field_values(output, field_name):
+    pattern = re.compile(
+        rf"(?im)[\"']?{re.escape(field_name)}[\"']?\s*[:=]\s*[\"']?([^\"',\]\}}\r\n]+)"
+    )
+    values = []
+    seen = set()
+    for match in pattern.finditer(str(output or "")):
+        value = _clean_bm_dump_value(match.group(1))
+        if value and value not in seen:
+            values.append(value)
+            seen.add(value)
+    return values
+
+def _split_module_ability(value):
+    text = _clean_bm_dump_value(value)
+    if "/" not in text:
+        return "", text
+    module_name, ability_name = text.rsplit("/", 1)
+    return _clean_bm_dump_value(module_name), _clean_bm_dump_value(ability_name)
+
+def parse_app_launch_target_from_bm_dump(output, fallback_ability=""):
+    entry_modules = _bm_dump_field_values(output, "entryModuleName")
+    module_names = _bm_dump_field_values(output, "moduleName")
+    main_entries = _bm_dump_field_values(output, "mainEntry")
+    main_abilities = (
+        _bm_dump_field_values(output, "mainAbility") +
+        _bm_dump_field_values(output, "mainElementName")
+    )
+
+    module_name = entry_modules[0] if entry_modules else ""
+    ability_name = main_abilities[0] if main_abilities else fallback_ability
+
+    if main_entries:
+        inline_module, inline_ability = _split_module_ability(main_entries[0])
+        if inline_module:
+            module_name = inline_module
+        elif not module_name and main_entries[0] in module_names:
+            module_name = main_entries[0]
+        if inline_ability and not main_entries[0] in module_names:
+            ability_name = inline_ability
+
+    if not module_name and module_names:
+        module_name = module_names[0]
+
+    inline_module, inline_ability = _split_module_ability(ability_name)
+    if inline_ability:
+        ability_name = inline_ability
+    if inline_module and not module_name:
+        module_name = inline_module
+    return {
+        "module_name": _clean_bm_dump_value(module_name),
+        "ability_name": _clean_bm_dump_value(ability_name),
+    }
+
+def get_app_launch_target_from_bm_dump(bundle, fallback_ability=""):
+    cmd = f"{hdc_prefix()} shell bm dump -n {shlex.quote(bundle)}"
+    try:
+        result = _run_timed_command("launch_app bm dump", cmd, timeout=HDC_ACTION_TIMEOUT)
+    except Exception as ex:
+        print(f">> [启动警告] 查询 {bundle} bm dump 失败，回退旧启动参数: {ex}")
+        return {"module_name": "", "ability_name": fallback_ability}
+    output = (result.stdout or "") + "\n" + (result.stderr or "")
+    return parse_app_launch_target_from_bm_dump(output, fallback_ability=fallback_ability)
+
+def app_launch_targets_for_bundle(bundle, discovered_ability=""):
+    targets = []
+    bm_target = get_app_launch_target_from_bm_dump(bundle, discovered_ability)
+    if bm_target.get("ability_name"):
+        targets.append((bm_target["ability_name"], bm_target.get("module_name", "")))
+    for ability in ability_candidates_for_bundle(bundle, discovered_ability):
+        targets.append((ability, ""))
+
+    deduped = []
+    seen = set()
+    for ability_name, module_name in targets:
+        ability_name = _clean_bm_dump_value(ability_name)
+        module_name = _clean_bm_dump_value(module_name)
+        key = (ability_name, module_name)
+        if ability_name and key not in seen:
+            deduped.append(key)
+            seen.add(key)
+    return deduped
+
+def start_app_with_explicit_ability(bundle, ability_name, module_name=""):
     if not ability_name:
         return False
-    cmd = f"{hdc_prefix()} shell aa start -a {ability_name} -b {bundle}"
+    cmd = f"{hdc_prefix()} shell aa start -a {shlex.quote(ability_name)} -b {shlex.quote(bundle)}"
+    if module_name:
+        cmd += f" -m {shlex.quote(module_name)}"
     try:
         print(f">> 执行启动命令 (hdc explicit): {cmd}")
         _run_timed_command("launch_app explicit aa start", cmd)
@@ -1428,8 +1518,8 @@ def _launch_app_impl(app_name, reset_first=True):
         ability_name = get_main_ability_for_bundle(bundle)
         if reset_first:
             stop_app_before_launch(bundle)
-        for candidate in ability_candidates_for_bundle(bundle, ability_name):
-            if start_app_with_explicit_ability(bundle, candidate):
+        for candidate, module_name in app_launch_targets_for_bundle(bundle, ability_name):
+            if start_app_with_explicit_ability(bundle, candidate, module_name):
                 return True
 
         if ensure_driver_available():
