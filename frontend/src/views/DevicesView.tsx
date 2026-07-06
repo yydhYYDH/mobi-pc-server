@@ -2,24 +2,7 @@ import { useState } from "react";
 
 import type { DeviceBusy, HdcStatus } from "../api/types";
 import { EmptyState, InlineNotice, PanelTitle, StatusPill } from "../components";
-import { getConnectedHdcTargetAction, normalizeHdcTarget } from "../domain/hdcTarget";
-
-function validateManualTarget(value: string) {
-  const target = normalizeHdcTarget(value);
-  if (!target) {
-    return "请输入无线调试 IP 和端口。";
-  }
-  const match = /^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/.exec(target);
-  if (!match) {
-    return "格式应为 ip:port，例如 192.168.1.23:5555。";
-  }
-  const octets = match[1].split(".").map(Number);
-  const port = Number(match[2]);
-  if (octets.some((part) => part < 0 || part > 255) || port < 1 || port > 65535) {
-    return "请输入有效的 IP 和端口。";
-  }
-  return null;
-}
+import { getConnectedHdcTargetAction, normalizeHdcTarget, validateHdcConnectTarget } from "../domain/hdcTarget";
 
 export function DevicesView(props: {
   autoConnectHdc: () => Promise<void>;
@@ -49,7 +32,7 @@ export function DevicesView(props: {
       return;
     }
     const normalizedTarget = normalizeHdcTarget(props.hdcTarget);
-    const error = validateManualTarget(normalizedTarget);
+    const error = validateHdcConnectTarget(normalizedTarget);
     if (error) {
       setManualError(error);
       return;
@@ -114,10 +97,10 @@ export function DevicesView(props: {
           <input
             value={props.hdcTarget}
             onChange={(event) => updateManualTarget(event.target.value)}
-            placeholder="请输入无线调试 IP 和端口，例如 192.168.1.23:5555"
+            placeholder="请输入设备序列号，或无线调试地址，例如 192.168.1.23:5555"
           />
           <div className="device-form-note">
-            请输入无线调试 IP 和端口，格式为 ip:port。LLM 端口由后端自动映射：{props.hdcLlmPort || "未转发"}
+            请输入 USB/本地设备序列号，或无线调试 IP 和端口。LLM 端口由后端自动映射：{props.hdcLlmPort || "未转发"}
           </div>
           {manualError ? <InlineNotice variant="device">{manualError}</InlineNotice> : null}
           <div className="actions">

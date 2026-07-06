@@ -1,6 +1,7 @@
 import {
   getConnectedHdcTargetAction,
   nextAutoFilledHdcTarget,
+  validateHdcConnectTarget,
   shouldPollHdcDiscovery
 } from "../src/domain/hdcTarget.js";
 
@@ -78,6 +79,16 @@ const usbDevice = connectedDevice();
 {
   assertEqual(shouldPollHdcDiscovery({ available: true, devices: [] }), true, "discovery polling runs with no connected devices");
   assertEqual(shouldPollHdcDiscovery({ available: true, devices: [usbDevice] }), false, "discovery polling stops once a device is connected");
+}
+
+{
+  assertEqual(validateHdcConnectTarget(usbDevice.serial), null, "USB serial can be used as a manual HDC target");
+  assertEqual(validateHdcConnectTarget("192.168.1.23:5555"), null, "wireless ip:port can be used as a manual HDC target");
+  assertEqual(
+    validateHdcConnectTarget("192.168.1.999:5555"),
+    "请输入有效的 IP 和端口，或已连接设备的序列号。",
+    "invalid ip:port is rejected"
+  );
 }
 
 console.log("hdc target behavior tests passed");

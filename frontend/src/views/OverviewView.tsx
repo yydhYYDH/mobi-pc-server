@@ -278,13 +278,13 @@ export function OverviewView(props: {
 
       {manualOpen && hdcAvailable ? (
         <div className="readiness-manual">
-          <p>自动连接失败了？请打开手机无线调试，确认手机和电脑在同一网络，然后输入设备地址。</p>
+          <p>自动连接失败了？可输入 USB 设备序列号，或打开无线调试后输入设备地址。</p>
           <div className="readiness-manual-form">
             <input
               aria-label="设备序列号或 host:port"
               value={props.hdcTarget}
               onChange={(event) => props.setHdcTarget(normalizeHdcTarget(event.target.value))}
-              placeholder="设备地址，例如 192.168.61.99:5555"
+              placeholder="设备序列号，或 192.168.61.99:5555"
             />
             <button className="product-primary-button" disabled={props.deviceBusy !== null || manualTargetAction.disabled} onClick={() => void props.connectHdc()}>
               {props.deviceBusy === "connect" ? "连接中" : manualTargetAction.label}

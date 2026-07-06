@@ -10,6 +10,33 @@ export function normalizeHdcTarget(value: string) {
   return value.trim().replace(/：/g, ":");
 }
 
+export function validateHdcConnectTarget(value: string) {
+  const target = normalizeHdcTarget(value);
+  if (!target) {
+    return "请输入设备序列号或无线调试 IP 和端口。";
+  }
+
+  const ipPortMatch = /^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/.exec(target);
+  if (ipPortMatch) {
+    const octets = ipPortMatch[1].split(".").map(Number);
+    const port = Number(ipPortMatch[2]);
+    if (octets.every((part) => part >= 0 && part <= 255) && port >= 1 && port <= 65535) {
+      return null;
+    }
+    return "请输入有效的 IP 和端口，或已连接设备的序列号。";
+  }
+
+  if (target.includes(":")) {
+    return "请输入有效的 IP 和端口，或已连接设备的序列号。";
+  }
+
+  if (/\s/.test(target)) {
+    return "设备序列号不能包含空格。";
+  }
+
+  return null;
+}
+
 export function getHdcDeviceTarget(device: HdcTargetDevice) {
   if (device.host && device.port) {
     return `${device.host}:${device.port}`;

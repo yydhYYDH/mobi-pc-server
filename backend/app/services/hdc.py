@@ -300,12 +300,19 @@ class HdcService:
         )
 
     def disconnect(self, target: str) -> HdcStatus:
+        target = target.strip()
         hdc_path = self._hdc_path()
         if not hdc_path:
             return self._status_response(available=False, message="hdc was not found on PATH.")
 
         self.cleanup_ports(target=target)
-        result = self._run([hdc_path, "tdisconn", target], timeout=10)
+        wireless_target = self._parse_wireless_target(target)
+        if not wireless_target:
+            current = self._status_live()
+            current.message = f"Cleaned HDC port mappings for USB/local target {target}."
+            return current
+
+        result = self._run([hdc_path, "tconn", wireless_target, "-remove"], timeout=10)
         if result is None:
             return self._status_response(
                 available=True,
@@ -319,7 +326,7 @@ class HdcService:
                 message=result.stderr.strip() or result.stdout.strip() or "hdc disconnect failed.",
             )
         current = self._status_live()
-        current.message = result.stdout.strip() or f"Disconnected from {target}."
+        current.message = result.stdout.strip() or f"Disconnected from {wireless_target}."
         return current
 
     def shutdown(self) -> None:
@@ -724,12 +731,52 @@ class HdcService:
         if not hdc_path:
             return False, f"{label} rport skipped: hdc was not found."
 
-        if already_ready and ready_target == target and ready_pc_port == pc_port:
-            return True, f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
-
         args_prefix = [hdc_path]
         if target:
             args_prefix.extend(["-t", target])
+
+        mappings = self._list_port_mappings(args_prefix, label)
+        if mappings is not None:
+            stale_pc_ports = [
+                mapped_pc_port
+                for mapped_phone_port, mapped_pc_port, direction in mappings
+                if direction == "reverse"
+                and mapped_phone_port == phone_port
+                and mapped_pc_port != pc_port
+            ]
+            for stale_pc_port in stale_pc_ports:
+                cleanup = self._run(
+                    args_prefix + ["rport", "rm", f"tcp:{phone_port}", f"tcp:{stale_pc_port}"],
+                    timeout=5,
+                )
+                if cleanup is None:
+                    return False, f"{label} stale rport cleanup timed out."
+                if cleanup.returncode != 0:
+                    message = (
+                        cleanup.stderr.strip()
+                        or cleanup.stdout.strip()
+                        or "stale rport cleanup failed."
+                    )
+                    self._log_hdc(
+                        f"{label} stale rport cleanup failed: phone tcp:{phone_port} "
+                        f"-> PC tcp:{stale_pc_port}: {message}"
+                    )
+                    return False, message
+                self._log_hdc(
+                    f"{label} stale rport cleaned up: phone tcp:{phone_port} "
+                    f"-> PC tcp:{stale_pc_port}"
+                )
+
+            has_current_mapping = any(
+                direction == "reverse"
+                and mapped_phone_port == phone_port
+                and mapped_pc_port == pc_port
+                for mapped_phone_port, mapped_pc_port, direction in mappings
+            )
+            if has_current_mapping and not stale_pc_ports:
+                return True, f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
+        elif already_ready and ready_target == target and ready_pc_port == pc_port:
+            return True, f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
 
         for command in ("fport", "rport"):
             self._run(
@@ -749,6 +796,34 @@ class HdcService:
         message = f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
         self._log_hdc(f"{label} rport succeeded: phone tcp:{phone_port} -> PC tcp:{pc_port}")
         return True, message
+
+    def _list_port_mappings(
+        self,
+        args_prefix: list[str],
+        label: str,
+    ) -> list[tuple[int, int, str]] | None:
+        result = self._run(args_prefix + ["fport", "ls"], timeout=5)
+        if result is None:
+            self._log_hdc(f"{label} fport ls timed out; falling back to cached rport state.")
+            return None
+        if result.returncode != 0:
+            message = result.stderr.strip() or result.stdout.strip() or "fport ls failed."
+            self._log_hdc(f"{label} fport ls failed; falling back to cached rport state: {message}")
+            return None
+        return self._parse_port_mappings(result.stdout)
+
+    def _parse_port_mappings(self, output: str) -> list[tuple[int, int, str]]:
+        mappings: list[tuple[int, int, str]] = []
+        for line in output.splitlines():
+            match = re.search(
+                r"\btcp:(\d+)\s+tcp:(\d+)\s+\[(Reverse|Forward)\]",
+                line,
+                re.IGNORECASE,
+            )
+            if not match:
+                continue
+            mappings.append((int(match.group(1)), int(match.group(2)), match.group(3).lower()))
+        return mappings
 
     def cleanup_ports(self, target: str | None = None) -> None:
         cleanup_specs = [
