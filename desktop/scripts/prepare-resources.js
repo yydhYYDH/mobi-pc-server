@@ -1,6 +1,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const {
+  assertNativeExecutableForTarget,
+  nativeExecutableMatchesTarget,
+  removeIfIncompatible
+} = require("./native-platform");
 
 const desktopRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(desktopRoot, "..");
@@ -90,6 +95,17 @@ function copyFileIfExists(source, target) {
   fs.copyFileSync(source, target);
   fs.chmodSync(target, 0o755);
   return true;
+}
+
+function copyNativeFileIfCompatible(source, target, label) {
+  if (!source || !fs.existsSync(source)) {
+    return false;
+  }
+  if (!nativeExecutableMatchesTarget(source, targetPlatform)) {
+    console.warn(`${label} skipped because it is not compatible with ${targetPlatform}: ${source}`);
+    return false;
+  }
+  return copyFileIfExists(source, target);
 }
 
 function copyHdcRuntime(source, targetDirectory) {
@@ -213,6 +229,42 @@ function findOnPath(executable) {
   return "";
 }
 
+function hostPlatformMatchesTarget() {
+  return normalizedTargetPlatform(process.platform) === targetPlatform;
+}
+
+function hdcSourceCandidates() {
+  const platformSpecificEnv =
+    targetPlatform === "linux"
+      ? process.env.HDC_BIN_LINUX
+      : targetPlatform === "darwin"
+        ? process.env.HDC_BIN_DARWIN
+        : process.env.HDC_BIN_WIN;
+  const candidates = [platformSpecificEnv, process.env.HDC_BIN];
+  if (hostPlatformMatchesTarget()) {
+    candidates.push(findOnPath("hdc"));
+  }
+  return candidates.filter(Boolean);
+}
+
+function copyTargetHdcRuntime(targetDirectory) {
+  fs.mkdirSync(targetDirectory, { recursive: true });
+  const target = path.join(targetDirectory, expectedExecutableName("hdc"));
+  removeIfIncompatible(target, targetPlatform, "Existing bundled hdc");
+
+  for (const source of hdcSourceCandidates()) {
+    if (source.endsWith(".exe") && targetPlatform !== "win32") {
+      continue;
+    }
+    if (!nativeExecutableMatchesTarget(source, targetPlatform)) {
+      console.warn(`hdc skipped because it is not compatible with ${targetPlatform}: ${source}`);
+      continue;
+    }
+    return copyHdcRuntime(source, targetDirectory);
+  }
+  return false;
+}
+
 function ensureGitkeep(directory) {
   fs.mkdirSync(directory, { recursive: true });
   fs.writeFileSync(path.join(directory, ".gitkeep"), "");
@@ -265,9 +317,10 @@ function seedBackendExecutable() {
     path.join(repoRoot, "backend", "dist", backendName)
   ];
   const target = path.join(packagedBackend, backendName);
+  removeIfIncompatible(target, targetPlatform, "Existing backend executable");
 
   for (const source of sourceCandidates) {
-    if (copyFileIfExists(source, target)) {
+    if (copyNativeFileIfCompatible(source, target, "Backend executable")) {
       return;
     }
   }
@@ -279,13 +332,15 @@ function prepareLinuxRuntimeResources() {
   const llamaCppDir = path.join(resourcesRoot, "llama-cpp");
   const hdcDir = path.join(resourcesRoot, "hdc");
 
-  copyFileIfExists(
+  copyNativeFileIfCompatible(
     path.join(repoRoot, "3rdparty", "MNN", "apps", "mnncli", "build_mnncli", "mnncli"),
-    path.join(mnnDir, "mnncli")
+    path.join(mnnDir, "mnncli"),
+    "MNN executable"
   );
-  copyFileIfExists(
+  copyNativeFileIfCompatible(
     path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", "build_mnncli", "mnncli"),
-    path.join(mobiinferDir, "mnncli")
+    path.join(mobiinferDir, "mnncli"),
+    "MobiInfer executable"
   );
   copyRuntimeDir(
     path.join(repoRoot, "3rdparty", "llama.cpp", "build-cpu-native", "bin"),
@@ -296,12 +351,7 @@ function prepareLinuxRuntimeResources() {
     path.join(llamaCppDir, "cuda")
   );
 
-  const hdcSource = process.env.HDC_BIN || findOnPath("hdc");
-  if (hdcSource && !hdcSource.endsWith(".exe")) {
-    copyHdcRuntime(hdcSource, hdcDir);
-  } else {
-    fs.mkdirSync(hdcDir, { recursive: true });
-  }
+  copyTargetHdcRuntime(hdcDir);
 
   for (const directory of [mnnDir, mobiinferDir, hdcDir]) {
     ensureGitkeep(directory);
@@ -314,13 +364,15 @@ function prepareDarwinRuntimeResources() {
   const llamaCppDir = path.join(resourcesRoot, "llama-cpp");
   const hdcDir = path.join(resourcesRoot, "hdc");
 
-  copyFileIfExists(
+  copyNativeFileIfCompatible(
     path.join(repoRoot, "3rdparty", "MNN", "apps", "mnncli", "build_mnncli", "mnncli"),
-    path.join(mnnDir, "mnncli")
+    path.join(mnnDir, "mnncli"),
+    "MNN executable"
   );
-  copyFileIfExists(
+  copyNativeFileIfCompatible(
     path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", "build_mnncli", "mnncli"),
-    path.join(mobiinferDir, "mnncli")
+    path.join(mobiinferDir, "mnncli"),
+    "MobiInfer executable"
   );
 
   const copiedLlamaCpp =
@@ -342,12 +394,7 @@ function prepareDarwinRuntimeResources() {
   }
   patchDarwinRuntimeRpaths(path.join(llamaCppDir, "cpu"));
 
-  const hdcSource = process.env.HDC_BIN || findOnPath("hdc");
-  if (hdcSource && !hdcSource.endsWith(".exe")) {
-    copyHdcRuntime(hdcSource, hdcDir);
-  } else {
-    fs.mkdirSync(hdcDir, { recursive: true });
-  }
+  copyTargetHdcRuntime(hdcDir);
 
   for (const directory of [mnnDir, mobiinferDir, hdcDir]) {
     ensureGitkeep(directory);
@@ -390,12 +437,14 @@ if (!fs.existsSync(backendExecutable)) {
     `Backend executable not found: ${backendExecutable}\n` +
     "Build it first with scripts/build-backend.sh on Linux/macOS or scripts/windows/build-backend.ps1 on Windows.";
   if (
-    (targetPlatform === "win32" || targetPlatform === "darwin") &&
+    (targetPlatform === "win32" || targetPlatform === "darwin" || targetPlatform === "linux") &&
     process.env.PC_SERVER_ALLOW_MISSING_BACKEND !== "1"
   ) {
     throw new Error(message);
   }
   console.warn(message);
+} else {
+  assertNativeExecutableForTarget(backendExecutable, targetPlatform, "Backend executable");
 }
 
 const mnnExecutable = path.join(resourcesRoot, "mnn", expectedExecutableName("mnncli"));
@@ -404,6 +453,8 @@ if (!fs.existsSync(mnnExecutable)) {
     `MNN executable not found: ${mnnExecutable}\n` +
     `Build MNN mnncli and copy it to ${path.relative(desktopRoot, path.join(resourcesRoot, "mnn"))} before packaging.`;
   console.warn(message);
+} else {
+  assertNativeExecutableForTarget(mnnExecutable, targetPlatform, "MNN executable");
 }
 
 const mobiinferExecutable = path.join(resourcesRoot, "mobiinfer", expectedExecutableName("mnncli"));
@@ -412,6 +463,8 @@ if (!fs.existsSync(mobiinferExecutable)) {
     `MobiInfer executable not found: ${mobiinferExecutable}\n` +
     `Build MobiInfer mnncli and copy it to ${path.relative(desktopRoot, path.join(resourcesRoot, "mobiinfer"))} before packaging.`;
   console.warn(message);
+} else {
+  assertNativeExecutableForTarget(mobiinferExecutable, targetPlatform, "MobiInfer executable");
 }
 
 const hdcExecutable = path.join(resourcesRoot, "hdc", expectedExecutableName("hdc"));
@@ -420,6 +473,8 @@ if (!fs.existsSync(hdcExecutable)) {
     `hdc executable not found: ${hdcExecutable}\n` +
       "The packaged app can still use hdc from PATH, but bundling hdc is recommended."
   );
+} else {
+  assertNativeExecutableForTarget(hdcExecutable, targetPlatform, "hdc executable");
 }
 
 const llamaCppCpuExecutable = path.join(resourcesRoot, "llama-cpp", "cpu", expectedExecutableName("llama-server"));
@@ -440,6 +495,15 @@ if (
     `llama.cpp server executable not found under ${path.join(resourcesRoot, "llama-cpp")}\n` +
       llamaCppBuildHint
   );
+}
+for (const [label, executable] of [
+  ["llama.cpp CPU server", llamaCppCpuExecutable],
+  ["llama.cpp CUDA server", llamaCppCudaExecutable],
+  ["llama.cpp legacy server", legacyLlamaCppExecutable]
+]) {
+  if (fs.existsSync(executable)) {
+    assertNativeExecutableForTarget(executable, targetPlatform, label);
+  }
 }
 if (targetPlatform !== "darwin" && !fs.existsSync(llamaCppCudaExecutable)) {
   console.warn(

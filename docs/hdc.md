@@ -4,13 +4,30 @@ The backend owns all `hdc` interactions.
 
 Expected first capabilities:
 
-- Detect `hdc` on `PATH`.
+- Detect bundled `hdc` from `HDC_BIN`, then fall back to `hdc` on `PATH`.
 - Run `hdc list targets`.
 - Parse connected devices into structured API responses.
 - Add explicit connect and disconnect endpoints.
 - Add a controlled auto-connect endpoint that searches known wireless targets before doing a bounded LAN scan.
 
 Do not expose a generic arbitrary-command endpoint to the frontend.
+
+## HDC Discovery
+
+The Electron shell sets `HDC_BIN` to the packaged `resources/hdc/hdc` path and prepends
+that directory to `PATH`. The backend still treats the packaged tool as optional:
+
+- Missing packaged `hdc` is skipped.
+- Non-executable packaged `hdc` is skipped.
+- Wrong-platform binaries are skipped by native format checks:
+  Linux uses ELF, macOS uses Mach-O, and Windows uses PE.
+- Packaged `hdc` that starts with loader errors, for example missing shared libraries,
+  is skipped.
+- After skipping an unusable packaged binary, the backend scans `PATH` and uses the
+  first usable system `hdc`.
+
+This behavior is the same on Linux, macOS, and Windows. If neither bundled nor system
+`hdc` is usable, `/api/devices/hdc` reports unavailable and the UI shows `HDC 未找到`.
 
 ## Auto Connect
 

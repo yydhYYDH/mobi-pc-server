@@ -11,6 +11,7 @@ export function ModelsView(props: {
   isDownloaded: (modelId: string) => boolean;
   isDownloading: (modelId: string) => boolean;
   loadModel: (modelId: string) => Promise<void>;
+  loadError?: string | null;
   modelBusy: ModelBusy;
   models: CatalogModel[];
   pauseDownload: (modelId: string) => Promise<void>;
@@ -21,7 +22,7 @@ export function ModelsView(props: {
   return (
     <section className="panel table-panel">
       <PanelTitle action={<CountPill>{props.models.length}</CountPill>} kicker="ModelScope" title="模型资产" />
-      <DataState empty={props.models.length === 0} emptyText="模型目录为空，请检查 configs/models.json。">
+      <DataState error={props.loadError} empty={props.models.length === 0} emptyText="模型目录为空，请检查 configs/models.json。">
       <div className="model-table">
         <div className="table-row table-head">
           <span>模型</span>
