@@ -92,6 +92,29 @@ function copyFileIfExists(source, target) {
   return true;
 }
 
+function copyHdcRuntime(source, targetDirectory) {
+  if (!source || !fs.existsSync(source)) {
+    fs.mkdirSync(targetDirectory, { recursive: true });
+    return false;
+  }
+
+  const executableName = expectedExecutableName("hdc");
+  const sourceDirectory = path.dirname(source);
+  const copied = copyFileIfExists(source, path.join(targetDirectory, executableName));
+  const libraryNames =
+    targetPlatform === "darwin"
+      ? ["libusb_shared.dylib"]
+      : targetPlatform === "win32"
+        ? ["libusb_shared.dll"]
+        : ["libusb_shared.so"];
+
+  for (const libraryName of libraryNames) {
+    copyFileIfExists(path.join(sourceDirectory, libraryName), path.join(targetDirectory, libraryName));
+  }
+
+  return copied;
+}
+
 function copyRuntimeDir(source, target) {
   if (!source || !fs.existsSync(source)) {
     return false;
@@ -123,6 +146,58 @@ function copyRuntimeEntry(source, target) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.copyFileSync(source, target);
   fs.chmodSync(target, stats.mode);
+}
+
+function spawnOutput(command, args) {
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    shell: false
+  });
+
+  if (result.error || result.status !== 0) {
+    return "";
+  }
+
+  return result.stdout || "";
+}
+
+function darwinRpaths(file) {
+  return spawnOutput("otool", ["-l", file])
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("path "))
+    .map((line) => line.split(/\s+/)[1])
+    .filter(Boolean);
+}
+
+function patchDarwinRuntimeRpaths(directory) {
+  if (targetPlatform !== "darwin" || !fs.existsSync(directory)) {
+    return;
+  }
+
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    const file = path.join(directory, entry.name);
+    if (entry.name !== "llama-server" && !entry.name.endsWith(".dylib")) {
+      continue;
+    }
+
+    for (const rpath of darwinRpaths(file)) {
+      if (path.isAbsolute(rpath)) {
+        spawnSync("install_name_tool", ["-delete_rpath", rpath, file], { stdio: "ignore" });
+      }
+    }
+
+    const currentRpaths = darwinRpaths(file);
+    for (const rpath of ["@executable_path", "@loader_path"]) {
+      if (!currentRpaths.includes(rpath)) {
+        spawnSync("install_name_tool", ["-add_rpath", rpath, file], { stdio: "ignore" });
+      }
+    }
+  }
 }
 
 function findOnPath(executable) {
@@ -223,7 +298,7 @@ function prepareLinuxRuntimeResources() {
 
   const hdcSource = process.env.HDC_BIN || findOnPath("hdc");
   if (hdcSource && !hdcSource.endsWith(".exe")) {
-    copyFileIfExists(hdcSource, path.join(hdcDir, "hdc"));
+    copyHdcRuntime(hdcSource, hdcDir);
   } else {
     fs.mkdirSync(hdcDir, { recursive: true });
   }
@@ -265,10 +340,11 @@ function prepareDarwinRuntimeResources() {
   if (!copiedLlamaCpp) {
     fs.mkdirSync(path.join(llamaCppDir, "cpu"), { recursive: true });
   }
+  patchDarwinRuntimeRpaths(path.join(llamaCppDir, "cpu"));
 
   const hdcSource = process.env.HDC_BIN || findOnPath("hdc");
   if (hdcSource && !hdcSource.endsWith(".exe")) {
-    copyFileIfExists(hdcSource, path.join(hdcDir, "hdc"));
+    copyHdcRuntime(hdcSource, hdcDir);
   } else {
     fs.mkdirSync(hdcDir, { recursive: true });
   }

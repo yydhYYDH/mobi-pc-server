@@ -209,7 +209,9 @@ CUDA 构建、模型下载和测试步骤见 [docs/llama-cpp.md](docs/llama-cpp.
 
 ## 模型
 
-模型选项定义在 `configs/models.json`。下载后的模型文件放在 `models/<model-id>/`，不提交到 Git。
+模型选项定义在 `configs/models.json`。开发模式下下载后的模型文件放在 `models/<model-id>/`，不提交到 Git。
+
+桌面发布包会把模型、用户配置、日志和 ModelScope 缓存放到系统用户数据目录，避免覆盖安装或更新应用时被删除。详见 [docs/desktop-data.md](docs/desktop-data.md)。
 
 ## HarmonyOS 设备
 

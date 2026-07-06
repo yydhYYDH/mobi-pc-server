@@ -25,6 +25,8 @@ desktop/resources-linux/
 
 Electron Builder 会把这些资源复制到最终应用的 `resources/` 目录。
 
+运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入安装目录或 AppImage 挂载目录。打包版会使用 `$XDG_CONFIG_HOME/DataHome` 或 `~/.config/DataHome`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
+
 ## 前置要求
 
 建议安装：

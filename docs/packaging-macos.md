@@ -36,6 +36,8 @@ desktop/resources-mac-<arch>/
 
 Electron Builder 会把选中的 `desktop/resources-mac-<arch>/` 复制到最终 `.app` 的 `Contents/Resources/` 目录。
 
+运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入 `.app`。打包版会使用 `~/Library/Application Support/DataHome`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
+
 ## 前置要求
 
 建议安装：
@@ -135,6 +137,7 @@ desktop/resources-mac-x64/backend/pc-server-backend
 ## 3. 准备 llama.cpp
 
 macOS 不使用 CUDA。推荐先构建 Metal 版，并放入 `llama-cpp/cpu/` 目录。后端仍通过现有 CPU 入口发现它。
+构建脚本按 llama.cpp server README 的方式执行 `cmake --build ... --target llama-server`，只生成 `llama-server` 目标，并把同目录运行时动态库一起复制到资源目录。
 
 Apple Silicon：
 

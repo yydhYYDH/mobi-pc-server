@@ -65,6 +65,7 @@ case "$BUILD_MODE" in
     CMAKE_FLAGS=(
       -DGGML_METAL=ON
       -DGGML_NATIVE=OFF
+      -DLLAMA_OPENSSL=OFF
       -DLLAMA_BUILD_UI=OFF
       -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
     )
@@ -102,11 +103,47 @@ if [[ ! -x "$OUTPUT_BIN" ]]; then
   exit 1
 fi
 
+patch_darwin_rpaths() {
+  local runtime_dir="$1"
+
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return
+  fi
+  if ! command -v otool >/dev/null 2>&1 || ! command -v install_name_tool >/dev/null 2>&1; then
+    echo "otool or install_name_tool was not found; skipping Darwin rpath patch." >&2
+    return
+  fi
+
+  for file in "$runtime_dir"/*; do
+    if [[ ! -f "$file" ]]; then
+      continue
+    fi
+    if [[ "$(basename "$file")" != "llama-server" && "$file" != *.dylib ]]; then
+      continue
+    fi
+
+    while IFS= read -r rpath; do
+      if [[ "$rpath" == /* ]]; then
+        install_name_tool -delete_rpath "$rpath" "$file" 2>/dev/null || true
+      fi
+    done < <(otool -l "$file" | awk '/^[[:space:]]*path / { print $2 }')
+
+    current_rpaths="$(otool -l "$file" | awk '/^[[:space:]]*path / { print $2 }')"
+    if ! grep -Fxq "@executable_path" <<<"$current_rpaths"; then
+      install_name_tool -add_rpath "@executable_path" "$file" 2>/dev/null || true
+    fi
+    if ! grep -Fxq "@loader_path" <<<"$current_rpaths"; then
+      install_name_tool -add_rpath "@loader_path" "$file" 2>/dev/null || true
+    fi
+  done
+}
+
 if [[ -n "${LLAMA_CPP_INSTALL_DIR:-}" ]]; then
   mkdir -p "$LLAMA_CPP_INSTALL_DIR"
-  cp "$OUTPUT_BIN" "$LLAMA_CPP_INSTALL_DIR/llama-server"
+  cp -R "$BUILD_DIR/bin/." "$LLAMA_CPP_INSTALL_DIR/"
+  patch_darwin_rpaths "$LLAMA_CPP_INSTALL_DIR"
   chmod +x "$LLAMA_CPP_INSTALL_DIR/llama-server"
-  echo "llama.cpp executable copied to $LLAMA_CPP_INSTALL_DIR/llama-server"
+  echo "llama.cpp runtime copied to $LLAMA_CPP_INSTALL_DIR"
 fi
 
 echo "llama.cpp build output: $OUTPUT_BIN"
