@@ -1,7 +1,9 @@
 import hashlib
+import inspect
 import json
 import multiprocessing
 import os
+import re
 import shutil
 import threading
 import time
@@ -12,6 +14,9 @@ from pathlib import Path
 
 from app.core.paths import MODEL_CATALOG_PATH, MODELS_DIR, REPO_ROOT
 from app.schemas.models import LocalModel, ModelCatalogItem, ModelDownloadStatus
+
+
+DOWNLOAD_METADATA_FILES = {".pc-server-download.json", ".pc-server-download-error.json"}
 
 
 def _snapshot_download_worker(
@@ -393,6 +398,8 @@ class ModelScopeService:
 
         total = 0
         for path in directory.rglob("*"):
+            if path.name in DOWNLOAD_METADATA_FILES:
+                continue
             if path.is_file():
                 try:
                     total += path.stat().st_size
@@ -402,10 +409,11 @@ class ModelScopeService:
 
     def _remote_model_size(self, item: ModelCatalogItem) -> int | None:
         files = self._remote_files(item)
-        if not files:
-            return None
-        total = sum(int(metadata.get("size") or 0) for metadata in files.values())
-        return total or None
+        if files:
+            total = sum(int(metadata.get("size") or 0) for metadata in files.values())
+            if total:
+                return total
+        return self._catalog_size_bytes(item.size)
 
     def _download_process_error(self, exitcode: int | None, error_path: Path) -> str:
         if error_path.exists():
@@ -572,11 +580,11 @@ class ModelScopeService:
             return None
 
         try:
-            files = HubApi().get_model_files(
-                item.modelscope_id,
-                revision=item.revision,
-                recursive=True,
-            )
+            api = HubApi()
+            kwargs: dict[str, object] = {"recursive": True}
+            if self._supports_revision_argument(api.get_model_files):
+                kwargs["revision"] = item.revision
+            files = api.get_model_files(item.modelscope_id, **kwargs)
         except Exception:
             return None
 
@@ -601,7 +609,7 @@ class ModelScopeService:
                 or file_info.get("file_hash")
             )
             try:
-                normalized_path = str(Path(str(file_path)).as_posix()).lstrip("./")
+                normalized_path = self._normalize_remote_file_path(file_path)
                 metadata_by_path[normalized_path] = {
                     "size": int(size) if size is not None else None,
                     "sha256": str(sha256).lower() if sha256 else None,
@@ -612,3 +620,47 @@ class ModelScopeService:
         with self._lock:
             self._remote_file_cache[item.id] = metadata_by_path
         return metadata_by_path
+
+    def _normalize_remote_file_path(self, file_path: object) -> str:
+        normalized_path = Path(str(file_path)).as_posix()
+        while normalized_path.startswith("./"):
+            normalized_path = normalized_path[2:]
+        return normalized_path.lstrip("/")
+
+    def _supports_revision_argument(self, method: object) -> bool:
+        try:
+            parameters = inspect.signature(method).parameters.values()
+        except (TypeError, ValueError):
+            return True
+        return any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD or parameter.name == "revision"
+            for parameter in parameters
+        )
+
+    def _catalog_size_bytes(self, size: str) -> int | None:
+        match = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)\s*([kmgt]?i?b?)\s*", size, re.IGNORECASE)
+        if not match:
+            return None
+
+        value = float(match.group(1))
+        unit = match.group(2).lower()
+        multipliers = {
+            "": 1,
+            "b": 1,
+            "k": 1024,
+            "kb": 1024,
+            "kib": 1024,
+            "m": 1024**2,
+            "mb": 1024**2,
+            "mib": 1024**2,
+            "g": 1024**3,
+            "gb": 1024**3,
+            "gib": 1024**3,
+            "t": 1024**4,
+            "tb": 1024**4,
+            "tib": 1024**4,
+        }
+        multiplier = multipliers.get(unit)
+        if not multiplier:
+            return None
+        return int(value * multiplier)

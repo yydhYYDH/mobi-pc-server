@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import shutil
 import socket
 import subprocess
 import sys
@@ -37,6 +36,21 @@ HDC_AUTO_MAX_WORKERS = max(8, int(os.getenv("HDC_AUTO_MAX_WORKERS", "128")))
 HDC_AUTO_MAX_SUBNETS = max(1, int(os.getenv("HDC_AUTO_MAX_SUBNETS", "8")))
 HDC_AUTO_DEFAULT_PORTS = (8710, 10178, 5555)
 HDC_STATUS_REFRESH_INTERVAL = float(os.getenv("HDC_STATUS_REFRESH_INTERVAL", "5"))
+HDC_LAUNCH_PROBE_TIMEOUT = float(os.getenv("HDC_LAUNCH_PROBE_TIMEOUT", "2"))
+_HOST_PLATFORM = sys.platform
+_NATIVE_FORMAT_BY_PLATFORM = {
+    "darwin": "macho",
+    "linux": "elf",
+    "win32": "pe",
+}
+_MACHO_MAGICS = {
+    bytes.fromhex("feedface"),
+    bytes.fromhex("cefaedfe"),
+    bytes.fromhex("feedfacf"),
+    bytes.fromhex("cffaedfe"),
+    bytes.fromhex("cafebabe"),
+    bytes.fromhex("bebafeca"),
+}
 
 
 class HdcService:
@@ -67,6 +81,7 @@ class HdcService:
         self._status_cache: HdcStatus | None = None
         self._shutdown_event = threading.Event()
         self._origin_http_server: ThreadingHTTPServer | None = None
+        self._hdc_candidate_cache: dict[str, bool] = {}
 
     def status(self) -> HdcStatus:
         hdc_path = self._hdc_path()
@@ -368,12 +383,112 @@ class HdcService:
             self._status_cache = status.model_copy(deep=True)
 
     def _hdc_path(self) -> str | None:
+        for candidate in self._hdc_candidates():
+            if self._is_usable_hdc_candidate(candidate):
+                return str(candidate)
+        return None
+
+    def _hdc_candidates(self) -> list[Path]:
+        candidates: list[Path] = []
+        seen: set[str] = set()
+
+        def add(candidate: Path) -> None:
+            resolved = str(candidate.expanduser().resolve())
+            if resolved in seen:
+                return
+            seen.add(resolved)
+            candidates.append(Path(resolved))
+
         env_path = os.environ.get("HDC_BIN")
         if env_path:
-            path = Path(env_path).expanduser().resolve()
-            if path.exists():
-                return str(path)
-        return shutil.which("hdc")
+            add(Path(env_path))
+
+        executable_names = (
+            ["hdc.exe", "hdc.cmd", "hdc.bat", "hdc"]
+            if sys.platform == "win32"
+            else ["hdc"]
+        )
+        for segment in os.environ.get("PATH", "").split(os.pathsep):
+            if not segment:
+                continue
+            directory = Path(segment).expanduser()
+            for executable_name in executable_names:
+                add(directory / executable_name)
+
+        return candidates
+
+    def _is_usable_hdc_candidate(self, candidate: Path) -> bool:
+        if not candidate.exists() or not candidate.is_file():
+            return False
+        if sys.platform != "win32" and not os.access(candidate, os.X_OK):
+            return False
+        if not self._native_format_matches_host(candidate):
+            return False
+        if sys.platform != _HOST_PLATFORM:
+            return True
+        return self._can_launch_hdc_candidate(candidate)
+
+    def _native_format_matches_host(self, candidate: Path) -> bool:
+        actual = self._native_executable_format(candidate)
+        if actual == "unknown":
+            return True
+        expected = _NATIVE_FORMAT_BY_PLATFORM.get(sys.platform)
+        return expected is None or actual == expected
+
+    def _native_executable_format(self, candidate: Path) -> str:
+        try:
+            with candidate.open("rb") as file:
+                header = file.read(4)
+        except OSError:
+            return "unknown"
+
+        if header.startswith(b"\x7fELF"):
+            return "elf"
+        if header.startswith(b"MZ"):
+            return "pe"
+        if header in _MACHO_MAGICS:
+            return "macho"
+        return "unknown"
+
+    def _can_launch_hdc_candidate(self, candidate: Path) -> bool:
+        try:
+            stat = candidate.stat()
+        except OSError:
+            return False
+
+        cache_key = f"{sys.platform}:{candidate}:{stat.st_mtime_ns}:{stat.st_size}"
+        cached = self._hdc_candidate_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            result = subprocess.run(
+                [str(candidate), "-v"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=HDC_LAUNCH_PROBE_TIMEOUT,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            self._hdc_candidate_cache[cache_key] = False
+            return False
+
+        error_text = f"{result.stderr}\n{result.stdout}".lower()
+        unusable = result.returncode in (126, 127) or any(
+            marker in error_text
+            for marker in (
+                "bad cpu type",
+                "cannot execute",
+                "exec format",
+                "image not found",
+                "no such file",
+                "not found",
+                "permission denied",
+                "shared librar",
+            )
+        )
+        self._hdc_candidate_cache[cache_key] = not unusable
+        return not unusable
 
     def _ensure_origin_hdc_server(self) -> None:
         if self._origin_hdc_server_healthy():

@@ -44,6 +44,7 @@ export function ActiveViewRenderer(props: {
   isDownloaded: (modelId: string) => boolean;
   isDownloading: (modelId: string) => boolean;
   loadModel: (modelId: string) => Promise<void>;
+  loadError?: string | null;
   logFilter: string;
   logRef: RefObject<HTMLPreElement | null>;
   mnn: MnnStatus | null;
@@ -128,6 +129,7 @@ export function ActiveViewRenderer(props: {
           isDownloaded={props.isDownloaded}
           isDownloading={props.isDownloading}
           loadModel={props.loadModel}
+          loadError={props.loadError}
           modelBusy={props.modelBusy}
           models={props.models}
           pauseDownload={props.pauseDownload}

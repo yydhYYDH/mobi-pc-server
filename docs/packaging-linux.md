@@ -94,6 +94,18 @@ desktop/resources-linux/backend/pc-server-backend
 PC_SERVER_PYTHON=/absolute/path/to/python ./scripts/build-backend.sh
 ```
 
+如果在 macOS 上生成 Linux x64 安装包，需要先在 Linux 环境里生成后端可执行文件，
+或者用 Docker 生成 Linux ELF 版本：
+
+```bash
+docker run --rm --platform linux/amd64 \
+  -v "$PWD":/work -w /work python:3.12-bookworm \
+  bash -lc 'python -m pip install -U pip && PC_SERVER_PYTHON=python PC_SERVER_DESKTOP_TARGET_PLATFORM=linux PC_SERVER_DESKTOP_TARGET_ARCH=x64 bash scripts/build-backend.sh'
+```
+
+打包脚本会校验本地二进制格式。Linux 包只接受 ELF 可执行文件；如果误传 macOS
+Mach-O 或 Windows PE 二进制，脚本会跳过或终止，避免产出安装后无法启动后端的包。
+
 ## 3. 构建 Linux 版 MobiInfer
 
 Linux 包需要 Linux 版 MobiInfer 二进制。可以使用项目脚本：
@@ -138,6 +150,16 @@ desktop/resources-linux/hdc/hdc
 ```
 
 如果 `hdc` 依赖其他 `.so`，也放在同一目录，或者确保目标机器系统路径中能找到。
+
+也可以在打包时通过环境变量指定 Linux 版 `hdc`：
+
+```bash
+HDC_BIN_LINUX=/absolute/path/to/linux/hdc npm run dist:linux -- --x64
+```
+
+`HDC_BIN_LINUX` 优先于通用的 `HDC_BIN`。在 macOS 上打 Linux 包时，不要传 macOS
+版 `hdc`；脚本会识别并跳过不兼容的二进制。未内置 `hdc` 的包仍会在目标 Linux
+系统启动后从 `PATH` 查找 `hdc`，目标机未安装时界面会显示 `HDC 未找到`。
 
 ## 5. 准备前端资源
 
