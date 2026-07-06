@@ -3,8 +3,30 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
-DESKTOP_BACKEND_DIR="$ROOT_DIR/desktop/resources-linux/backend"
 PYTHON_BIN="${PC_SERVER_PYTHON:-$BACKEND_DIR/.venv/bin/python}"
+TARGET_PLATFORM="${PC_SERVER_DESKTOP_TARGET_PLATFORM:-$(uname -s)}"
+TARGET_ARCH="${PC_SERVER_DESKTOP_TARGET_ARCH:-$(uname -m)}"
+
+case "$TARGET_ARCH" in
+  x86_64)
+    TARGET_ARCH="x64"
+    ;;
+  arm64|aarch64)
+    TARGET_ARCH="arm64"
+    ;;
+esac
+
+case "$TARGET_PLATFORM" in
+  Darwin|darwin|mac|macos)
+    DESKTOP_BACKEND_DIR="$ROOT_DIR/desktop/resources-mac-$TARGET_ARCH/backend"
+    ;;
+  Linux|linux)
+    DESKTOP_BACKEND_DIR="$ROOT_DIR/desktop/resources-linux/backend"
+    ;;
+  *)
+    DESKTOP_BACKEND_DIR="$ROOT_DIR/desktop/resources-linux/backend"
+    ;;
+esac
 
 if [ ! -x "$PYTHON_BIN" ]; then
   PYTHON_BIN="$(command -v python3)"

@@ -550,6 +550,8 @@ class MnnServerService:
             REPO_ROOT / "3rdparty/mobiinfer/build/apps/mnncli/mnncli.exe",
             REPO_ROOT / "desktop/resources-linux/mobiinfer/mnncli",
             REPO_ROOT / "desktop/resources-win/mobiinfer/mnncli.exe",
+            REPO_ROOT / "desktop/resources-mac-arm64/mobiinfer/mnncli",
+            REPO_ROOT / "desktop/resources-mac-x64/mobiinfer/mnncli",
         ]
         for path in candidates:
             if path.exists():

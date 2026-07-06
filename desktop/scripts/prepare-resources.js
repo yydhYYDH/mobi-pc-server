@@ -7,14 +7,46 @@ const repoRoot = path.resolve(desktopRoot, "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const configsRoot = path.join(repoRoot, "configs");
 const exampleImagesRoot = path.join(repoRoot, "test", "data", "example", "pics");
-const targetPlatform = process.env.PC_SERVER_DESKTOP_TARGET_PLATFORM || process.platform;
-const defaultResourcesDir = targetPlatform === "win32" ? "resources-win" : "resources-linux";
+const targetPlatform = normalizedTargetPlatform(process.env.PC_SERVER_DESKTOP_TARGET_PLATFORM || process.platform);
+const targetArch = normalizedTargetArch();
+const defaultResourcesDir = defaultResourcesDirectory(targetPlatform, targetArch);
 const resourcesRoot = path.resolve(desktopRoot, process.env.PC_SERVER_DESKTOP_RESOURCES || defaultResourcesDir);
 const frontendDist = path.join(frontendRoot, "dist");
 const packagedFrontend = path.join(resourcesRoot, "frontend");
 const packagedBackend = path.join(resourcesRoot, "backend");
 const packagedConfigs = path.join(resourcesRoot, "configs");
 const packagedExampleImages = path.join(resourcesRoot, "example-images");
+
+function normalizedTargetPlatform(platform) {
+  if (platform === "win" || platform === "windows") {
+    return "win32";
+  }
+  if (platform === "mac" || platform === "macos") {
+    return "darwin";
+  }
+  return platform;
+}
+
+function normalizedTargetArch() {
+  const arch = process.env.PC_SERVER_DESKTOP_TARGET_ARCH || process.arch;
+  if (arch === "x64" || arch === "x86_64") {
+    return "x64";
+  }
+  if (arch === "arm64" || arch === "aarch64") {
+    return "arm64";
+  }
+  return "arm64";
+}
+
+function defaultResourcesDirectory(platform, arch) {
+  if (platform === "win32") {
+    return "resources-win";
+  }
+  if (platform === "darwin") {
+    return `resources-mac-${arch}`;
+  }
+  return "resources-linux";
+}
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, {
@@ -201,6 +233,51 @@ function prepareLinuxRuntimeResources() {
   }
 }
 
+function prepareDarwinRuntimeResources() {
+  const mnnDir = path.join(resourcesRoot, "mnn");
+  const mobiinferDir = path.join(resourcesRoot, "mobiinfer");
+  const llamaCppDir = path.join(resourcesRoot, "llama-cpp");
+  const hdcDir = path.join(resourcesRoot, "hdc");
+
+  copyFileIfExists(
+    path.join(repoRoot, "3rdparty", "MNN", "apps", "mnncli", "build_mnncli", "mnncli"),
+    path.join(mnnDir, "mnncli")
+  );
+  copyFileIfExists(
+    path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", "build_mnncli", "mnncli"),
+    path.join(mobiinferDir, "mnncli")
+  );
+
+  const copiedLlamaCpp =
+    copyRuntimeDir(
+      path.join(repoRoot, "3rdparty", "llama.cpp", "build-metal-native", "bin"),
+      path.join(llamaCppDir, "cpu")
+    ) ||
+    copyRuntimeDir(
+      path.join(repoRoot, "3rdparty", "llama.cpp", "build-cpu-native", "bin"),
+      path.join(llamaCppDir, "cpu")
+    ) ||
+    copyRuntimeDir(
+      path.join(repoRoot, "3rdparty", "llama.cpp", "build", "bin"),
+      path.join(llamaCppDir, "cpu")
+    );
+
+  if (!copiedLlamaCpp) {
+    fs.mkdirSync(path.join(llamaCppDir, "cpu"), { recursive: true });
+  }
+
+  const hdcSource = process.env.HDC_BIN || findOnPath("hdc");
+  if (hdcSource && !hdcSource.endsWith(".exe")) {
+    copyFileIfExists(hdcSource, path.join(hdcDir, "hdc"));
+  } else {
+    fs.mkdirSync(hdcDir, { recursive: true });
+  }
+
+  for (const directory of [mnnDir, mobiinferDir, hdcDir]) {
+    ensureGitkeep(directory);
+  }
+}
+
 run(npmCommand(), ["run", "build"], frontendRoot);
 
 if (!fs.existsSync(frontendDist)) {
@@ -225,6 +302,9 @@ seedBackendExecutable();
 if (targetPlatform === "linux") {
   prepareLinuxRuntimeResources();
 }
+if (targetPlatform === "darwin") {
+  prepareDarwinRuntimeResources();
+}
 
 cleanPlatformRuntimeResources();
 
@@ -232,8 +312,11 @@ const backendExecutable = path.join(packagedBackend, expectedBackendName());
 if (!fs.existsSync(backendExecutable)) {
   const message =
     `Backend executable not found: ${backendExecutable}\n` +
-    "Build it first with scripts/build-backend.sh on Linux or scripts/windows/build-backend.ps1 on Windows.";
-  if (targetPlatform === "win32") {
+    "Build it first with scripts/build-backend.sh on Linux/macOS or scripts/windows/build-backend.ps1 on Windows.";
+  if (
+    (targetPlatform === "win32" || targetPlatform === "darwin") &&
+    process.env.PC_SERVER_ALLOW_MISSING_BACKEND !== "1"
+  ) {
     throw new Error(message);
   }
   console.warn(message);
@@ -271,12 +354,18 @@ if (
   !fs.existsSync(llamaCppCudaExecutable) &&
   !fs.existsSync(legacyLlamaCppExecutable)
 ) {
+  const llamaCppBuildHint =
+    targetPlatform === "win32"
+      ? "Build it with scripts/windows/build-llama-cpp.ps1 -Mode cpu."
+      : targetPlatform === "darwin"
+        ? "Build it with LLAMA_CPP_BUILD_MODE=metal ./scripts/build-llama-cpp.sh."
+        : "Build it with LLAMA_CPP_BUILD_MODE=cpu or LLAMA_CPP_BUILD_MODE=cuda ./scripts/build-llama-cpp.sh.";
   console.warn(
     `llama.cpp server executable not found under ${path.join(resourcesRoot, "llama-cpp")}\n` +
-      "Build it with scripts/windows/build-llama-cpp.ps1 -Mode cuda or -Mode cpu."
+      llamaCppBuildHint
   );
 }
-if (!fs.existsSync(llamaCppCudaExecutable)) {
+if (targetPlatform !== "darwin" && !fs.existsSync(llamaCppCudaExecutable)) {
   console.warn(
     `CUDA llama.cpp server executable not found: ${llamaCppCudaExecutable}\n` +
       "Build it with scripts/windows/build-llama-cpp.ps1 -Mode cuda if you want CUDA acceleration."

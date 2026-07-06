@@ -99,6 +99,7 @@ PC_SERVER_SKIP_FRONTEND=1
 详细打包说明见：
 
 - Windows：[docs/packaging-windows.md](docs/packaging-windows.md)
+- macOS：[docs/packaging-macos.md](docs/packaging-macos.md)
 - Linux/WSL：[docs/packaging-linux.md](docs/packaging-linux.md)
 
 ## 运行时后端

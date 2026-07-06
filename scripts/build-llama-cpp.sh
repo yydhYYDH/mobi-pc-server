@@ -4,11 +4,31 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LLAMA_CPP_DIR="$ROOT_DIR/3rdparty/llama.cpp"
 BUILD_TYPE="${LLAMA_CPP_BUILD_TYPE:-Release}"
-BUILD_MODE="${LLAMA_CPP_BUILD_MODE:-cuda}"
+BUILD_MODE="${LLAMA_CPP_BUILD_MODE:-}"
 BUILD_JOBS="${LLAMA_CPP_BUILD_JOBS:-16}"
 BUILD_DIR="${LLAMA_CPP_BUILD_DIR:-}"
 CUDA_ARCH="${LLAMA_CPP_CUDA_ARCH:-89}"
 TARGET="${LLAMA_CPP_TARGET:-llama-server}"
+OSX_ARCHITECTURES="${LLAMA_CPP_OSX_ARCHITECTURES:-}"
+
+if [[ -z "$BUILD_MODE" ]]; then
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    BUILD_MODE="metal"
+  else
+    BUILD_MODE="cuda"
+  fi
+fi
+
+if [[ -z "$OSX_ARCHITECTURES" && "$(uname -s)" == "Darwin" ]]; then
+  case "${PC_SERVER_DESKTOP_TARGET_ARCH:-$(uname -m)}" in
+    x64|x86_64)
+      OSX_ARCHITECTURES="x86_64"
+      ;;
+    arm64|aarch64)
+      OSX_ARCHITECTURES="arm64"
+      ;;
+  esac
+fi
 
 if [[ ! -f "$LLAMA_CPP_DIR/CMakeLists.txt" ]]; then
   echo "Missing llama.cpp source at $LLAMA_CPP_DIR." >&2
@@ -40,11 +60,27 @@ case "$BUILD_MODE" in
       -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
     )
     ;;
+  metal)
+    BUILD_DIR="${BUILD_DIR:-$LLAMA_CPP_DIR/build-metal-native}"
+    CMAKE_FLAGS=(
+      -DGGML_METAL=ON
+      -DGGML_NATIVE=OFF
+      -DLLAMA_BUILD_UI=OFF
+      -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+    )
+    ;;
   *)
-    echo "Unsupported LLAMA_CPP_BUILD_MODE=$BUILD_MODE. Use 'cuda' or 'cpu'." >&2
+    echo "Unsupported LLAMA_CPP_BUILD_MODE=$BUILD_MODE. Use 'cuda', 'cpu', or 'metal'." >&2
     exit 1
     ;;
 esac
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  CMAKE_FLAGS+=(-DGGML_NATIVE=OFF)
+  if [[ -n "$OSX_ARCHITECTURES" ]]; then
+    CMAKE_FLAGS+=(-DCMAKE_OSX_ARCHITECTURES="$OSX_ARCHITECTURES")
+  fi
+fi
 
 cmake -S "$LLAMA_CPP_DIR" -B "$BUILD_DIR" "${CMAKE_FLAGS[@]}" "$@"
 cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --target "$TARGET" -j "$BUILD_JOBS"
@@ -64,6 +100,13 @@ esac
 if [[ ! -x "$OUTPUT_BIN" ]]; then
   echo "llama.cpp target binary was not produced under $BUILD_DIR/bin: $TARGET" >&2
   exit 1
+fi
+
+if [[ -n "${LLAMA_CPP_INSTALL_DIR:-}" ]]; then
+  mkdir -p "$LLAMA_CPP_INSTALL_DIR"
+  cp "$OUTPUT_BIN" "$LLAMA_CPP_INSTALL_DIR/llama-server"
+  chmod +x "$LLAMA_CPP_INSTALL_DIR/llama-server"
+  echo "llama.cpp executable copied to $LLAMA_CPP_INSTALL_DIR/llama-server"
 fi
 
 echo "llama.cpp build output: $OUTPUT_BIN"

@@ -2,7 +2,8 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const desktopRoot = path.resolve(__dirname, "..");
-const target = process.argv[2] || "--dir";
+const args = process.argv.slice(2);
+const target = args[0] || "--dir";
 
 function npmCommand() {
   return process.platform === "win32" ? "npm.cmd" : "npm";
@@ -17,21 +18,56 @@ function electronBuilderCommand() {
   );
 }
 
+function hasArg(value) {
+  return args.includes(value);
+}
+
+function targetMatches(value) {
+  return target === value || target.startsWith(`${value}=`);
+}
+
+function hostElectronArch() {
+  return process.arch === "x64" ? "x64" : "arm64";
+}
+
+function archForTarget() {
+  if (hasArg("--x64")) {
+    return "x64";
+  }
+  if (hasArg("--arm64")) {
+    return "arm64";
+  }
+  return hostElectronArch();
+}
+
 function resourcesDirForTarget() {
-  if (target === "--win" || target.startsWith("--win=")) {
+  if (targetMatches("--win")) {
     return "resources-win";
   }
-  if (target === "--linux" || target.startsWith("--linux=")) {
+  if (targetMatches("--mac")) {
+    return `resources-mac-${archForTarget()}`;
+  }
+  if (targetMatches("--linux")) {
     return "resources-linux";
   }
-  return process.platform === "win32" ? "resources-win" : "resources-linux";
+
+  if (process.platform === "win32") {
+    return "resources-win";
+  }
+  if (process.platform === "darwin") {
+    return `resources-mac-${archForTarget()}`;
+  }
+  return "resources-linux";
 }
 
 function platformForTarget() {
-  if (target === "--win" || target.startsWith("--win=")) {
+  if (targetMatches("--win")) {
     return "win32";
   }
-  if (target === "--linux" || target.startsWith("--linux=")) {
+  if (targetMatches("--mac")) {
+    return "darwin";
+  }
+  if (targetMatches("--linux")) {
     return "linux";
   }
   return process.platform;
@@ -57,10 +93,11 @@ const resourcesDir = resourcesDirForTarget();
 const env = {
   ...process.env,
   PC_SERVER_DESKTOP_RESOURCES: resourcesDir,
+  PC_SERVER_DESKTOP_TARGET_ARCH: archForTarget(),
   PC_SERVER_DESKTOP_TARGET_PLATFORM: platformForTarget()
 };
 
 console.log(`Using desktop resource staging directory: ${resourcesDir}`);
 run(npmCommand(), ["run", "build"], env);
 run(npmCommand(), ["run", "prepare:resources"], env);
-run(electronBuilderCommand(), [target], env);
+run(electronBuilderCommand(), args.length > 0 ? args : [target], env);

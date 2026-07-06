@@ -42,6 +42,16 @@ function frontendViteBin(): string {
   return path.join(repoRoot(), "frontend", "node_modules", "vite", "bin", "vite.js");
 }
 
+function hostResourceDirectory(): string {
+  if (process.platform === "win32") {
+    return "resources-win";
+  }
+  if (process.platform === "darwin") {
+    return `resources-mac-${process.arch === "x64" ? "x64" : "arm64"}`;
+  }
+  return "resources-linux";
+}
+
 function logBuffer(label: string, data: Buffer, error = false): void {
   const text = data.toString("utf8").trimEnd();
   if (!text) {
@@ -173,7 +183,7 @@ function startBackend(): void {
 function childEnv(): NodeJS.ProcessEnv {
   const devResourcesPath = process.env.PC_SERVER_DESKTOP_RESOURCES
     ? path.resolve(repoRoot(), "desktop", process.env.PC_SERVER_DESKTOP_RESOURCES)
-    : path.join(repoRoot(), "desktop", process.platform === "win32" ? "resources-win" : "resources-linux");
+    : path.join(repoRoot(), "desktop", hostResourceDirectory());
   const resourcesPath = app.isPackaged ? process.resourcesPath : devResourcesPath;
   const dataRoot = app.isPackaged ? appDataRoot() : repoRoot();
   const hdcDir = path.join(resourcesPath, "hdc");
