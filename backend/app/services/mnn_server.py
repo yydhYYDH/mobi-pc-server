@@ -127,6 +127,8 @@ class MnnServerService:
             return self.load_model(self._status.active_model_id, self._status.backend)
 
         self._append_log(self._status.backend, "Start requested without an active model.")
+        if self._status.state == "error" and self._status.message:
+            return self._status
         self._status = MnnStatus(
             state="error",
             backend=self._status.backend,

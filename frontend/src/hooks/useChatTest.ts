@@ -131,7 +131,7 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
       return;
     }
     if (mnn?.state !== "running" || !mnn.port) {
-      setChatError("请确认推理服务正在运行。");
+      setChatError(mnn?.message || "请确认推理服务正在运行。");
       return;
     }
     if (selectedImage && !activeModelSupportsImages) {
