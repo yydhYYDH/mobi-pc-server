@@ -22,6 +22,17 @@ export function getRuntimeStatus(backend: BackendId) {
   return fetch(`${API_BASE}${runtimeApiPrefix(backend)}/status`);
 }
 
+async function readRuntimeActionStatus(response: Response, fallback: string) {
+  if (!response.ok) {
+    throw new Error(await apiErrorMessage(response, fallback));
+  }
+  const status = await response.json() as MnnStatus;
+  if (status.state === "error") {
+    throw new Error(status.message || fallback);
+  }
+  return status;
+}
+
 export async function getLlamaCppRuntimes() {
   const response = await fetch(`${API_BASE}/api/llama-cpp/runtimes`);
   if (!response.ok) {
@@ -32,10 +43,7 @@ export async function getLlamaCppRuntimes() {
 
 export async function startRuntime(backend: BackendId) {
   const response = await fetch(`${API_BASE}${runtimeApiPrefix(backend)}/start`, { method: "POST" });
-  if (!response.ok) {
-    throw new Error(await apiErrorMessage(response, "启动失败"));
-  }
-  return response.json() as Promise<MnnStatus>;
+  return readRuntimeActionStatus(response, "启动失败");
 }
 
 export async function stopRuntime(backend: BackendId) {
@@ -52,10 +60,7 @@ export async function loadRuntimeModel(backend: BackendId, modelId: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model_id: modelId, backend })
   });
-  if (!response.ok) {
-    throw new Error(await apiErrorMessage(response, "加载失败"));
-  }
-  return response.json() as Promise<MnnStatus>;
+  return readRuntimeActionStatus(response, "加载失败");
 }
 
 export function readRuntimeStatus(response: Response) {

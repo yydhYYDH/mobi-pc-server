@@ -21,6 +21,8 @@ desktop/out/
 desktop/resources/
 desktop/resources-win/
 desktop/resources-linux/
+desktop/resources-mac-*/
+.worktrees/
 .electron-builder-cache/
 
 # Runtime data

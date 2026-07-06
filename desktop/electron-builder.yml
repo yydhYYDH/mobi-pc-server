@@ -38,6 +38,14 @@ win:
   target:
     - nsis
   artifactName: "DataHome-${version}-${os}-${arch}.${ext}"
+mac:
+  icon: build/icon.icns
+  category: public.app-category.developer-tools
+  identity: null
+  target:
+    - dmg
+    - zip
+  artifactName: "DataHome-${version}-${os}-${arch}.${ext}"
 nsis:
   oneClick: false
   perMachine: false

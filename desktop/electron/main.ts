@@ -4,6 +4,7 @@ import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
+import { initializePersistentData, legacyPackagedDataRoot, persistentDataRoot } from "./persistent-data";
 
 const BACKEND_HOST = process.env.PC_SERVER_BACKEND_HOST ?? "127.0.0.1";
 let backendPort = Number(process.env.PC_SERVER_BACKEND_PORT ?? "18188");
@@ -25,9 +26,13 @@ function backendExecutablePath(): string {
 }
 
 function appDataRoot(): string {
-  return app.isPackaged
-    ? path.join(path.dirname(process.execPath), "pc-server-data")
-    : path.join(repoRoot(), "pc-server-data");
+  return persistentDataRoot({
+    appDataPath: app.getPath("appData"),
+    env: process.env,
+    executablePath: process.execPath,
+    isPackaged: app.isPackaged,
+    repoRoot: repoRoot()
+  });
 }
 
 function npmCommand(): string {
@@ -40,6 +45,16 @@ function nodeCommand(): string {
 
 function frontendViteBin(): string {
   return path.join(repoRoot(), "frontend", "node_modules", "vite", "bin", "vite.js");
+}
+
+function hostResourceDirectory(): string {
+  if (process.platform === "win32") {
+    return "resources-win";
+  }
+  if (process.platform === "darwin") {
+    return `resources-mac-${process.arch === "x64" ? "x64" : "arm64"}`;
+  }
+  return "resources-linux";
 }
 
 function logBuffer(label: string, data: Buffer, error = false): void {
@@ -173,11 +188,22 @@ function startBackend(): void {
 function childEnv(): NodeJS.ProcessEnv {
   const devResourcesPath = process.env.PC_SERVER_DESKTOP_RESOURCES
     ? path.resolve(repoRoot(), "desktop", process.env.PC_SERVER_DESKTOP_RESOURCES)
-    : path.join(repoRoot(), "desktop", process.platform === "win32" ? "resources-win" : "resources-linux");
+    : path.join(repoRoot(), "desktop", hostResourceDirectory());
   const resourcesPath = app.isPackaged ? process.resourcesPath : devResourcesPath;
   const dataRoot = app.isPackaged ? appDataRoot() : repoRoot();
+  const bundledConfigsDir = path.join(resourcesPath, "configs");
+  const configsDir = app.isPackaged ? path.join(dataRoot, "configs") : bundledConfigsDir;
   const hdcDir = path.join(resourcesPath, "hdc");
   const pathValue = [hdcDir, process.env.PATH ?? ""].filter(Boolean).join(path.delimiter);
+
+  if (app.isPackaged) {
+    initializePersistentData({
+      bundledConfigsDir,
+      configsDir,
+      dataRoot,
+      legacyDataRoots: [legacyPackagedDataRoot(process.execPath)]
+    });
+  }
 
   return {
     ...process.env,
@@ -188,7 +214,9 @@ function childEnv(): NodeJS.ProcessEnv {
     PATH: pathValue,
     PC_SERVER_BACKEND_HOST: BACKEND_HOST,
     PC_SERVER_BACKEND_PORT: String(backendPort),
-    PC_SERVER_CONFIGS_DIR: path.join(resourcesPath, "configs"),
+    PC_SERVER_BUNDLED_CONFIGS_DIR: bundledConfigsDir,
+    PC_SERVER_CONFIGS_DIR: configsDir,
+    PC_SERVER_DATA_DIR: dataRoot,
     PC_SERVER_LOGS_DIR: path.join(dataRoot, "logs"),
     PC_SERVER_MODELS_DIR: path.join(dataRoot, "models"),
     PC_SERVER_RESOURCES: resourcesPath,

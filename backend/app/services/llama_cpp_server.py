@@ -67,6 +67,22 @@ class LlamaCppServerAdapter:
                 ("auto", REPO_ROOT / "3rdparty/llama.cpp/llama-server.exe"),
             ]
 
+        if platform.system() == "Darwin":
+            return [
+                ("cpu", RESOURCES_DIR / "llama-cpp/cpu/llama-server"),
+                ("cpu", REPO_ROOT / "desktop/resources-mac-arm64/llama-cpp/cpu/llama-server"),
+                ("cpu", REPO_ROOT / "desktop/resources-mac-x64/llama-cpp/cpu/llama-server"),
+                ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-metal-native/bin/llama-server"),
+                ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-cpu-native/bin/llama-server"),
+                ("auto", RESOURCES_DIR / "llama-cpp/llama-server"),
+                ("auto", RESOURCES_DIR / "mnn/llama-server"),
+                ("auto", REPO_ROOT / "desktop/resources-mac-arm64/llama-cpp/llama-server"),
+                ("auto", REPO_ROOT / "desktop/resources-mac-x64/llama-cpp/llama-server"),
+                ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server"),
+                ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/server"),
+                ("auto", REPO_ROOT / "3rdparty/llama.cpp/llama-server"),
+            ]
+
         return [
             ("cuda", RESOURCES_DIR / "llama-cpp/cuda/llama-server"),
             ("cuda", REPO_ROOT / "desktop/resources-linux/llama-cpp/cuda/llama-server"),

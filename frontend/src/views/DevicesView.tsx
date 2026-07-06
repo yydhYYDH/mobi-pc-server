@@ -2,27 +2,7 @@ import { useState } from "react";
 
 import type { DeviceBusy, HdcStatus } from "../api/types";
 import { EmptyState, InlineNotice, PanelTitle, StatusPill } from "../components";
-
-function normalizeManualTarget(value: string) {
-  return value.trim().replace("：", ":");
-}
-
-function validateManualTarget(value: string) {
-  const target = normalizeManualTarget(value);
-  if (!target) {
-    return "请输入无线调试 IP 和端口。";
-  }
-  const match = /^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/.exec(target);
-  if (!match) {
-    return "格式应为 ip:port，例如 192.168.1.23:5555。";
-  }
-  const octets = match[1].split(".").map(Number);
-  const port = Number(match[2]);
-  if (octets.some((part) => part < 0 || part > 255) || port < 1 || port > 65535) {
-    return "请输入有效的 IP 和端口。";
-  }
-  return null;
-}
+import { getConnectedHdcTargetAction, normalizeHdcTarget, validateHdcConnectTarget } from "../domain/hdcTarget";
 
 export function DevicesView(props: {
   autoConnectHdc: () => Promise<void>;
@@ -36,18 +16,23 @@ export function DevicesView(props: {
   setHdcTarget: (value: string) => void;
 }) {
   const [manualError, setManualError] = useState<string | null>(null);
-  const deviceConnected = Boolean(
-    props.hdc?.pc_server_rport_ready || props.hdc?.devices.some((device) => device.state === "connected")
-  );
+  const manualTargetAction = getConnectedHdcTargetAction({
+    devices: props.hdc?.devices ?? [],
+    pcServerRportReady: props.hdc?.pc_server_rport_ready ?? false,
+    target: props.hdcTarget
+  });
 
   function updateManualTarget(value: string) {
-    props.setHdcTarget(normalizeManualTarget(value));
+    props.setHdcTarget(normalizeHdcTarget(value));
     setManualError(null);
   }
 
   function connectManualTarget() {
-    const normalizedTarget = normalizeManualTarget(props.hdcTarget);
-    const error = validateManualTarget(normalizedTarget);
+    if (manualTargetAction.connected) {
+      return;
+    }
+    const normalizedTarget = normalizeHdcTarget(props.hdcTarget);
+    const error = validateHdcConnectTarget(normalizedTarget);
     if (error) {
       setManualError(error);
       return;
@@ -112,15 +97,15 @@ export function DevicesView(props: {
           <input
             value={props.hdcTarget}
             onChange={(event) => updateManualTarget(event.target.value)}
-            placeholder="请输入无线调试 IP 和端口，例如 192.168.1.23:5555"
+            placeholder="请输入设备序列号，或无线调试地址，例如 192.168.1.23:5555"
           />
           <div className="device-form-note">
-            请输入无线调试 IP 和端口，格式为 ip:port。LLM 端口由后端自动映射：{props.hdcLlmPort || "未转发"}
+            请输入 USB/本地设备序列号，或无线调试 IP 和端口。LLM 端口由后端自动映射：{props.hdcLlmPort || "未转发"}
           </div>
           {manualError ? <InlineNotice variant="device">{manualError}</InlineNotice> : null}
           <div className="actions">
-            <button disabled={props.deviceBusy !== null || deviceConnected} onClick={connectManualTarget}>
-              {deviceConnected ? "已连接" : props.deviceBusy === "connect" ? "连接中..." : "连接"}
+            <button disabled={props.deviceBusy !== null || manualTargetAction.disabled} onClick={connectManualTarget}>
+              {props.deviceBusy === "connect" ? "连接中..." : manualTargetAction.label}
             </button>
             <button disabled={props.deviceBusy !== null} onClick={() => void props.disconnectHdc()}>
               {props.deviceBusy === "disconnect" ? "断开中..." : "断开"}

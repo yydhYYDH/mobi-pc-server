@@ -11,8 +11,12 @@
     "dev": "npm run check-node && tsc -p tsconfig.json && electron .",
     "prepare:resources": "npm run check-node && node scripts/prepare-resources.js",
     "package": "node scripts/package-desktop.js --dir",
+    "dist:mac": "node scripts/package-desktop.js --mac",
+    "dist:mac:x64": "node scripts/package-desktop.js --mac --x64",
+    "dist:mac:arm64": "node scripts/package-desktop.js --mac --arm64",
     "dist:linux": "node scripts/package-desktop.js --linux",
     "dist:win": "node scripts/package-desktop.js --win",
+    "test:persistent-data": "npm run build && node scripts/test-persistent-data.js",
     "start": "electron ."
   },
   "engines": {

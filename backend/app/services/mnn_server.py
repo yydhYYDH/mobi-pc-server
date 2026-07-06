@@ -127,6 +127,8 @@ class MnnServerService:
             return self.load_model(self._status.active_model_id, self._status.backend)
 
         self._append_log(self._status.backend, "Start requested without an active model.")
+        if self._status.state == "error" and self._status.message:
+            return self._status
         self._status = MnnStatus(
             state="error",
             backend=self._status.backend,
@@ -550,6 +552,8 @@ class MnnServerService:
             REPO_ROOT / "3rdparty/mobiinfer/build/apps/mnncli/mnncli.exe",
             REPO_ROOT / "desktop/resources-linux/mobiinfer/mnncli",
             REPO_ROOT / "desktop/resources-win/mobiinfer/mnncli.exe",
+            REPO_ROOT / "desktop/resources-mac-arm64/mobiinfer/mnncli",
+            REPO_ROOT / "desktop/resources-mac-x64/mobiinfer/mnncli",
         ]
         for path in candidates:
             if path.exists():

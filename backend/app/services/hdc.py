@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import shutil
 import socket
 import subprocess
 import sys
@@ -37,6 +36,21 @@ HDC_AUTO_MAX_WORKERS = max(8, int(os.getenv("HDC_AUTO_MAX_WORKERS", "128")))
 HDC_AUTO_MAX_SUBNETS = max(1, int(os.getenv("HDC_AUTO_MAX_SUBNETS", "8")))
 HDC_AUTO_DEFAULT_PORTS = (8710, 10178, 5555)
 HDC_STATUS_REFRESH_INTERVAL = float(os.getenv("HDC_STATUS_REFRESH_INTERVAL", "5"))
+HDC_LAUNCH_PROBE_TIMEOUT = float(os.getenv("HDC_LAUNCH_PROBE_TIMEOUT", "2"))
+_HOST_PLATFORM = sys.platform
+_NATIVE_FORMAT_BY_PLATFORM = {
+    "darwin": "macho",
+    "linux": "elf",
+    "win32": "pe",
+}
+_MACHO_MAGICS = {
+    bytes.fromhex("feedface"),
+    bytes.fromhex("cefaedfe"),
+    bytes.fromhex("feedfacf"),
+    bytes.fromhex("cffaedfe"),
+    bytes.fromhex("cafebabe"),
+    bytes.fromhex("bebafeca"),
+}
 
 
 class HdcService:
@@ -67,6 +81,7 @@ class HdcService:
         self._status_cache: HdcStatus | None = None
         self._shutdown_event = threading.Event()
         self._origin_http_server: ThreadingHTTPServer | None = None
+        self._hdc_candidate_cache: dict[str, bool] = {}
 
     def status(self) -> HdcStatus:
         hdc_path = self._hdc_path()
@@ -285,12 +300,19 @@ class HdcService:
         )
 
     def disconnect(self, target: str) -> HdcStatus:
+        target = target.strip()
         hdc_path = self._hdc_path()
         if not hdc_path:
             return self._status_response(available=False, message="hdc was not found on PATH.")
 
         self.cleanup_ports(target=target)
-        result = self._run([hdc_path, "tdisconn", target], timeout=10)
+        wireless_target = self._parse_wireless_target(target)
+        if not wireless_target:
+            current = self._status_live()
+            current.message = f"Cleaned HDC port mappings for USB/local target {target}."
+            return current
+
+        result = self._run([hdc_path, "tconn", wireless_target, "-remove"], timeout=10)
         if result is None:
             return self._status_response(
                 available=True,
@@ -304,7 +326,7 @@ class HdcService:
                 message=result.stderr.strip() or result.stdout.strip() or "hdc disconnect failed.",
             )
         current = self._status_live()
-        current.message = result.stdout.strip() or f"Disconnected from {target}."
+        current.message = result.stdout.strip() or f"Disconnected from {wireless_target}."
         return current
 
     def shutdown(self) -> None:
@@ -368,12 +390,112 @@ class HdcService:
             self._status_cache = status.model_copy(deep=True)
 
     def _hdc_path(self) -> str | None:
+        for candidate in self._hdc_candidates():
+            if self._is_usable_hdc_candidate(candidate):
+                return str(candidate)
+        return None
+
+    def _hdc_candidates(self) -> list[Path]:
+        candidates: list[Path] = []
+        seen: set[str] = set()
+
+        def add(candidate: Path) -> None:
+            resolved = str(candidate.expanduser().resolve())
+            if resolved in seen:
+                return
+            seen.add(resolved)
+            candidates.append(Path(resolved))
+
         env_path = os.environ.get("HDC_BIN")
         if env_path:
-            path = Path(env_path).expanduser().resolve()
-            if path.exists():
-                return str(path)
-        return shutil.which("hdc")
+            add(Path(env_path))
+
+        executable_names = (
+            ["hdc.exe", "hdc.cmd", "hdc.bat", "hdc"]
+            if sys.platform == "win32"
+            else ["hdc"]
+        )
+        for segment in os.environ.get("PATH", "").split(os.pathsep):
+            if not segment:
+                continue
+            directory = Path(segment).expanduser()
+            for executable_name in executable_names:
+                add(directory / executable_name)
+
+        return candidates
+
+    def _is_usable_hdc_candidate(self, candidate: Path) -> bool:
+        if not candidate.exists() or not candidate.is_file():
+            return False
+        if sys.platform != "win32" and not os.access(candidate, os.X_OK):
+            return False
+        if not self._native_format_matches_host(candidate):
+            return False
+        if sys.platform != _HOST_PLATFORM:
+            return True
+        return self._can_launch_hdc_candidate(candidate)
+
+    def _native_format_matches_host(self, candidate: Path) -> bool:
+        actual = self._native_executable_format(candidate)
+        if actual == "unknown":
+            return True
+        expected = _NATIVE_FORMAT_BY_PLATFORM.get(sys.platform)
+        return expected is None or actual == expected
+
+    def _native_executable_format(self, candidate: Path) -> str:
+        try:
+            with candidate.open("rb") as file:
+                header = file.read(4)
+        except OSError:
+            return "unknown"
+
+        if header.startswith(b"\x7fELF"):
+            return "elf"
+        if header.startswith(b"MZ"):
+            return "pe"
+        if header in _MACHO_MAGICS:
+            return "macho"
+        return "unknown"
+
+    def _can_launch_hdc_candidate(self, candidate: Path) -> bool:
+        try:
+            stat = candidate.stat()
+        except OSError:
+            return False
+
+        cache_key = f"{sys.platform}:{candidate}:{stat.st_mtime_ns}:{stat.st_size}"
+        cached = self._hdc_candidate_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            result = subprocess.run(
+                [str(candidate), "-v"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=HDC_LAUNCH_PROBE_TIMEOUT,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            self._hdc_candidate_cache[cache_key] = False
+            return False
+
+        error_text = f"{result.stderr}\n{result.stdout}".lower()
+        unusable = result.returncode in (126, 127) or any(
+            marker in error_text
+            for marker in (
+                "bad cpu type",
+                "cannot execute",
+                "exec format",
+                "image not found",
+                "no such file",
+                "not found",
+                "permission denied",
+                "shared librar",
+            )
+        )
+        self._hdc_candidate_cache[cache_key] = not unusable
+        return not unusable
 
     def _ensure_origin_hdc_server(self) -> None:
         if self._origin_hdc_server_healthy():
@@ -437,6 +559,7 @@ class HdcService:
             from app.legacy import hdc_server as module
 
             module.LEGACY_LOOP_ENABLED = False
+            self._install_legacy_log_bridge(module)
             server = ThreadingHTTPServer(("0.0.0.0", module.SERVER_PORT), module.HDCServerHandler)
             self._origin_http_server = server
             self._origin_server_started = True
@@ -455,6 +578,16 @@ class HdcService:
             if server is not None:
                 server.server_close()
                 self._origin_http_server = None
+
+    def _install_legacy_log_bridge(self, module) -> None:
+        set_log_sink = getattr(module, "set_log_sink", None)
+        if not callable(set_log_sink):
+            return
+
+        def append_legacy_log(line: str) -> None:
+            self._logs.append(HDC_SERVER_LOG, line)
+
+        set_log_sink(append_legacy_log)
 
     def _log_hdc_server(self, message: str) -> None:
         text = f">> [HDC] {message}"
@@ -609,12 +742,52 @@ class HdcService:
         if not hdc_path:
             return False, f"{label} rport skipped: hdc was not found."
 
-        if already_ready and ready_target == target and ready_pc_port == pc_port:
-            return True, f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
-
         args_prefix = [hdc_path]
         if target:
             args_prefix.extend(["-t", target])
+
+        mappings = self._list_port_mappings(args_prefix, label)
+        if mappings is not None:
+            stale_pc_ports = [
+                mapped_pc_port
+                for mapped_phone_port, mapped_pc_port, direction in mappings
+                if direction == "reverse"
+                and mapped_phone_port == phone_port
+                and mapped_pc_port != pc_port
+            ]
+            for stale_pc_port in stale_pc_ports:
+                cleanup = self._run(
+                    args_prefix + ["rport", "rm", f"tcp:{phone_port}", f"tcp:{stale_pc_port}"],
+                    timeout=5,
+                )
+                if cleanup is None:
+                    return False, f"{label} stale rport cleanup timed out."
+                if cleanup.returncode != 0:
+                    message = (
+                        cleanup.stderr.strip()
+                        or cleanup.stdout.strip()
+                        or "stale rport cleanup failed."
+                    )
+                    self._log_hdc(
+                        f"{label} stale rport cleanup failed: phone tcp:{phone_port} "
+                        f"-> PC tcp:{stale_pc_port}: {message}"
+                    )
+                    return False, message
+                self._log_hdc(
+                    f"{label} stale rport cleaned up: phone tcp:{phone_port} "
+                    f"-> PC tcp:{stale_pc_port}"
+                )
+
+            has_current_mapping = any(
+                direction == "reverse"
+                and mapped_phone_port == phone_port
+                and mapped_pc_port == pc_port
+                for mapped_phone_port, mapped_pc_port, direction in mappings
+            )
+            if has_current_mapping and not stale_pc_ports:
+                return True, f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
+        elif already_ready and ready_target == target and ready_pc_port == pc_port:
+            return True, f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
 
         for command in ("fport", "rport"):
             self._run(
@@ -634,6 +807,34 @@ class HdcService:
         message = f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
         self._log_hdc(f"{label} rport succeeded: phone tcp:{phone_port} -> PC tcp:{pc_port}")
         return True, message
+
+    def _list_port_mappings(
+        self,
+        args_prefix: list[str],
+        label: str,
+    ) -> list[tuple[int, int, str]] | None:
+        result = self._run(args_prefix + ["fport", "ls"], timeout=5)
+        if result is None:
+            self._log_hdc(f"{label} fport ls timed out; falling back to cached rport state.")
+            return None
+        if result.returncode != 0:
+            message = result.stderr.strip() or result.stdout.strip() or "fport ls failed."
+            self._log_hdc(f"{label} fport ls failed; falling back to cached rport state: {message}")
+            return None
+        return self._parse_port_mappings(result.stdout)
+
+    def _parse_port_mappings(self, output: str) -> list[tuple[int, int, str]]:
+        mappings: list[tuple[int, int, str]] = []
+        for line in output.splitlines():
+            match = re.search(
+                r"\btcp:(\d+)\s+tcp:(\d+)\s+\[(Reverse|Forward)\]",
+                line,
+                re.IGNORECASE,
+            )
+            if not match:
+                continue
+            mappings.append((int(match.group(1)), int(match.group(2)), match.group(3).lower()))
+        return mappings
 
     def cleanup_ports(self, target: str | None = None) -> None:
         cleanup_specs = [

@@ -28,6 +28,8 @@ desktop/resources-win/
 
 Electron Builder 会把 `desktop/resources-win/` 下的内容复制到最终安装包的 `resources/` 目录。Linux 打包使用独立的 `desktop/resources-linux/`，不要再把两个平台的运行时文件混放到同一个 staging 目录。
 
+运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入安装目录。打包版会使用 `%APPDATA%\DataHome`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
+
 ## 前置要求
 
 建议安装：
@@ -434,4 +436,3 @@ desktop/resources-win/backend/pc-server-backend.exe
 ### CUDA Runtime 要不要放进包
 
 第一版不建议内置完整 CUDA Toolkit。优先检测用户系统是否已安装 NVIDIA Driver/CUDA runtime。后续如果要做 CUDA 可选组件，只打包运行所需 DLL，不打包完整 Toolkit。
-

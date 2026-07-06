@@ -63,6 +63,48 @@ AUTO_DISCOVERY_MAX_SUBNETS = max(1, int(os.environ.get("HDC_AUTO_MAX_SUBNETS", "
 AUTO_DISCOVERY_EXTRA_PORTS = os.environ.get("HDC_AUTO_PORTS", "")
 AUTO_DISCOVERY_EXTRA_TARGETS = os.environ.get("HDC_AUTO_TARGETS", "")
 AUTO_DISCOVERY_DEFAULT_PORTS = (8710, 10178, 5555)
+LOG_SINK = None
+
+
+def set_log_sink(sink):
+    global LOG_SINK
+    LOG_SINK = sink
+
+
+def emit_hdc_server_log(message):
+    text = str(message or "").rstrip()
+    if not text:
+        return
+    print(text, flush=True)
+    sink = LOG_SINK
+    if callable(sink):
+        try:
+            sink(text)
+        except Exception:
+            pass
+
+
+def _compact_log_value(value, limit=160):
+    if isinstance(value, (dict, list)):
+        text = json.dumps(value, ensure_ascii=False)
+    else:
+        text = str(value)
+    text = text.replace("\r", "\\r").replace("\n", "\\n")
+    if len(text) > limit:
+        return text[:limit] + "..."
+    return text
+
+
+def summarize_workflow_payload(payload):
+    if not isinstance(payload, dict) or not payload:
+        return "{}"
+    parts = []
+    for key, value in payload.items():
+        if key in {"image_b64", "screenshot", "messages"}:
+            parts.append(f"{key}=<omitted>")
+            continue
+        parts.append(f"{key}={_compact_log_value(value)}")
+    return "{" + ", ".join(parts) + "}"
 
 def make_hdc_tunnel_status(status, message, target="", tunnel_ready=False, fport_ready=False,
                            rport_ready=False, rport_listening=None,
@@ -1549,20 +1591,79 @@ def run_hdc_command(cmd, timeout=HDC_ACTION_TIMEOUT):
 
 
 FOREGROUND_PACKAGE_PATTERNS = (
+    re.compile(r"(?im)\bbundle\s+name\s*\[\s*([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)\s*\]"),
+    re.compile(r"(?im)\bapp\s+name\s*\[\s*([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)\s*\]"),
+    re.compile(r"(?im)\bmission\s+name\b[^\r\n#]*#\[\s*#([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)[:\]]"),
     re.compile(r"(?im)\bbundle(?:\s*name|name)?\b\s*[:=]\s*['\"]?([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)"),
     re.compile(r"(?im)\bmission\s+name\b[^A-Za-z0-9_#-]*#*\s*([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)"),
     re.compile(r"(?im)\bmain\s+window\b.*?\bbundle(?:\s*name)?\b\s*[:=]\s*['\"]?([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)"),
     re.compile(r"(?im)\bability\b.*?\bbundle(?:\s*name)?\b\s*[:=]\s*['\"]?([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)"),
 )
+ABILITY_FOREGROUND_STATE_PATTERN = re.compile(r"(?im)^\s*state\s*#FOREGROUND\b")
+APP_FOREGROUND_STATE_PATTERN = re.compile(r"(?im)^\s*app\s+state\s*#FOREGROUND\b")
+MISSION_BLOCK_START_PATTERN = re.compile(r"(?im)^\s*Mission ID #")
 
 
-def extract_foreground_package_name(text):
+def extract_package_name_from_text(text):
     raw = str(text or "")
     for pattern in FOREGROUND_PACKAGE_PATTERNS:
         match = pattern.search(raw)
         if match:
             return match.group(1).strip()
     return ""
+
+
+def mission_blocks_from_dump(text):
+    blocks = []
+    current = []
+    for line in str(text or "").splitlines():
+        if MISSION_BLOCK_START_PATTERN.search(line):
+            if current:
+                blocks.append("\n".join(current))
+            current = [line]
+        elif current:
+            current.append(line)
+    if current:
+        blocks.append("\n".join(current))
+    return blocks
+
+
+def extract_foreground_package_name(text):
+    raw = str(text or "")
+    blocks = mission_blocks_from_dump(raw)
+
+    for block in blocks:
+        if ABILITY_FOREGROUND_STATE_PATTERN.search(block):
+            package_name = extract_package_name_from_text(block)
+            if package_name:
+                return package_name
+
+    lines = raw.splitlines()
+    for index, line in enumerate(lines):
+        if ABILITY_FOREGROUND_STATE_PATTERN.search(line):
+            start = max(0, index - 12)
+            end = min(len(lines), index + 4)
+            package_name = extract_package_name_from_text("\n".join(lines[start:end]))
+            if package_name:
+                return package_name
+
+    # Some hidumper variants only expose app-level foreground state. Use it as a fallback
+    # after ability-level state, because mission-list may keep stale app state on old tasks.
+    for block in blocks:
+        if APP_FOREGROUND_STATE_PATTERN.search(block):
+            package_name = extract_package_name_from_text(block)
+            if package_name:
+                return package_name
+
+    for index, line in enumerate(lines):
+        if APP_FOREGROUND_STATE_PATTERN.search(line):
+            start = max(0, index - 12)
+            end = min(len(lines), index + 4)
+            package_name = extract_package_name_from_text("\n".join(lines[start:end]))
+            if package_name:
+                return package_name
+
+    return extract_package_name_from_text(raw)
 
 
 def run_hdc_command_capture(cmd, timeout=None):
@@ -1598,36 +1699,69 @@ def detect_current_foreground_package_name():
     return ""
 
 
+def expected_package_name_for_app_start(app_name, package_name):
+    package = str(package_name or "").strip()
+    if package:
+        return package
+    app = str(app_name or "").strip()
+    if not app:
+        return ""
+    mapping = getattr(harmony_agent, "APP_MAPPING", {}) if harmony_agent is not None else {}
+    mapped = mapping.get(app) if isinstance(mapping, dict) else ""
+    if mapped:
+        return mapped
+    if "." in app:
+        return app
+    return ""
+
+
 def build_app_start_result(app_name, package_name, reset_first):
     target = app_name or package_name
     if not target:
         raise RuntimeError('app_start requires app_name or package_name')
+    expected_package_name = expected_package_name_for_app_start(app_name, package_name)
+    emit_hdc_server_log(
+        ">> [HDC操作] 启动应用 "
+        f"app_name={app_name or ''} package_name={package_name or ''} "
+        f"reset_first={bool(reset_first)} expected={expected_package_name or ''}"
+    )
     ok = harmony_agent.launch_app(target, reset_first=reset_first)
     if not ok and package_name and package_name != target:
+        emit_hdc_server_log(f">> [HDC操作] 启动应用回退 package_name={package_name}")
         ok = harmony_agent.launch_app(package_name, reset_first=reset_first)
     if not ok:
+        emit_hdc_server_log(f">> [HDC操作] 启动应用失败 target={target}")
         return {
             'status': 'error',
             'message': f'app_start failed: {target}',
-            'package_name': package_name
+            'package_name': expected_package_name or package_name
         }
     current_package_name = ''
-    if package_name:
+    if expected_package_name:
         current_package_name = detect_current_foreground_package_name()
-        if current_package_name and current_package_name != package_name:
+        if current_package_name != expected_package_name:
+            current = current_package_name or "unknown"
+            emit_hdc_server_log(
+                ">> [HDC操作] 启动应用校验失败 "
+                f"expected={expected_package_name} current={current}"
+            )
             return {
                 'status': 'error',
-                'message': f'app_identity_mismatch: expected {package_name}, current {current_package_name}',
-                'package_name': package_name,
-                'current_package_name': current_package_name
+                'message': f'app_start verification failed: expected {expected_package_name}, current {current}',
+                'package_name': expected_package_name,
+                'current_package_name': current
             }
     result = {
         'status': 'ok',
         'message': f'app_start {target}',
-        'package_name': package_name
+        'package_name': expected_package_name or package_name
     }
     if current_package_name:
         result['current_package_name'] = current_package_name
+    emit_hdc_server_log(
+        ">> [HDC操作] 启动应用成功 "
+        f"target={target} current={current_package_name or expected_package_name or ''}"
+    )
     return result
 
 def hdc_prefix():
@@ -1727,7 +1861,7 @@ def describe_gui_action(payload):
     return f"{action or 'unknown'}: {payload}"
 
 def log_gui_action(payload):
-    print(f">> [HDC操作] {describe_gui_action(payload)}", flush=True)
+    emit_hdc_server_log(f">> [HDC操作] {describe_gui_action(payload)}")
 
 def workflow_gui_action(payload):
     ensure_workflow_agent_ready()
@@ -1865,6 +1999,11 @@ def _workflow_gui_action_impl(payload):
 def handle_workflow_action(action, payload):
     action = str(action or '')
     payload = payload or {}
+    if action not in ('health', 'repair_health', 'agent_config'):
+        emit_hdc_server_log(
+            f">> [Workflow] request action={action or 'unknown'} "
+            f"payload={summarize_workflow_payload(payload)}"
+        )
 
     if action == 'health':
         return hdc_health_payload(force=False, repair=False)

@@ -220,6 +220,7 @@ function App() {
           isDownloaded={isDownloaded}
           isDownloading={isDownloading}
           loadModel={loadModel}
+          loadError={error && models.length === 0 ? error : null}
           logFilter={logFilter}
           logRef={logRef}
           mnn={mnn}

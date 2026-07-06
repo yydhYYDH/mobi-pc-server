@@ -193,7 +193,8 @@ def example_image(image_id: str) -> dict[str, Any]:
 def chat_completions(payload: dict[str, Any]) -> dict[str, Any]:
     status = runtime_service.status()
     if status.state != "running" or not status.port:
-        raise HTTPException(status_code=409, detail="Inference server is not running.")
+        detail = status.message or "Inference server is not running."
+        raise HTTPException(status_code=409, detail=detail)
 
     upstream_payload = _normalize_uploaded_images(payload, status.backend)
     upstream_payload["stream"] = False
