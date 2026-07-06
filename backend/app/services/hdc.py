@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from typing import NamedTuple
 
 from app.core.paths import REPO_ROOT
 from app.schemas.devices import HdcDevice, HdcStatus
@@ -51,6 +52,13 @@ _MACHO_MAGICS = {
     bytes.fromhex("cafebabe"),
     bytes.fromhex("bebafeca"),
 }
+
+
+class HdcPortMapping(NamedTuple):
+    target: str
+    local: str
+    remote: str
+    direction: str
 
 
 class HdcService:
@@ -837,6 +845,10 @@ class HdcService:
         return mappings
 
     def cleanup_ports(self, target: str | None = None) -> None:
+        if self._cleanup_all_listed_port_mappings(target):
+            self._reset_port_state()
+            return
+
         cleanup_specs = [
             (
                 self._llm_rport_target,
@@ -860,12 +872,77 @@ class HdcService:
                 self._log_hdc(
                     f"{label} port cleanup failed: phone tcp:{phone_port} -> PC tcp:{pc_port}: {last_error}"
                 )
+        self._reset_port_state()
+
+    def _reset_port_state(self) -> None:
         self._llm_rport_ready = False
         self._pc_server_rport_ready = False
         self._llm_rport_target = ""
         self._pc_server_rport_target = ""
         self._llm_rport_pc_port = 0
         self._pc_server_rport_pc_port = 0
+
+    def _cleanup_all_listed_port_mappings(self, target: str | None = None) -> bool:
+        mappings = self._list_all_port_mappings()
+        if mappings is None:
+            return False
+        cleanup_target = (target or "").strip()
+        for mapping in mappings:
+            if cleanup_target and mapping.target != cleanup_target:
+                continue
+            self._cleanup_listed_port_mapping(mapping)
+        return True
+
+    def _list_all_port_mappings(self) -> list[HdcPortMapping] | None:
+        hdc_path = self._hdc_path()
+        if not hdc_path:
+            return None
+        for subcommand in ("ls", "list"):
+            result = self._run([hdc_path, "fport", subcommand], timeout=5)
+            if result is None:
+                continue
+            if result.returncode == 0:
+                return self._parse_all_port_mappings(result.stdout)
+        return None
+
+    def _parse_all_port_mappings(self, output: str) -> list[HdcPortMapping]:
+        mappings: list[HdcPortMapping] = []
+        for line in output.splitlines():
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+            direction = parts[3].strip("[]").lower()
+            if direction not in {"forward", "reverse"}:
+                continue
+            mappings.append(HdcPortMapping(parts[0], parts[1], parts[2], direction))
+        return mappings
+
+    def _cleanup_listed_port_mapping(self, mapping: HdcPortMapping) -> None:
+        hdc_path = self._hdc_path()
+        if not hdc_path:
+            return
+        command = "rport" if mapping.direction == "reverse" else "fport"
+        result = self._run(
+            [hdc_path, "-t", mapping.target, command, "rm", mapping.local, mapping.remote],
+            timeout=5,
+        )
+        if result is None:
+            self._log_hdc(
+                f"{command} cleanup timed out: target={mapping.target} "
+                f"{mapping.local} -> {mapping.remote}"
+            )
+            return
+        if result.returncode == 0:
+            self._log_hdc(
+                f"{command} cleaned up from list: target={mapping.target} "
+                f"{mapping.local} -> {mapping.remote}"
+            )
+            return
+        message = result.stderr.strip() or result.stdout.strip() or "cleanup failed"
+        self._log_hdc(
+            f"{command} cleanup failed from list: target={mapping.target} "
+            f"{mapping.local} -> {mapping.remote}: {message}"
+        )
 
     def _cleanup_port_mapping(
         self,

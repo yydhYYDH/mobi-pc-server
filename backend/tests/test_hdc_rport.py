@@ -78,6 +78,14 @@ def test_disconnect_usb_target_only_cleans_ports_without_tdisconn(
 
     def fake_run(args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
         calls.append(args)
+        if args == ["hdc", "fport", "ls"]:
+            return completed(
+                args,
+                stdout=(
+                    f"{target}    tcp:8090 tcp:8090    [Reverse]\n"
+                    f"{target}    tcp:15001 tcp:18188    [Reverse]\n"
+                ),
+            )
         return completed(args, stdout="ok")
 
     monkeypatch.setattr(service, "_run", fake_run)
@@ -88,6 +96,71 @@ def test_disconnect_usb_target_only_cleans_ports_without_tdisconn(
     assert not any(args[1] == "tdisconn" for args in calls)
     assert not any(args[1:4] == ["tconn", target, "-remove"] for args in calls)
     assert ["hdc", "-t", target, "rport", "rm", "tcp:15001", "tcp:18188"] in calls
+
+
+def test_cleanup_ports_removes_all_listed_forward_and_reverse_mappings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = HdcService()
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(service, "_hdc_path", lambda: "hdc")
+    monkeypatch.setattr(service, "_log_hdc", lambda _message: None)
+
+    def fake_run(args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args == ["hdc", "fport", "ls"]:
+            return completed(
+                args,
+                stdout=(
+                    "4QE0225916013634    tcp:15001 tcp:18219    [Reverse]\n"
+                    "4QE0225916013634    tcp:8090 tcp:8090    [Reverse]\n"
+                    "4QE0225916013634    tcp:9126 tcp:9126    [Forward]\n"
+                ),
+            )
+        return completed(args)
+
+    monkeypatch.setattr(service, "_run", fake_run)
+
+    service.cleanup_ports()
+
+    assert calls == [
+        ["hdc", "fport", "ls"],
+        ["hdc", "-t", "4QE0225916013634", "rport", "rm", "tcp:15001", "tcp:18219"],
+        ["hdc", "-t", "4QE0225916013634", "rport", "rm", "tcp:8090", "tcp:8090"],
+        ["hdc", "-t", "4QE0225916013634", "fport", "rm", "tcp:9126", "tcp:9126"],
+    ]
+
+
+def test_cleanup_ports_filters_listed_mappings_by_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = HdcService()
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(service, "_hdc_path", lambda: "hdc")
+    monkeypatch.setattr(service, "_log_hdc", lambda _message: None)
+
+    def fake_run(args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args == ["hdc", "fport", "ls"]:
+            return completed(
+                args,
+                stdout=(
+                    "old    tcp:8090 tcp:8090    [Reverse]\n"
+                    "active    tcp:15001 tcp:18188    [Reverse]\n"
+                ),
+            )
+        return completed(args)
+
+    monkeypatch.setattr(service, "_run", fake_run)
+
+    service.cleanup_ports(target="active")
+
+    assert calls == [
+        ["hdc", "fport", "ls"],
+        ["hdc", "-t", "active", "rport", "rm", "tcp:15001", "tcp:18188"],
+    ]
 
 
 def test_disconnect_network_target_uses_tconn_remove(

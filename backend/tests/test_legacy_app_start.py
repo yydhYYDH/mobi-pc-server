@@ -247,3 +247,95 @@ def test_workflow_action_writes_action_and_payload_to_log_sink(
     assert result == {"status": "ok", "message": "click 320,640"}
     assert any("action=gui_action" in line and "第一个帖子" in line for line in logs)
     assert any("[HDC操作]" in line and "点击" in line and "坐标=320,640" in line for line in logs)
+
+
+def test_workflow_click_input_driver_uses_uiinput_text_shell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str | int]] = []
+
+    class FakeDriver:
+        def click(self, x: int, y: int) -> None:
+            calls.append(("click", f"{x},{y}"))
+
+        def shell(self, command: str) -> None:
+            calls.append(("shell", command))
+
+        def press_key(self, key: int) -> None:
+            calls.append(("press_key", key))
+
+    class FakeHarmonyAgent:
+        d = FakeDriver()
+        DEVICE_WAIT_TIME = 0
+
+        @staticmethod
+        def run_with_device_control(_name: str, operation):
+            return operation()
+
+        @staticmethod
+        def run_driver_call(_name: str, operation):
+            return operation(FakeHarmonyAgent.d)
+
+        @staticmethod
+        def press_harmony_key(key_name: str, fallback_code: int) -> None:
+            calls.append(("press_harmony_key", f"{key_name}:{fallback_code}"))
+
+    monkeypatch.setattr(hdc_server, "harmony_agent", FakeHarmonyAgent)
+    monkeypatch.setattr(hdc_server, "ensure_workflow_agent_ready", lambda: None)
+    monkeypatch.setattr(hdc_server.time, "sleep", lambda _seconds: None)
+
+    result = hdc_server.handle_workflow_action(
+        "gui_action",
+        {
+            "action": "click_input",
+            "x": 469,
+            "y": 2204,
+            "text": "购买充电宝",
+            "target_element": "底部输入框",
+        },
+    )
+
+    assert result == {"status": "ok", "message": "click_input 469,2204"}
+    assert ("click", "469,2204") in calls
+    assert ("shell", "uitest uiInput text '购买充电宝'") in calls
+    assert not any(call[0] == "input_text" for call in calls)
+
+
+def test_workflow_click_input_hdc_fallback_uses_uiinput_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[str] = []
+
+    class FakeHarmonyAgent:
+        d = None
+        DEVICE_WAIT_TIME = 0
+
+        @staticmethod
+        def run_with_device_control(_name: str, operation):
+            return operation()
+
+        @staticmethod
+        def ensure_driver_available() -> bool:
+            return False
+
+    monkeypatch.setattr(hdc_server, "harmony_agent", FakeHarmonyAgent)
+    monkeypatch.setattr(hdc_server, "ensure_workflow_agent_ready", lambda: None)
+    monkeypatch.setattr(hdc_server, "hdc_prefix", lambda: "hdc -t 4QE0225916013634")
+    monkeypatch.setattr(hdc_server, "run_hdc_command", commands.append)
+    monkeypatch.setattr(hdc_server.time, "sleep", lambda _seconds: None)
+
+    result = hdc_server.handle_workflow_action(
+        "gui_action",
+        {
+            "action": "click_input",
+            "x": 469,
+            "y": 2204,
+            "text": "购买充电宝",
+        },
+    )
+
+    assert result == {"status": "ok", "message": "click_input 469,2204"}
+    assert commands == [
+        "hdc -t 4QE0225916013634 shell uitest uiInput click 469 2204",
+        "hdc -t 4QE0225916013634 shell uitest uiInput text '购买充电宝'",
+    ]
