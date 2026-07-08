@@ -1638,9 +1638,34 @@ def mission_blocks_from_dump(text):
     return blocks
 
 
-def extract_foreground_package_name(text):
+def _block_has_package_name(block, package_name):
+    expected = str(package_name or "").strip()
+    if not expected:
+        return False
+    raw = str(block or "")
+    for pattern in FOREGROUND_PACKAGE_PATTERNS:
+        for match in pattern.finditer(raw):
+            if match.group(1).strip() == expected:
+                return True
+    return False
+
+
+def _block_has_foreground_state(block):
+    return (
+        ABILITY_FOREGROUND_STATE_PATTERN.search(block) or
+        APP_FOREGROUND_STATE_PATTERN.search(block)
+    )
+
+
+def extract_foreground_package_name(text, expected_package_name=""):
     raw = str(text or "")
     blocks = mission_blocks_from_dump(raw)
+    expected = str(expected_package_name or "").strip()
+
+    if expected:
+        for block in blocks:
+            if _block_has_package_name(block, expected) and _block_has_foreground_state(block):
+                return expected
 
     for block in blocks:
         if ABILITY_FOREGROUND_STATE_PATTERN.search(block):
@@ -1695,7 +1720,7 @@ def run_hdc_command_capture(cmd, timeout=None):
         )
 
 
-def detect_current_foreground_package_name():
+def detect_current_foreground_package_name(expected_package_name=""):
     commands = (
         f"{hdc_prefix()} shell aa dump --mission-list",
         f"{hdc_prefix()} shell aa dump -l",
@@ -1703,7 +1728,10 @@ def detect_current_foreground_package_name():
     )
     for command in commands:
         result = run_hdc_command_capture(command, timeout=min(HDC_ACTION_TIMEOUT, 5))
-        package_name = extract_foreground_package_name((result.stdout or "") + "\n" + (result.stderr or ""))
+        package_name = extract_foreground_package_name(
+            (result.stdout or "") + "\n" + (result.stderr or ""),
+            expected_package_name=expected_package_name,
+        )
         if package_name:
             return package_name
     return ""
@@ -1748,7 +1776,7 @@ def build_app_start_result(app_name, package_name, reset_first):
         }
     current_package_name = ''
     if expected_package_name:
-        current_package_name = detect_current_foreground_package_name()
+        current_package_name = detect_current_foreground_package_name(expected_package_name)
         if current_package_name != expected_package_name:
             current = current_package_name or "unknown"
             emit_hdc_server_log(

@@ -86,6 +86,10 @@ com.xingin.xhs_hos:
     }
 
 
+def test_browser_has_no_hardcoded_main_ability_candidate() -> None:
+    assert harmony_agent.ability_candidates_for_bundle("com.huawei.hmos.browser") == []
+
+
 def test_build_app_start_result_errors_when_foreground_verification_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -102,7 +106,7 @@ def test_build_app_start_result_errors_when_foreground_verification_fails(
     monkeypatch.setattr(
         hdc_server,
         "detect_current_foreground_package_name",
-        lambda: "com.example.mnnllmchat.test",
+        lambda expected_package_name="": "com.example.mnnllmchat.test",
     )
 
     result = hdc_server.build_app_start_result("小红书", "", reset_first=False)
@@ -213,6 +217,53 @@ User ID #100
         "message": "app_start 小红书",
         "package_name": "com.xingin.xhs_hos",
         "current_package_name": "com.xingin.xhs_hos",
+    }
+
+
+def test_build_app_start_result_prefers_expected_foreground_package(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mission_list = """
+User ID #100
+  current mission lists:{
+    Mission ID #101  mission name #[#com.example.mnnllmchat.test:entry:EntryAbility]  lockedState #0
+      AbilityRecord ID #1229
+        app name [com.example.mnnllmchat.test]
+        bundle name [com.example.mnnllmchat.test]
+        state #FOREGROUND
+        app state #FOREGROUND
+    Mission ID #116  mission name #[#com.huawei.hmos.browser:entry:MainAbility]  lockedState #0
+      AbilityRecord ID #1553
+        app name [com.huawei.hmos.browser]
+        bundle name [com.huawei.hmos.browser]
+        state #FOREGROUND
+        app state #FOREGROUND
+ }
+"""
+
+    class FakeHarmonyAgent:
+        APP_MAPPING = {"浏览器": "com.huawei.hmos.browser"}
+
+        @staticmethod
+        def launch_app(target: str, reset_first: bool = True) -> bool:
+            assert target == "浏览器"
+            assert reset_first is False
+            return True
+
+    monkeypatch.setattr(hdc_server, "harmony_agent", FakeHarmonyAgent)
+    monkeypatch.setattr(
+        hdc_server,
+        "run_hdc_command_capture",
+        lambda command, timeout=None: completed(command, stdout=mission_list),
+    )
+
+    result = hdc_server.build_app_start_result("浏览器", "", reset_first=False)
+
+    assert result == {
+        "status": "ok",
+        "message": "app_start 浏览器",
+        "package_name": "com.huawei.hmos.browser",
+        "current_package_name": "com.huawei.hmos.browser",
     }
 
 

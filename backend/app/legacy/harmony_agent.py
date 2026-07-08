@@ -379,9 +379,7 @@ def get_main_ability_for_bundle(bundle):
         print(f">> [启动警告] 查询 {bundle} 主 Ability 失败: {ex}")
     return ""
 
-APP_ABILITY_CANDIDATES = {
-    "com.huawei.hmos.browser": ("MainAbility",),
-}
+APP_ABILITY_CANDIDATES = {}
 
 def ability_candidates_for_bundle(bundle, discovered_ability=""):
     candidates = []
