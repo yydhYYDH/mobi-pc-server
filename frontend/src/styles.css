@@ -1471,7 +1471,7 @@ dd {
 
 .chat-window-wrap {
   position: relative;
-  width: min(100%, 95%);
+  width: 100%;
   min-height: 0;
   height: 100%;
   margin: 0 auto;
@@ -1571,7 +1571,7 @@ dd {
 }
 
 .chat-bubble {
-  width: min(60%, 760px);
+  width: min(72%, 920px);
   border: 0;
   border-radius: 20px;
   background: #ffffff;
@@ -1670,7 +1670,7 @@ dd {
   width: min(100%, 350px);
   min-width: 0;
   min-height: 68px;
-  margin: 12px auto 0 max(8px, calc((100% - 880px) / 2 + 8px));
+  margin: 12px auto 0 8px;
   border-radius: 18px;
   background: var(--surface-soft);
   padding: 9px 9px 9px 16px;
@@ -1721,7 +1721,7 @@ dd {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
-  width: min(100%, 880px);
+  width: 100%;
   margin: 8px auto 0;
   border-radius: 22px;
   background: var(--surface-soft);
