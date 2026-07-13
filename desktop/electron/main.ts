@@ -47,6 +47,14 @@ function frontendViteBin(): string {
   return path.join(repoRoot(), "frontend", "node_modules", "vite", "bin", "vite.js");
 }
 
+function windowIconPath(): string | undefined {
+  if (app.isPackaged) {
+    return undefined;
+  }
+  const fileName = process.platform === "win32" ? "icon.ico" : "icon.png";
+  return path.join(repoRoot(), "desktop", "build", fileName);
+}
+
 function hostResourceDirectory(): string {
   if (process.platform === "win32") {
     return "resources-win";
@@ -192,7 +200,7 @@ function childEnv(): NodeJS.ProcessEnv {
   const resourcesPath = app.isPackaged ? process.resourcesPath : devResourcesPath;
   const dataRoot = app.isPackaged ? appDataRoot() : repoRoot();
   const bundledConfigsDir = path.join(resourcesPath, "configs");
-  const configsDir = app.isPackaged ? path.join(dataRoot, "configs") : bundledConfigsDir;
+  const configsDir = app.isPackaged ? path.join(dataRoot, "configs") : path.join(repoRoot(), "configs");
   const hdcDir = path.join(resourcesPath, "hdc");
   const pathValue = [hdcDir, process.env.PATH ?? ""].filter(Boolean).join(path.delimiter);
 
@@ -344,6 +352,7 @@ async function waitForFrontend(timeoutMs = 15000): Promise<void> {
 
 async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
+    icon: windowIconPath(),
     width: 1280,
     height: 860,
     minWidth: 960,
