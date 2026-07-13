@@ -369,14 +369,16 @@ class HdcService:
                 status = self._status_live()
                 targets = [device.serial for device in status.devices]
                 target = targets[0] if targets else ""
-                if target and target != self._last_observed_connected_target:
-                    self._last_observed_connected_target = target
-                    self._log_hdc(f"HDC monitor observed connected target: {target}")
+                if target:
+                    is_new_target = target != self._last_observed_connected_target
+                    if is_new_target:
+                        self._last_observed_connected_target = target
+                        self._log_hdc(f"HDC monitor observed connected target: {target}")
                     status = self._with_llm_rport(
                         status,
                         target,
                         self._normalize_port(None),
-                        "HDC monitor observed connected target.",
+                        "HDC monitor refreshed connected target." if not is_new_target else "HDC monitor observed connected target.",
                     )
                     self._set_status_cache(status)
                 elif not target and self._last_observed_connected_target:
@@ -764,12 +766,12 @@ class HdcService:
                 and mapped_pc_port != pc_port
             ]
             for stale_pc_port in stale_pc_ports:
-                cleanup = self._run(
-                    args_prefix + ["rport", "rm", f"tcp:{phone_port}", f"tcp:{stale_pc_port}"],
-                    timeout=5,
-                )
+                cleanup_args = args_prefix + ["fport", "rm", f"tcp:{phone_port}", f"tcp:{stale_pc_port}"]
+                self._log_hdc(f"Executing stale mapping cleanup: {self._format_command(cleanup_args)}")
+                cleanup = self._run(cleanup_args, timeout=5)
                 if cleanup is None:
                     return False, f"{label} stale rport cleanup timed out."
+                self._log_hdc(f"Stale mapping cleanup result: {self._format_result(cleanup)}")
                 if cleanup.returncode != 0:
                     message = (
                         cleanup.stderr.strip()
@@ -797,7 +799,7 @@ class HdcService:
         elif already_ready and ready_target == target and ready_pc_port == pc_port:
             return True, f"Phone {label} URL: {phone_url} -> PC 127.0.0.1:{pc_port}."
 
-        for command in ("fport", "rport"):
+        for command in ("fport",):
             self._run(
                 args_prefix + [command, "rm", f"tcp:{phone_port}", f"tcp:{pc_port}"],
                 timeout=5,
@@ -921,17 +923,19 @@ class HdcService:
         hdc_path = self._hdc_path()
         if not hdc_path:
             return
-        command = "rport" if mapping.direction == "reverse" else "fport"
-        result = self._run(
-            [hdc_path, "-t", mapping.target, command, "rm", mapping.local, mapping.remote],
-            timeout=5,
-        )
+        # HDC lists reverse mappings through `fport ls`, and deletes both mapping
+        # directions through `fport rm`.
+        command = "fport"
+        args = [hdc_path, "-t", mapping.target, command, "rm", mapping.local, mapping.remote]
+        self._log_hdc(f"Executing listed mapping cleanup: {self._format_command(args)}")
+        result = self._run(args, timeout=5)
         if result is None:
             self._log_hdc(
                 f"{command} cleanup timed out: target={mapping.target} "
                 f"{mapping.local} -> {mapping.remote}"
             )
             return
+        self._log_hdc(f"Listed mapping cleanup result: {self._format_result(result)}")
         if result.returncode == 0:
             self._log_hdc(
                 f"{command} cleaned up from list: target={mapping.target} "
@@ -956,7 +960,7 @@ class HdcService:
             return False, ""
         cleaned = False
         last_error = ""
-        for command in ("fport", "rport"):
+        for command in ("fport",):
             args = [
                 hdc_path,
                 "-t",
@@ -966,16 +970,26 @@ class HdcService:
                 f"tcp:{phone_port}",
                 f"tcp:{pc_port}",
             ]
+            self._log_hdc(f"Executing {label} cleanup: {self._format_command(args)}")
             result = self._run(args, timeout=5)
             if result is None:
                 last_error = "timed out"
                 continue
+            self._log_hdc(f"{label} cleanup result: {self._format_result(result)}")
             if result.returncode == 0:
                 cleaned = True
                 self._log_hdc(f"{label} {command} cleaned up: phone tcp:{phone_port} -> PC tcp:{pc_port}")
                 continue
             last_error = result.stderr.strip() or result.stdout.strip() or "cleanup failed"
         return cleaned, last_error
+
+    def _format_command(self, args: list[str]) -> str:
+        return " ".join(args)
+
+    def _format_result(self, result: subprocess.CompletedProcess[str]) -> str:
+        stdout = result.stdout.strip().replace("\n", " | ")
+        stderr = result.stderr.strip().replace("\n", " | ")
+        return f"exit={result.returncode} stdout={stdout!r} stderr={stderr!r}"
 
     def _normalize_port(self, port: int | None) -> int:
         if port is None:

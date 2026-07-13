@@ -1,6 +1,6 @@
 import React from "react";
 
-import type { ChatImageAttachment, ChatMessage, MnnStatus } from "../api/types";
+import type { ChatImageAttachment, ChatMessage, ChatTimingMetrics, MnnStatus } from "../api/types";
 import { EmptyState, PanelTitle, StatusPill } from "../components";
 import { serverOwnerLabel } from "../domain/runtime";
 
@@ -9,6 +9,21 @@ function formatImageSize(bytes: number) {
     return `${Math.round(bytes / 1024)} KB`;
   }
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatSpeed(value: number | undefined) {
+  return value === undefined ? "--" : `${value.toFixed(2)} tok/s`;
+}
+
+function ChatTimingStrip({ timings }: { timings: ChatTimingMetrics }) {
+  return (
+    <div className="chat-timing-strip" aria-label="推理速度">
+      <span>Prefill {formatSpeed(timings.promptTokensPerSecond)}</span>
+      <span>Prefill {timings.promptTokens ?? "--"} tokens</span>
+      <span>Decode {formatSpeed(timings.predictedTokensPerSecond)}</span>
+      <span>Decode {timings.predictedTokens ?? "--"} tokens</span>
+    </div>
+  );
 }
 
 export function ChatView(props: {
@@ -25,6 +40,7 @@ export function ChatView(props: {
   selectedImage: ChatImageAttachment | null;
   clearSelectedImage: () => void;
   onClearChat: () => void;
+  onResetDefaultChat: () => void;
   selectImageFile: (file: File | null) => Promise<void>;
   sendChat: () => Promise<void>;
   setChatInput: (value: string) => void;
@@ -55,6 +71,9 @@ export function ChatView(props: {
               onClick={props.onClearChat}
             >
               清空
+            </button>
+            <button className="secondary-button" disabled={props.chatBusy} onClick={props.onResetDefaultChat}>
+              重置
             </button>
           </div>
         }
@@ -112,6 +131,7 @@ export function ChatView(props: {
               <span>{message.role === "user" ? "用户" : "模型"}</span>
               {message.imageName ? <small className="chat-image-tag">图片：{message.imageName}</small> : null}
               <p>{message.content || (props.chatBusy && index === props.chatMessages.length - 1 ? "生成中..." : "")}</p>
+              {message.role === "assistant" && message.timings ? <ChatTimingStrip timings={message.timings} /> : null}
             </div>
           ))
         )}

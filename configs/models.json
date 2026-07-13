@@ -23,6 +23,17 @@
     "entry_file": "config.json"
   },
   {
+    "id": "ui-venus-1.5-2b-0422-reasoning-halfpixel-1ep-rlv2-4npus-bs128-ds5050-step100-w8g128-w8a8-vocab-pruned",
+    "name": "UI-Venus 1.5 2B MNN W8A8 Vocab Pruned",
+    "modelscope_id": "YYDH21/UI-Venus-1.5-2B-0422-reasoning-halfpixel-1ep_RLv2_4NPUS_bs128_ds5050_step100-w8g128-w8a8-vocab-pruned",
+    "revision": "master",
+    "description": "UI-Venus 1.5 2B MNN quantized model for the mobiinfer/MNN runtime.",
+    "size": "2.2GB",
+    "runtime": "mnn",
+    "local_dir": "models/UI-Venus-1.5-2B-0422-reasoning-halfpixel-1ep_RLv2_4NPUS_bs128_ds5050_step100-w8g128-w8a8-vocab-pruned",
+    "entry_file": "config.json"
+  },
+  {
     "id": "qwen3.5-0.8b-q4-k-m-gguf",
     "name": "Qwen3.5 0.8B Q4_K_M GGUF",
     "modelscope_id": "YYDH21/qwen3.5-0.8b-q4-k-m",

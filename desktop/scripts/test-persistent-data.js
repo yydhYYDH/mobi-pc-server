@@ -10,7 +10,7 @@ const {
 } = require("../dist/persistent-data");
 
 function withTempDir(test) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "datahome-persistent-data-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "clawmate-persistent-data-"));
   try {
     test(directory);
   } finally {
@@ -26,18 +26,18 @@ withTempDir((root) => {
     persistentDataRoot({
       appDataPath,
       env: {},
-      executablePath: path.join(root, "DataHome.app", "Contents", "MacOS", "DataHome"),
+      executablePath: path.join(root, "ClawMate.app", "Contents", "MacOS", "ClawMate"),
       isPackaged: true,
       repoRoot
     }),
-    path.join(appDataPath, "DataHome")
+    path.join(appDataPath, "ClawMate")
   );
 
   assert.equal(
     persistentDataRoot({
       appDataPath,
       env: {},
-      executablePath: path.join(root, "desktop", "DataHome"),
+      executablePath: path.join(root, "desktop", "ClawMate"),
       isPackaged: false,
       repoRoot
     }),
@@ -48,7 +48,7 @@ withTempDir((root) => {
     persistentDataRoot({
       appDataPath,
       env: { PC_SERVER_DATA_DIR: path.join(root, "override") },
-      executablePath: path.join(root, "desktop", "DataHome"),
+      executablePath: path.join(root, "desktop", "ClawMate"),
       isPackaged: true,
       repoRoot
     }),
@@ -57,16 +57,16 @@ withTempDir((root) => {
 });
 
 withTempDir((root) => {
-  const executablePath = path.join(root, "DataHome.app", "Contents", "MacOS", "DataHome");
+  const executablePath = path.join(root, "ClawMate.app", "Contents", "MacOS", "ClawMate");
   assert.equal(
     legacyPackagedDataRoot(executablePath),
-    path.join(root, "DataHome.app", "Contents", "MacOS", "pc-server-data")
+    path.join(root, "ClawMate.app", "Contents", "MacOS", "pc-server-data")
   );
 });
 
 withTempDir((root) => {
   const bundledConfigs = path.join(root, "resources", "configs");
-  const dataRoot = path.join(root, "user-data", "DataHome");
+  const dataRoot = path.join(root, "user-data", "ClawMate");
   const configsDir = path.join(dataRoot, "configs");
   const legacyRoot = path.join(root, "legacy", "pc-server-data");
 

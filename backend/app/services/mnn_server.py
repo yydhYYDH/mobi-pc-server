@@ -93,6 +93,24 @@ class MnnServerService:
             return self._status
         port = self._status.port or BACKEND_PORTS[self._status.backend]
         if self._is_port_open(port):
+            if not self._runtime_ready(self._status.backend, port):
+                self._append_log(
+                    self._status.backend,
+                    (
+                        f"Port {port} is occupied by a non-responsive service; "
+                        "the next local inference launch will select another port."
+                    ),
+                )
+                self._status = MnnStatus(
+                    state="stopped",
+                    backend=self._status.backend,
+                    active_model_id=self._status.active_model_id,
+                    message=(
+                        f"Port {port} is occupied by another application. "
+                        "Starting a model will use another available local port."
+                    ),
+                )
+                return self._status
             if self._status.state != "running" or self._status.managed_by_backend is not False:
                 self._append_log(
                     self._status.backend,
@@ -140,6 +158,7 @@ class MnnServerService:
         backend = self._status.backend
         label = BACKEND_LABELS[backend]
         port = self._status.port or BACKEND_PORTS[backend]
+        active_model_id = self._status.active_model_id
         if self._process and self._process.poll() is None:
             self._append_log(backend, f"Stopping managed {label} process pid={self._process.pid}.")
             self._process.terminate()
@@ -168,15 +187,18 @@ class MnnServerService:
             self._status = MnnStatus(
                 state="running",
                 backend=backend,
-                active_model_id=self._status.active_model_id,
+                active_model_id=active_model_id,
                 port=port,
-                message=f"{label} service is online, but it was not started by this backend.",
+                message=(
+                    f"Unable to stop {label}: port {port} is still occupied by an external or "
+                    "unidentified process. Stop that process manually, then try again."
+                ),
                 managed_by_backend=False,
             )
             return self._status
 
         self._append_log(backend, f"{label} service stopped.")
-        self._status = MnnStatus(state="stopped", backend=backend)
+        self._status = MnnStatus(state="stopped", backend=backend, active_model_id=active_model_id)
         return self._status
 
     def load_model(self, model_id: str, backend: InferenceBackend = "llama_cpp") -> MnnStatus:
@@ -239,10 +261,11 @@ class MnnServerService:
             f"Starting {BACKEND_LABELS[backend]}:{runtime_label} binary={binary_path} model={model_id} "
             f"entry={entry_path} host=127.0.0.1 port={port}",
         )
-        self._append_log(backend, f"Working directory: {REPO_ROOT}")
+        working_directory = self._working_directory(backend, entry_path)
+        self._append_log(backend, f"Working directory: {working_directory}")
         self._process = subprocess.Popen(
             command,
-            cwd=str(REPO_ROOT),
+            cwd=str(working_directory),
             stdout=log_file,
             stderr=subprocess.STDOUT,
             text=True,
@@ -291,6 +314,11 @@ class MnnServerService:
             self._append_log(backend, f"{BACKEND_LABELS[backend]} is still loading model on port {port}.")
         return self._status
 
+    def _working_directory(self, backend: InferenceBackend, entry_path: Path) -> Path:
+        if backend == "mobiinfer":
+            return entry_path.parent
+        return REPO_ROOT
+
     def _append_log(self, backend: InferenceBackend, message: str) -> None:
         self._logs.append(LLM_SERVER_LOG, f"[{BACKEND_LABELS[backend]}] {message}")
 
@@ -317,6 +345,10 @@ class MnnServerService:
     def _stop_known_runtime_on_port(self, backend: InferenceBackend, port: int) -> bool:
         pids = self._pids_listening_on_port(port)
         if not pids:
+            self._append_log(
+                backend,
+                f"Port {port} is still open, but its listener PID could not be identified; leaving it running.",
+            )
             return False
 
         stopped = False
@@ -330,19 +362,31 @@ class MnnServerService:
             self._append_log(backend, f"Stopping orphaned {BACKEND_LABELS[backend]} process pid={pid} on port {port}.")
             if self._terminate_pid(pid):
                 stopped = True
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline and self._is_port_open(port):
+                    time.sleep(0.2)
+                if self._is_port_open(port):
+                    self._append_log(backend, f"Process pid={pid} is still listening; force stopping its process tree.")
+                    stopped = self._force_terminate_pid(pid) or stopped
         return stopped
 
     def _pids_listening_on_port(self, port: int) -> list[int]:
         if platform.system() == "Windows":
             return self._windows_pids_listening_on_port(port)
+        if self._is_wsl():
+            return self._windows_pids_listening_on_port(port, use_windows_command=True)
         return self._procfs_pids_listening_on_port(port)
 
-    def _windows_pids_listening_on_port(self, port: int) -> list[int]:
+    def _windows_pids_listening_on_port(self, port: int, use_windows_command: bool = False) -> list[int]:
         try:
+            command = ["netstat", "-ano", "-p", "tcp"]
+            if use_windows_command:
+                command = ["cmd.exe", "/c", "netstat -ano -p tcp"]
             result = subprocess.run(
-                ["netstat", "-ano", "-p", "tcp"],
+                command,
                 capture_output=True,
                 text=True,
+                errors="replace",
                 timeout=5,
                 check=False,
             )
@@ -418,16 +462,17 @@ class MnnServerService:
         return "mobiinfer" in command_line or "mnncli" in command_line
 
     def _process_command_line(self, pid: int) -> str:
-        if platform.system() == "Windows":
+        if platform.system() == "Windows" or self._is_wsl():
             command = (
                 f"Get-CimInstance Win32_Process -Filter 'ProcessId = {pid}' "
                 "| Select-Object -ExpandProperty CommandLine"
             )
             try:
                 result = subprocess.run(
-                    ["powershell", "-NoProfile", "-Command", command],
+                    ["powershell.exe" if self._is_wsl() else "powershell", "-NoProfile", "-Command", command],
                     capture_output=True,
                     text=True,
+                    errors="replace",
                     timeout=5,
                     check=False,
                 )
@@ -447,6 +492,33 @@ class MnnServerService:
         except OSError:
             return False
         return True
+
+    def _force_terminate_pid(self, pid: int) -> bool:
+        if platform.system() == "Windows" or self._is_wsl():
+            try:
+                result = subprocess.run(
+                    ["taskkill.exe" if self._is_wsl() else "taskkill", "/PID", str(pid), "/T", "/F"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                return False
+            return result.returncode == 0
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            return False
+        return True
+
+    def _is_wsl(self) -> bool:
+        if platform.system() != "Linux":
+            return False
+        try:
+            return "microsoft" in Path("/proc/sys/kernel/osrelease").read_text(encoding="utf-8").lower()
+        except OSError:
+            return False
 
     def _wait_until_runtime_ready(self, backend: InferenceBackend, port: int) -> bool:
         deadline = time.monotonic() + float(os.environ.get("LLM_STARTUP_READY_TIMEOUT", "90"))

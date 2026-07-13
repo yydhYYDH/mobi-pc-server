@@ -58,7 +58,7 @@ def test_ensure_rport_removes_stale_reverse_mapping_even_when_memory_ready(
     assert ready is True
     assert "127.0.0.1:18188" in message
     assert ["hdc", "-t", target, "fport", "ls"] in calls
-    assert ["hdc", "-t", target, "rport", "rm", "tcp:15001", "tcp:18219"] in calls
+    assert ["hdc", "-t", target, "fport", "rm", "tcp:15001", "tcp:18219"] in calls
     assert ["hdc", "-t", target, "rport", "tcp:15001", "tcp:18188"] in calls
 
 
@@ -95,7 +95,7 @@ def test_disconnect_usb_target_only_cleans_ports_without_tdisconn(
     assert status.message == f"Cleaned HDC port mappings for USB/local target {target}."
     assert not any(args[1] == "tdisconn" for args in calls)
     assert not any(args[1:4] == ["tconn", target, "-remove"] for args in calls)
-    assert ["hdc", "-t", target, "rport", "rm", "tcp:15001", "tcp:18188"] in calls
+    assert ["hdc", "-t", target, "fport", "rm", "tcp:15001", "tcp:18188"] in calls
 
 
 def test_cleanup_ports_removes_all_listed_forward_and_reverse_mappings(
@@ -126,8 +126,8 @@ def test_cleanup_ports_removes_all_listed_forward_and_reverse_mappings(
 
     assert calls == [
         ["hdc", "fport", "ls"],
-        ["hdc", "-t", "4QE0225916013634", "rport", "rm", "tcp:15001", "tcp:18219"],
-        ["hdc", "-t", "4QE0225916013634", "rport", "rm", "tcp:8090", "tcp:8090"],
+        ["hdc", "-t", "4QE0225916013634", "fport", "rm", "tcp:15001", "tcp:18219"],
+        ["hdc", "-t", "4QE0225916013634", "fport", "rm", "tcp:8090", "tcp:8090"],
         ["hdc", "-t", "4QE0225916013634", "fport", "rm", "tcp:9126", "tcp:9126"],
     ]
 
@@ -159,7 +159,7 @@ def test_cleanup_ports_filters_listed_mappings_by_target(
 
     assert calls == [
         ["hdc", "fport", "ls"],
-        ["hdc", "-t", "active", "rport", "rm", "tcp:15001", "tcp:18188"],
+        ["hdc", "-t", "active", "fport", "rm", "tcp:15001", "tcp:18188"],
     ]
 
 

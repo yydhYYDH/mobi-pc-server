@@ -75,8 +75,8 @@ export function ModelsView(props: {
                 ) : null}
                 {downloaded ? (
                   <>
-                    <ActionButton busy={loadBusy} busyText="加载中..." disabled={!backendMatches || downloading || anyBusy || runtimeActive} onClick={() => void props.loadModel(model.id)}>
-                      {runningThisModel ? (props.serverState === "starting" ? "加载中" : "运行中") : "加载"}
+                    <ActionButton busy={loadBusy} busyText="启动中..." disabled={!backendMatches || downloading || anyBusy || runtimeActive} onClick={() => void props.loadModel(model.id)}>
+                      {runningThisModel ? (props.serverState === "starting" ? "启动中" : "运行中") : "启动"}
                     </ActionButton>
                     <ActionButton busy={deleteBusy} disabled={downloading || anyBusy || runningThisModel} onClick={() => void props.deleteModel(model.id)}>
                       {runningThisModel ? "运行中" : "删除"}

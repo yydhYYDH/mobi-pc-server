@@ -124,6 +124,9 @@ if ($OpenSslRoot) {
   }
 }
 $ExtraCMakeArgs += "-DOPENSSL_USE_STATIC_LIBS=TRUE"
+if ($IsWindows -or $env:OS -eq "Windows_NT") {
+  $ExtraCMakeArgs += "-DOPENSSL_MSVC_STATIC_RT=TRUE"
+}
 
 if ($Generator -eq "Ninja" -and -not (Get-Command ninja -ErrorAction SilentlyContinue)) {
   throw "Ninja was not found on PATH. Install Ninja or run with -Generator 'Visual Studio 17 2022'."

@@ -9,7 +9,7 @@ const {
   nativeExecutableMatchesTarget
 } = require("./native-platform");
 
-const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "datahome-native-platform-"));
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "clawmate-native-platform-"));
 
 try {
   const elf = path.join(tempDir, "linux-bin");

@@ -58,6 +58,7 @@ export function ActiveViewRenderer(props: {
   pauseDownload: (modelId: string) => Promise<void>;
   refreshLogs: () => Promise<void>;
   recentHdcTargets: string[];
+  resetDefaultChat: () => void;
   selectedBackend: BackendId;
   runningBackendLabel: string;
   selectableModels: CatalogModel[];
@@ -74,7 +75,6 @@ export function ActiveViewRenderer(props: {
   setLogFilter: (logFilter: string) => void;
   setSelectedBackend: (backend: BackendId) => void;
   setSelectedLaunchModelId: (modelId: string) => void;
-  startMnn: () => Promise<void>;
   stopMnn: () => Promise<void>;
   visibleLogLines: string[];
 }) {
@@ -148,7 +148,6 @@ export function ActiveViewRenderer(props: {
           loadModel={props.loadModel}
           modelBusy={props.modelBusy}
           mnn={props.mnn}
-          onStartMnn={props.startMnn}
           onStopMnn={props.stopMnn}
           selectableModels={props.selectableModels}
           selectedLaunchModelId={props.selectedLaunchModelId}
@@ -190,6 +189,7 @@ export function ActiveViewRenderer(props: {
           selectedImage={props.selectedImage}
           clearSelectedImage={props.clearSelectedImage}
           onClearChat={props.clearChat}
+          onResetDefaultChat={props.resetDefaultChat}
           selectImageFile={props.selectImageFile}
           sendChat={props.sendChat}
           setChatInput={props.setChatInput}

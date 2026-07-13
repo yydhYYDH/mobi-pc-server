@@ -11,7 +11,6 @@ export function ServerView(props: {
   loadModel: (modelId: string) => Promise<void>;
   modelBusy: ModelBusy;
   mnn: MnnStatus | null;
-  onStartMnn: () => Promise<void>;
   onStopMnn: () => Promise<void>;
   selectableModels: CatalogModel[];
   selectedLaunchModelId: string;
@@ -103,18 +102,12 @@ export function ServerView(props: {
         <div className="actions">
           <ActionButton
             busy={Boolean(selectedModel && props.modelBusy?.modelId === selectedModel.id && props.modelBusy.action === "load")}
-            busyText="加载中..."
+            busyText="启动中..."
             disabled={!canLoadSelected}
             onClick={() => selectedModel && void props.loadModel(selectedModel.id)}
           >
-            {selectedModelRunning ? "运行中" : "加载模型"}
+            {selectedModelRunning ? "运行中" : "启动模型"}
           </ActionButton>
-          <button
-            disabled={props.serverBusy !== null || props.serverState === "running"}
-            onClick={() => void props.onStartMnn()}
-          >
-            {props.serverBusy === "start" ? "启动中..." : "启动"}
-          </button>
           <button
             disabled={props.serverBusy !== null || props.serverState === "stopped"}
             onClick={() => void props.onStopMnn()}

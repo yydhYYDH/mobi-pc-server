@@ -1,6 +1,6 @@
 appId: com.waic.pc-mnn-server
-productName: 数据归家
-executableName: DataHome
+productName: 你的智伴
+executableName: ClawMate
 directories:
   output: release
 files:
@@ -37,7 +37,7 @@ win:
   icon: build/icon.ico
   target:
     - nsis
-  artifactName: "DataHome-${version}-${os}-${arch}.${ext}"
+  artifactName: "ClawMate-${version}-${os}-${arch}.${ext}"
 mac:
   icon: build/icon.icns
   category: public.app-category.developer-tools
@@ -45,7 +45,7 @@ mac:
   target:
     - dmg
     - zip
-  artifactName: "DataHome-${version}-${os}-${arch}.${ext}"
+  artifactName: "ClawMate-${version}-${os}-${arch}.${ext}"
 nsis:
   oneClick: false
   perMachine: false
@@ -55,4 +55,4 @@ linux:
   target:
     - AppImage
     - dir
-  artifactName: "DataHome-${version}-${os}-${arch}.${ext}"
+  artifactName: "ClawMate-${version}-${os}-${arch}.${ext}"

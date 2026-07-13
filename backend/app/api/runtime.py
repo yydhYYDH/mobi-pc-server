@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.core.paths import REPO_ROOT, RESOURCES_DIR
 from app.services.modelscope import ModelScopeService
@@ -189,15 +190,16 @@ def example_image(image_id: str) -> dict[str, Any]:
     return summary
 
 
-@router.post("/chat/completions")
-def chat_completions(payload: dict[str, Any]) -> dict[str, Any]:
+@router.post("/chat/completions", response_model=None)
+def chat_completions(payload: dict[str, Any]) -> Any:
     status = runtime_service.status()
     if status.state != "running" or not status.port:
         detail = status.message or "Inference server is not running."
         raise HTTPException(status_code=409, detail=detail)
 
     upstream_payload = _normalize_uploaded_images(payload, status.backend)
-    upstream_payload["stream"] = False
+    stream = bool(upstream_payload.get("stream"))
+    upstream_payload["stream"] = stream
     data = json.dumps(upstream_payload).encode("utf-8")
     request = urllib.request.Request(
         f"http://127.0.0.1:{status.port}/v1/chat/completions",
@@ -205,6 +207,31 @@ def chat_completions(payload: dict[str, Any]) -> dict[str, Any]:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
+
+    if stream:
+        def stream_upstream():
+            try:
+                with LOCAL_OPENER.open(request, timeout=120) as response:
+                    while True:
+                        line = response.readline()
+                        if not line:
+                            break
+                        yield line
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")
+                yield f"data: {json.dumps({'error': detail}, ensure_ascii=False)}\n\n".encode("utf-8")
+            except urllib.error.URLError as exc:
+                message = f"Inference server request failed: {exc}"
+                yield f"data: {json.dumps({'error': message}, ensure_ascii=False)}\n\n".encode("utf-8")
+
+        return StreamingResponse(
+            stream_upstream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     try:
         with LOCAL_OPENER.open(request, timeout=120) as response:

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { loadRuntimeModel, startRuntime, stopRuntime } from "../api/runtime";
+import { loadRuntimeModel, stopRuntime } from "../api/runtime";
 import type { BackendId, MnnStatus, ModelBusy, ModelBusyAction } from "../api/types";
 
 export function useRuntimeActions(params: {
@@ -15,29 +15,17 @@ export function useRuntimeActions(params: {
   const { isDownloaded, load, mnn, modelBusy, selectedBackend, setError, setModelBusy } = params;
   const [serverBusy, setServerBusy] = React.useState<"start" | "stop" | null>(null);
 
-  async function startMnn() {
-    if (serverBusy !== null || mnn?.state === "running" || mnn?.state === "starting") {
-      return;
-    }
-    setServerBusy("start");
-    try {
-      await startRuntime(selectedBackend);
-      await load();
-    } catch (startError) {
-      setError(startError instanceof Error ? startError.message : "启动失败。");
-    } finally {
-      setServerBusy(null);
-    }
-  }
-
   async function stopMnn() {
     if (serverBusy !== null || mnn?.state === "stopped" || mnn?.state === "stopping") {
       return;
     }
     setServerBusy("stop");
     try {
-      await stopRuntime(selectedBackend);
+      const status = await stopRuntime(selectedBackend);
       await load();
+      if (status.state !== "stopped") {
+        throw new Error(status.message || "服务未能停止，请检查端口占用情况。");
+      }
     } catch (stopError) {
       setError(stopError instanceof Error ? stopError.message : "停止失败。");
     } finally {
@@ -65,7 +53,6 @@ export function useRuntimeActions(params: {
   return {
     loadModel,
     serverBusy,
-    startMnn,
     stopMnn
   };
 }

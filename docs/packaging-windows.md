@@ -1,6 +1,6 @@
 ﻿# Windows 打包说明
 
-本文档说明如何在 Windows 原生环境里打包数据归家。不要在 WSL 里生成 Windows 包；WSL 适合生成 Linux 包。
+本文档说明如何在 Windows 原生环境里打包你的智伴。不要在 WSL 里生成 Windows 包；WSL 适合生成 Linux 包。
 
 ## 产物结构
 
@@ -28,7 +28,7 @@ desktop/resources-win/
 
 Electron Builder 会把 `desktop/resources-win/` 下的内容复制到最终安装包的 `resources/` 目录。Linux 打包使用独立的 `desktop/resources-linux/`，不要再把两个平台的运行时文件混放到同一个 staging 目录。
 
-运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入安装目录。打包版会使用 `%APPDATA%\DataHome`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
+运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入安装目录。打包版会使用 `%APPDATA%\ClawMate`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
 
 ## 前置要求
 

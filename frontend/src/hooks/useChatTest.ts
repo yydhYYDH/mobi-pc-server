@@ -1,11 +1,93 @@
 import React from "react";
 
-import { completionText, sendChatCompletion, type ChatCompletionContent } from "../api/chat";
+import { streamChatCompletion, type ChatCompletionContent } from "../api/chat";
 import { getExampleImage } from "../api/exampleImages";
 import type { BackendId, CatalogModel, ChatImageAttachment, ChatMessage, MnnStatus } from "../api/types";
 import { backendLabel, modelSupportsImages, normalizeBackend } from "../domain/runtime";
 
-const DEFAULT_EXAMPLE_IMAGE_ID = "taobao_full_1.jpg";
+const DEFAULT_EXAMPLE_IMAGE_ID = "taobao_1_4.jpg";
+const DEFAULT_CHAT_PROMPT = `You are a phone-use AI agent. 
+
+### Action Space
+Your action space includes:
+- Name: click, Parameters: target_element (a high-level description of the UI element to click), bbox (a bounding box of the target element, [x1, y1, x2, y2]).
+- Name: swipe, Parameters: direction (one of UP, DOWN, LEFT, RIGHT), start_coords (the starting coordinate [x, y]), end_coords (the ending coordinate [x, y]).
+- Name: click_input, Parameters: target_element (a high-level description of the UI element to click), text (the text to input), bbox (a bounding box of the target element, [x1, y1, x2, y2]).
+- Name: input, Parameters: text (the text to input).
+- Name: open_app, Parameters: app_name (the name of the application to open).
+- Name: press_home, Parameters: (no parameters, returns to the home screen).
+- Name: press_back, Parameters: (no parameters, goes back to the previous screen).
+- Name: wait, Parameters: (no parameters, will wait for 1 second).
+- Name: done, Parameters: status (the completion status of the current task, one of \`success\`, \`suspended\` and \`failed\`).
+
+### Response Format
+Your output should be a JSON object with the following format:
+{  
+  "reasoning": "Your reasoning here", 
+  "action": "The next action (one of click, click_input, input, swipe, open_app, press_home, press_back, wait, done)", 
+  "parameters": {"param1": "value1", "param2": "value2", ...}
+}
+
+### Constraints
+- If the screen has not changed after your last action, do not repeat the exact same action. Try a different method or slightly adjust coordinates.
+- If the task is completed, verify the result before outputting 'done'.
+
+
+### Current Task
+"去买雨伞"
+### Action History
+The sequence of actions you have already taken:
+(No history)
+
+
+
+
+Please provide the next action based on the screenshot and your action history. You should do careful reasoning before providing the action.`;
+
+// const DEFAULT_EXAMPLE_IMAGE_ID = "test.jpg";
+// const DEFAULT_CHAT_PROMPT = `You are a phone-use AI agent. 
+
+// ### Action Space
+// Your action space includes:
+// - Name: click, Parameters: target_element (a high-level description of the UI element to click), bbox (a bounding box of the target element, [x1, y1, x2, y2]).
+// - Name: swipe, Parameters: direction (one of UP, DOWN, LEFT, RIGHT), start_coords (the starting coordinate [x, y]), end_coords (the ending coordinate [x, y]).
+// - Name: click_input, Parameters: target_element (a high-level description of the UI element to click), text (the text to input), bbox (a bounding box of the target element, [x1, y1, x2, y2]).
+// - Name: input, Parameters: text (the text to input).
+// - Name: open_app, Parameters: app_name (the name of the application to open).
+// - Name: press_home, Parameters: (no parameters, returns to the home screen).
+// - Name: press_back, Parameters: (no parameters, goes back to the previous screen).
+// - Name: wait, Parameters: (no parameters, will wait for 1 second).
+// - Name: done, Parameters: status (the completion status of the current task, one of \`success\`, \`suspended\` and \`failed\`).
+
+// ### Response Format
+// Your output should be a JSON object with the following format:
+// {  
+//   "reasoning": "Your reasoning here", 
+//   "action": "The next action (one of click, click_input, input, swipe, open_app, press_home, press_back, wait, done)", 
+//   "parameters": {"param1": "value1", "param2": "value2", ...}
+// }
+
+// ### Constraints
+// - If the screen has not changed after your last action, do not repeat the exact same action. Try a different method or slightly adjust coordinates.
+// - If the task is completed, verify the result before outputting 'done'.
+
+
+// ### Current Task
+// "请你使用铁路12306应用查看电子发票，具体操作步骤为：
+
+// 1. 在应用首页，点击底部导航栏右下角的“我的”图标进入个人中心；
+// 2. 在“我的”页面向上滑动屏幕，找到“常用功能”栏目；
+// 3. 在“常用功能”区域中，点击“电子发票”图标；
+// 4. 进入电子发票页面后，即可查看发票申请、抬头管理等相关信息。"
+// ### Action History
+// The sequence of actions you have already taken:
+// (No history)
+
+
+
+
+// Please provide the next action based on the screenshot and your action history. You should do careful reasoning before providing the action.`;
+
 
 function buildChatContent(_backend: BackendId, prompt: string, image: ChatImageAttachment | null): ChatCompletionContent {
   if (!image) {
@@ -34,7 +116,7 @@ function fileToDataUri(file: File) {
 }
 
 export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
-  const [chatInput, setChatInput] = React.useState("请用一句话描述这张图片。");
+  const [chatInput, setChatInput] = React.useState(DEFAULT_CHAT_PROMPT);
   const [chatMessages, setChatMessages] = React.useState<ChatMessage[]>([]);
   const [chatBusy, setChatBusy] = React.useState(false);
   const [chatError, setChatError] = React.useState<string | null>(null);
@@ -148,16 +230,41 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
 
     try {
       const content = buildChatContent(runningBackend, prompt, selectedImage);
-      const completion = await sendChatCompletion(mnn.active_model_id ?? "default", content);
-      const responseText = completionText(completion);
-      setChatMessages((current) => {
-        const next = [...current];
-        const last = next[next.length - 1];
-        if (last?.role === "assistant") {
-          next[next.length - 1] = { ...last, content: responseText || "模型没有返回文本。" };
+      let responseText = "";
+      await streamChatCompletion(mnn.active_model_id ?? "default", content, {
+        onText: (text) => {
+          responseText += text;
+          setChatMessages((current) => {
+            const next = [...current];
+            const last = next[next.length - 1];
+            if (last?.role === "assistant") {
+              next[next.length - 1] = { ...last, content: responseText };
+            }
+            return next;
+          });
+        },
+        onTimings: (timings) => {
+          console.info("Chat inference timings", timings);
+          setChatMessages((current) => {
+            const next = [...current];
+            const last = next[next.length - 1];
+            if (last?.role === "assistant") {
+              next[next.length - 1] = { ...last, timings };
+            }
+            return next;
+          });
         }
-        return next;
       });
+      if (!responseText) {
+        setChatMessages((current) => {
+          const next = [...current];
+          const last = next[next.length - 1];
+          if (last?.role === "assistant") {
+            next[next.length - 1] = { ...last, content: "模型没有返回文本。" };
+          }
+          return next;
+        });
+      }
     } catch (chatRequestError) {
       setChatError(chatRequestError instanceof Error ? chatRequestError.message : "请求失败");
     } finally {
@@ -170,12 +277,19 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
     setChatError(null);
   }
 
+  function resetDefaultChat() {
+    setChatInput(DEFAULT_CHAT_PROMPT);
+    setChatMessages([]);
+    setChatError(null);
+  }
+
   return {
     chatBusy,
     chatError,
     chatInput,
     chatMessages,
     clearChat,
+    resetDefaultChat,
     imageDisabledReason,
     imageBusy,
     activeModelSupportsImages,

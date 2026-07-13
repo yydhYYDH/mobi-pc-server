@@ -67,6 +67,16 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   imageName?: string;
+  timings?: ChatTimingMetrics;
+};
+
+export type ChatTimingMetrics = {
+  promptTokens?: number;
+  promptMs?: number;
+  promptTokensPerSecond?: number;
+  predictedTokens?: number;
+  predictedMs?: number;
+  predictedTokensPerSecond?: number;
 };
 
 export type ChatImageAttachment = {

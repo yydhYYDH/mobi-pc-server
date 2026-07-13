@@ -9,7 +9,7 @@ from app.services.logs import BACKEND_SERVER_LOG, LogService
 from app.services.runtime_state import runtime_service
 
 
-app = FastAPI(title="数据归家", version="0.2.0")
+app = FastAPI(title="你的智伴", version="0.2.0")
 log_service = LogService()
 
 app.add_middleware(
@@ -29,6 +29,15 @@ app.include_router(llama_cpp.router, prefix="/api/llama-cpp", tags=["llama.cpp"]
 app.include_router(runtime.router, prefix="/api/runtime", tags=["runtime"])
 app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(logs.router, prefix="/api/logs", tags=["logs"])
+
+
+@app.on_event("shutdown")
+def cleanup_on_exit() -> None:
+    log_service.append(BACKEND_SERVER_LOG, ">> [Backend] shutdown cleanup requested")
+    try:
+        devices.service.shutdown()
+    except Exception as exc:
+        log_service.append(BACKEND_SERVER_LOG, f">> [Backend] HDC shutdown cleanup failed: {exc}")
 
 
 @app.post("/api/shutdown")

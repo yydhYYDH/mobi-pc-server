@@ -7,13 +7,13 @@ from being removed when the app is overwritten or upgraded.
 ## Packaged App Paths
 
 The packaged Electron app uses `PC_SERVER_DATA_DIR` as the backend data root.
-If `PC_SERVER_DATA_DIR` is not set, the app uses a stable `DataHome` directory
+If `PC_SERVER_DATA_DIR` is not set, the app uses a stable `ClawMate` directory
 under Electron's platform user data base:
 
 ```text
-macOS:   ~/Library/Application Support/DataHome
-Windows: %APPDATA%\DataHome
-Linux:   $XDG_CONFIG_HOME/DataHome or ~/.config/DataHome
+macOS:   ~/Library/Application Support/ClawMate
+Windows: %APPDATA%\ClawMate
+Linux:   $XDG_CONFIG_HOME/ClawMate or ~/.config/ClawMate
 ```
 
 The backend receives these paths from Electron:
@@ -29,7 +29,7 @@ MODELSCOPE_CACHE=<data-root>/modelscope-cache
 ## Directory Layout
 
 ```text
-DataHome/
+ClawMate/
   configs/
     models.json
   models/

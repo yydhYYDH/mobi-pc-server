@@ -1,4 +1,4 @@
-# 数据归家
+# 你的智伴 (ClawMate)
 
 PC-side control application for running local inference services, downloading models from ModelScope, and connecting to HarmonyOS phones through `hdc`.
 

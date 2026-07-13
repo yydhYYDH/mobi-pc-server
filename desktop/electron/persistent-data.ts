@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const PRODUCT_DATA_DIRECTORY = "DataHome";
+const PRODUCT_DATA_DIRECTORY = "ClawMate";
 const LEGACY_DATA_DIRECTORY = "pc-server-data";
 
 type Environment = NodeJS.ProcessEnv | Record<string, string | undefined>;

@@ -1,6 +1,6 @@
 # macOS 打包说明
 
-本文档说明如何生成数据归家的 macOS 发布包。首版支持两个独立架构包：
+本文档说明如何生成你的智伴的 macOS 发布包。首版支持两个独立架构包：
 
 - Intel Mac：`x64`
 - Apple Silicon：`arm64`
@@ -36,7 +36,7 @@ desktop/resources-mac-<arch>/
 
 Electron Builder 会把选中的 `desktop/resources-mac-<arch>/` 复制到最终 `.app` 的 `Contents/Resources/` 目录。
 
-运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入 `.app`。打包版会使用 `~/Library/Application Support/DataHome`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
+运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入 `.app`。打包版会使用 `~/Library/Application Support/ClawMate`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
 
 ## 前置要求
 
@@ -235,10 +235,10 @@ desktop/release/
 常见文件名：
 
 ```text
-DataHome-0.2.0-mac-arm64.dmg
-DataHome-0.2.0-mac-arm64.zip
-DataHome-0.2.0-mac-x64.dmg
-DataHome-0.2.0-mac-x64.zip
+ClawMate-0.2.0-mac-arm64.dmg
+ClawMate-0.2.0-mac-arm64.zip
+ClawMate-0.2.0-mac-x64.dmg
+ClawMate-0.2.0-mac-x64.zip
 ```
 
 ## 7. 验证
@@ -246,7 +246,7 @@ DataHome-0.2.0-mac-x64.zip
 解包后检查 `.app` 内容：
 
 ```bash
-APP="desktop/release/mac-arm64/DataHome.app"
+APP="desktop/release/mac-arm64/ClawMate.app"
 test -f "$APP/Contents/Resources/backend/pc-server-backend"
 test -f "$APP/Contents/Resources/frontend/index.html"
 test -f "$APP/Contents/Resources/configs/models.json"

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from app.schemas.models import ModelCatalogItem
 from app.services.modelscope import ModelScopeService
 
@@ -88,7 +90,138 @@ def test_remote_model_size_uses_catalog_size_when_metadata_is_unavailable() -> N
 def test_directory_size_excludes_download_metadata(tmp_path) -> None:
     model_file = tmp_path / "model.gguf"
     model_file.write_bytes(b"model")
+    (tmp_path / ".msc").write_bytes(b"modelscope state")
+    (tmp_path / ".mv").write_text("modelscope version", encoding="utf-8")
     (tmp_path / ".pc-server-download.json").write_text("{}", encoding="utf-8")
     (tmp_path / ".pc-server-download-error.json").write_text("{}", encoding="utf-8")
 
     assert ModelScopeService()._directory_size(tmp_path) == len(b"model")  # noqa: SLF001
+
+
+def test_failed_marker_is_recovered_when_required_files_are_complete(monkeypatch, tmp_path) -> None:
+    model_dir = tmp_path / "qwen"
+    model_dir.mkdir()
+    (model_dir / "model.gguf").write_bytes(b"model")
+    (model_dir / "mmproj.gguf").write_bytes(b"projector")
+    marker_path = model_dir / ".pc-server-download.json"
+    marker_path.write_text(json.dumps({"state": "failed"}), encoding="utf-8")
+    service = ModelScopeService()
+    item = ModelCatalogItem(
+        id="qwen",
+        name="Qwen",
+        modelscope_id="YYDH21/qwen3.5-0.8b-q4-k-m",
+        local_dir="models/qwen",
+        entry_file="model.gguf",
+        mmproj_file="mmproj.gguf",
+        runtime="llama_cpp",
+    )
+    monkeypatch.setattr(service, "_find_model", lambda _model_id: item)
+    monkeypatch.setattr(service, "_safe_model_dir", lambda _item: model_dir)
+    monkeypatch.setattr(service, "_remote_files", lambda _item: None)
+
+    status = service.download_status(item.id)
+
+    assert status.state == "downloaded"
+    assert json.loads(marker_path.read_text(encoding="utf-8"))["state"] == "downloaded"
+
+
+def test_failed_download_status_preserves_worker_error(monkeypatch, tmp_path) -> None:
+    model_dir = tmp_path / "qwen"
+    model_dir.mkdir()
+    (model_dir / ".pc-server-download.json").write_text(
+        json.dumps({"state": "failed"}), encoding="utf-8"
+    )
+    (model_dir / ".pc-server-download-error.json").write_text(
+        json.dumps(
+            {
+                "type": "ConnectionError",
+                "message": "ModelScope connection timed out",
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = ModelScopeService()
+    item = ModelCatalogItem(
+        id="qwen",
+        name="Qwen",
+        modelscope_id="YYDH21/qwen3.5-0.8b-q4-k-m",
+        local_dir="models/qwen",
+        entry_file="model.gguf",
+        runtime="llama_cpp",
+    )
+    monkeypatch.setattr(service, "_find_model", lambda _model_id: item)
+    monkeypatch.setattr(service, "_safe_model_dir", lambda _item: model_dir)
+    monkeypatch.setattr(service, "_remote_model_size", lambda _item: None)
+
+    status = service.download_status(item.id)
+
+    assert status.state == "failed"
+    assert status.message == (
+        "ModelScope download failed: ConnectionError: ModelScope connection timed out\n"
+        "Click download to retry."
+    )
+
+
+def test_mnn_config_can_be_edited_after_download(monkeypatch, tmp_path) -> None:
+    model_dir = tmp_path / "mnn-model"
+    model_dir.mkdir()
+    config = model_dir / "config.json"
+    config.write_text('{"thread_num": 8}\n', encoding="utf-8")
+    marker = {
+        "state": "downloaded",
+        "files": {
+            "config.json": {
+                "size": 1,
+                "sha256": "0" * 64,
+            }
+        },
+        "sizes": {"config.json": 1},
+    }
+    (model_dir / ".pc-server-download.json").write_text(json.dumps(marker), encoding="utf-8")
+
+    service = ModelScopeService()
+    item = ModelCatalogItem(
+        id="mnn-model",
+        name="MNN Model",
+        modelscope_id="example/mnn-model",
+        local_dir="models/mnn-model",
+        entry_file="config.json",
+        runtime="mnn",
+    )
+    monkeypatch.setattr(service, "_safe_model_dir", lambda _item: model_dir)
+    monkeypatch.setattr(
+        service,
+        "_remote_files",
+        lambda _item: (_ for _ in ()).throw(AssertionError("local status must not fetch remote metadata")),
+    )
+
+    assert service._is_model_complete(item) is True  # noqa: SLF001
+
+
+def test_download_verification_keeps_weights_strict_but_allows_mnn_config(monkeypatch, tmp_path) -> None:
+    model_dir = tmp_path / "mnn-model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text('{"thread_num": 8}\n', encoding="utf-8")
+    weight = model_dir / "llm.mnn.weight"
+    weight.write_bytes(b"weight")
+
+    service = ModelScopeService()
+    item = ModelCatalogItem(
+        id="mnn-model",
+        name="MNN Model",
+        modelscope_id="example/mnn-model",
+        local_dir="models/mnn-model",
+        entry_file="config.json",
+        runtime="mnn",
+    )
+    monkeypatch.setattr(service, "_safe_model_dir", lambda _item: model_dir)
+    monkeypatch.setattr(
+        service,
+        "_remote_files",
+        lambda _item: {
+            "config.json": {"size": 1, "sha256": "0" * 64},
+            "llm.mnn.weight": {"size": len(b"weight"), "sha256": service._sha256(weight)},  # noqa: SLF001
+        },
+    )
+
+    assert service._is_model_complete(item, verify_remote=True) is True  # noqa: SLF001

@@ -5,7 +5,7 @@ import "./styles.css";
 import { API_BASE } from "./api/client";
 import { getLlamaCppRuntimes } from "./api/runtime";
 import type { BackendId, ViewId } from "./api/types";
-import { BACKEND_OPTIONS, backendLabel, formatDownloadSize, isSelectableBackend, normalizeBackend, statusLabel } from "./domain/runtime";
+import { BACKEND_OPTIONS, backendLabel, formatDownloadSize, statusLabel } from "./domain/runtime";
 import { useChatTest } from "./hooks/useChatTest";
 import { useDashboardData } from "./hooks/useDashboardData";
 import { useHdcActions } from "./hooks/useHdcActions";
@@ -17,11 +17,8 @@ import { DataState, SidebarNav, WorkspaceHeader, type NavItem } from "./componen
 import { ActiveViewRenderer } from "./views";
 
 
-const FALLBACK_LLAMA_BACKEND: { id: BackendId; label: string } = { id: "llama_cpp", label: "llama.cpp" };
-
 function initialBackend(): BackendId {
-  const storedBackend = normalizeBackend(window.localStorage.getItem("pc-server-backend"));
-  return isSelectableBackend(storedBackend) ? storedBackend : "llama_cpp";
+  return "mobiinfer";
 }
 
 function App() {
@@ -63,7 +60,7 @@ function App() {
 
   const { deleteModel, downloadModel, modelBusy, pauseDownload, setModelBusy } = useModelActions({ load, mnn, models, setError });
 
-  const { loadModel, serverBusy, startMnn, stopMnn } = useRuntimeActions({
+  const { loadModel, serverBusy, stopMnn } = useRuntimeActions({
     isDownloaded,
     load,
     mnn,
@@ -97,6 +94,7 @@ function App() {
     imageDisabledReason,
     imageBusy,
     runningBackendLabel,
+    resetDefaultChat,
     selectedImage,
     selectImageFile,
     sendChat,
@@ -115,27 +113,19 @@ function App() {
         if (cancelled) {
           return;
         }
-        const availableLlamaOptions = runtimes
-          .filter((runtime) => runtime.available)
-          .map((runtime) => ({ id: runtime.id, label: runtime.label }));
-        const nonLlamaOptions = BACKEND_OPTIONS.filter((backend) => !backend.id.startsWith("llama_cpp"));
+        const cuda = runtimes.find((runtime) => runtime.id === "llama_cpp_cuda" && runtime.available);
+        const mobiInfer = BACKEND_OPTIONS.find((backend) => backend.id === "mobiinfer");
         const nextOptions = [
-          ...(availableLlamaOptions.length > 0 ? availableLlamaOptions : [FALLBACK_LLAMA_BACKEND]),
-          ...nonLlamaOptions
+          ...(cuda ? [{ id: cuda.id, label: cuda.label }] : []),
+          ...(mobiInfer ? [mobiInfer] : [])
         ];
         setBackendOptions(nextOptions);
-        setSelectedBackend((currentBackend) =>
-          nextOptions.some((backend) => backend.id === currentBackend)
-            ? currentBackend
-            : nextOptions[0]?.id ?? "llama_cpp"
-        );
+        setSelectedBackend(cuda ? "llama_cpp_cuda" : "mobiinfer");
       })
       .catch(() => {
         if (!cancelled) {
-          setBackendOptions([
-            FALLBACK_LLAMA_BACKEND,
-            ...BACKEND_OPTIONS.filter((backend) => !backend.id.startsWith("llama_cpp"))
-          ]);
+          setBackendOptions(BACKEND_OPTIONS.filter((backend) => backend.id === "mobiinfer"));
+          setSelectedBackend("mobiinfer");
         }
       });
     return () => {
@@ -234,6 +224,7 @@ function App() {
           pauseDownload={pauseDownload}
           refreshLogs={refreshLogs}
           runningBackendLabel={runningBackendLabel}
+          resetDefaultChat={resetDefaultChat}
           selectedBackend={selectedBackend}
           selectedImage={selectedImage}
           selectedLaunchModelId={selectedLaunchModelId}
@@ -249,7 +240,6 @@ function App() {
           setLogFilter={setLogFilter}
           setSelectedBackend={setSelectedBackend}
           setSelectedLaunchModelId={setSelectedLaunchModelId}
-          startMnn={startMnn}
           stopMnn={stopMnn}
           visibleLogLines={visibleLogLines}
         />

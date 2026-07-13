@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.2.0",
   "author": "WAIC",
-  "description": "Electron shell for 数据归家",
+  "description": "Electron shell for 你的智伴",
   "main": "dist/main.js",
   "scripts": {
     "check-node": "node scripts/check-node.js",

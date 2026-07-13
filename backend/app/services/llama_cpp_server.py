@@ -1,5 +1,6 @@
 import os
 import platform
+import shutil
 import subprocess
 from pathlib import Path
 from typing import NamedTuple
@@ -24,14 +25,25 @@ class LlamaCppServerAdapter:
         env_path = os.environ.get("LLAMA_SERVER_BIN")
         if env_path:
             path = Path(env_path).expanduser().resolve()
+            configured_accelerator = os.environ.get("LLAMA_CPP_ACCELERATOR", "custom")
+            if requested_accelerator and configured_accelerator != requested_accelerator:
+                return None
+            if configured_accelerator == "cuda" and not self._has_cuda_gpu():
+                return None
             if path.exists():
-                return LlamaCppRuntime(path, os.environ.get("LLAMA_CPP_ACCELERATOR", "custom"))
+                return LlamaCppRuntime(path, configured_accelerator)
+            return None
+
+        cuda_gpu_available = requested_accelerator != "cpu" and self._has_cuda_gpu()
+        if requested_accelerator == "cuda" and not cuda_gpu_available:
             return None
 
         candidates = self._runtime_candidates()
         fallback: LlamaCppRuntime | None = None
         for accelerator, path in candidates:
             if requested_accelerator and accelerator != requested_accelerator:
+                continue
+            if accelerator == "cuda" and not cuda_gpu_available:
                 continue
             if not path.exists():
                 continue
@@ -130,6 +142,8 @@ class LlamaCppServerAdapter:
             "--n-gpu-layers",
             str(int(gpu_layers)),
         ]
+        if os.environ.get("LLAMA_CPP_NO_JINJA", "1").lower() not in {"0", "false", "no"}:
+            command.append("--no-jinja")
         if mmproj_path is not None:
             command.extend(["--mmproj", str(mmproj_path)])
         else:
@@ -156,6 +170,28 @@ class LlamaCppServerAdapter:
             command.extend(["--reasoning", normalized_reasoning])
 
         return command
+
+    def _has_cuda_gpu(self) -> bool:
+        nvidia_smi = os.environ.get("NVIDIA_SMI_BIN") or shutil.which("nvidia-smi")
+        if not nvidia_smi:
+            return False
+
+        try:
+            result = subprocess.run(
+                [
+                    nvidia_smi,
+                    "--query-gpu=index,name,driver_version,memory.total",
+                    "--format=csv,noheader,nounits",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        return result.returncode == 0 and any(line.strip() for line in result.stdout.splitlines())
 
     def _can_start(self, binary_path: Path) -> bool:
         try:

@@ -33,8 +33,8 @@ artifacts instead of a universal app.
 
 Build two independent macOS packages:
 
-- `DataHome-<version>-mac-x64.dmg`
-- `DataHome-<version>-mac-arm64.dmg`
+- `ClawMate-<version>-mac-x64.dmg`
+- `ClawMate-<version>-mac-arm64.dmg`
 
 Each package uses its own native resource staging directory:
 

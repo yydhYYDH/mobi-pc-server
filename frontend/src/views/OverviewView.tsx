@@ -38,7 +38,7 @@ export function OverviewView(props: {
   selectedLaunchModelId: string;
   selectedBackend: BackendId;
   serverState: string;
-  serverBusy: "start" | "stop" | null;
+  serverBusy: ServerBusy;
   stopMnn: () => Promise<void>;
   setHdcTarget: (target: string) => void;
   setSelectedLaunchModelId: (modelId: string) => void;
@@ -259,11 +259,11 @@ export function OverviewView(props: {
               {selectedModel && selectedDownloaded ? (
                 <ActionButton
                   busy={selectedLoadBusy}
-                  busyText="加载中..."
+                  busyText="启动中..."
                   disabled={selectedDownloading || runtimeActive || props.modelBusy !== null || props.serverBusy !== null}
                   onClick={() => void props.onLoadModel(selectedModel.id)}
                 >
-                  {selectedModelRunning ? "运行中" : props.serverState === "starting" ? "加载中" : "加载模型"}
+                  {selectedModelRunning ? "运行中" : props.serverState === "starting" ? "启动中" : "启动模型"}
                 </ActionButton>
               ) : null}
             </div>

@@ -216,7 +216,7 @@ function childEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
     FORCE_COLOR: "0",
-    HDC_BIN: path.join(hdcDir, process.platform === "win32" ? "hdc.exe" : "hdc"),
+    HDC_BIN: process.env.HDC_BIN || path.join(hdcDir, process.platform === "win32" ? "hdc.exe" : "hdc"),
     MNNCLI_BIN: path.join(resourcesPath, "mnn", process.platform === "win32" ? "mnncli.exe" : "mnncli"),
     MOBIINFER_BIN: path.join(resourcesPath, "mobiinfer", process.platform === "win32" ? "mnncli.exe" : "mnncli"),
     PATH: pathValue,
