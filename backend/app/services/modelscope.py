@@ -16,7 +16,12 @@ from app.core.paths import MODEL_CATALOG_PATH, MODELS_DIR, REPO_ROOT
 from app.schemas.models import LocalModel, ModelCatalogItem, ModelDownloadStatus
 
 
-DOWNLOAD_METADATA_FILES = {".pc-server-download.json", ".pc-server-download-error.json"}
+DOWNLOAD_METADATA_FILES = {
+    ".msc",
+    ".mv",
+    ".pc-server-download.json",
+    ".pc-server-download-error.json",
+}
 
 
 def _snapshot_download_worker(
@@ -127,27 +132,26 @@ class ModelScopeService:
         return {"status": "paused", "message": f"Paused download for {item.modelscope_id}."}
 
     def download_statuses(self) -> list[ModelDownloadStatus]:
-        catalog_ids = {item.id for item in self.read_catalog()}
-        with self._lock:
-            statuses = list(self._download_status.values())
-
-        known = {status.model_id for status in statuses}
-        for model_id in sorted(catalog_ids - known):
-            statuses.append(self.download_status(model_id))
-        return statuses
+        return [self.download_status(item.id) for item in self.read_catalog()]
 
     def download_status(self, model_id: str) -> ModelDownloadStatus:
-        self._find_model(model_id)
+        item = self._find_model(model_id)
         with self._lock:
             existing = self._download_status.get(model_id)
-            if existing:
+            if existing and existing.state in {"queued", "downloading", "verifying"}:
                 return existing
-
-        item = self._find_model(model_id)
         model_dir = self._safe_model_dir(item)
-        if self._is_model_complete(item):
+        marker = self._read_download_marker(item)
+        marker_state = marker.get("state") if marker else None
+        complete = self._is_model_complete(item)
+        if not complete and marker_state == "failed":
+            complete = self._is_model_complete(item, allow_state_marker=True)
+            if complete:
+                self._write_download_marker(item, "downloaded")
+
+        if complete:
             downloaded_bytes = self._directory_size(model_dir)
-            return ModelDownloadStatus(
+            status = ModelDownloadStatus(
                 model_id=model_id,
                 state="downloaded",
                 progress=100,
@@ -155,20 +159,30 @@ class ModelScopeService:
                 total_bytes=downloaded_bytes,
                 message="Local model is ready.",
             )
-        marker = self._read_download_marker(item)
-        marker_state = marker.get("state") if marker else None
+            with self._lock:
+                self._download_status[model_id] = status
+            return status
         if marker_state in {"paused", "failed"}:
             downloaded_bytes = self._directory_size(model_dir)
             total_bytes = self._remote_model_size(item)
+            message = "Download paused. Click download again to continue."
+            if marker_state == "failed":
+                error_message = self._download_process_error(
+                    None, model_dir / ".pc-server-download-error.json"
+                )
+                fallback_message = "ModelScope download process exited with code None."
+                message = (
+                    f"{error_message}\nClick download to retry."
+                    if error_message != fallback_message
+                    else "Previous download failed. Click download to retry."
+                )
             return ModelDownloadStatus(
                 model_id=model_id,
                 state=str(marker_state),
                 progress=self._download_progress(downloaded_bytes, total_bytes),
                 downloaded_bytes=downloaded_bytes,
                 total_bytes=total_bytes,
-                message="Download paused. Click download again to continue."
-                if marker_state == "paused"
-                else "Previous download failed. Click download to retry.",
+                message=message,
             )
         if marker_state == "downloading":
             downloaded_bytes = self._directory_size(model_dir)
@@ -274,7 +288,7 @@ class ModelScopeService:
                 if task and task.process is process:
                     self._download_tasks.pop(model_id, None)
 
-        if not self._is_model_complete(item, allow_state_marker=True):
+        if not self._is_model_complete(item, allow_state_marker=True, verify_remote=True):
             self._set_status(
                 model_id,
                 "failed",
@@ -410,7 +424,11 @@ class ModelScopeService:
     def _remote_model_size(self, item: ModelCatalogItem) -> int | None:
         files = self._remote_files(item)
         if files:
-            total = sum(int(metadata.get("size") or 0) for metadata in files.values())
+            total = sum(
+                int(metadata.get("size") or 0)
+                for file_name, metadata in files.items()
+                if not self._is_download_metadata_file(file_name)
+            )
             if total:
                 return total
         return self._catalog_size_bytes(item.size)
@@ -431,47 +449,61 @@ class ModelScopeService:
                 return f"ModelScope download failed: {details}"
         return f"ModelScope download process exited with code {exitcode}."
 
-    def _is_model_complete(self, item: ModelCatalogItem, allow_state_marker: bool = False) -> bool:
+    def _is_model_complete(
+        self,
+        item: ModelCatalogItem,
+        allow_state_marker: bool = False,
+        verify_remote: bool = False,
+    ) -> bool:
         model_dir = self._safe_model_dir(item)
         marker = self._read_download_marker(item)
         marker_state = marker.get("state") if marker else None
-
-        remote_files = self._remote_files(item)
-        if remote_files is not None:
-            if not remote_files:
-                return False
-            for file_name, metadata in remote_files.items():
-                if not self._verify_local_file(model_dir / file_name, metadata):
-                    return False
-            self._write_download_marker(item, "downloaded")
-            return True
-
-        if marker_state == "downloaded":
-            files = marker.get("files")
-            if isinstance(files, dict):
-                return all(
-                    isinstance(metadata, dict) and self._verify_local_file(model_dir / file_name, metadata)
-                    for file_name, metadata in files.items()
-                )
 
         required_files = self._required_model_files(item)
         required_paths = [model_dir / file_name for file_name in required_files]
         if not all(path.exists() and path.is_file() for path in required_paths):
             return False
 
+        if marker_state in {"downloading", "paused", "failed"} and not allow_state_marker:
+            return False
+
+        if marker_state == "downloaded":
+            files = marker.get("files")
+            if isinstance(files, dict) and not all(
+                isinstance(metadata, dict) and self._verify_marker_file(item, model_dir, file_name, metadata)
+                for file_name, metadata in files.items()
+            ):
+                return False
+
         if marker_state == "downloaded":
             sizes = marker.get("sizes")
             if isinstance(sizes, dict):
                 try:
-                    return all(
-                        path.stat().st_size == int(sizes.get(file_name, -1))
-                        for file_name, path in zip(required_files, required_paths)
-                    )
+                    for file_name, path in zip(required_files, required_paths):
+                        if self._is_user_editable_entry_file(item, file_name):
+                            continue
+                        if path.stat().st_size != int(sizes.get(file_name, -1)):
+                            return False
+                    return True
                 except (OSError, TypeError, ValueError):
                     return False
 
-        if marker_state in {"downloading", "paused", "failed"} and not allow_state_marker:
-            return False
+        if verify_remote:
+            remote_files = self._remote_files(item)
+            if remote_files is not None:
+                if not remote_files:
+                    return False
+                for file_name, metadata in remote_files.items():
+                    if self._is_download_metadata_file(file_name):
+                        continue
+                    if self._is_user_editable_entry_file(item, file_name):
+                        if not (model_dir / file_name).is_file():
+                            return False
+                        continue
+                    if not self._verify_local_file(model_dir / file_name, metadata):
+                        return False
+                self._write_download_marker(item, "downloaded")
+                return True
 
         return True
 
@@ -480,6 +512,18 @@ class ModelScopeService:
         if item.mmproj_file:
             files.append(item.mmproj_file)
         return files
+
+    def _is_user_editable_entry_file(self, item: ModelCatalogItem, file_name: str) -> bool:
+        if file_name != item.entry_file:
+            return False
+        if Path(file_name).name != "config.json":
+            return False
+        return self._normalize_runtime(item.runtime) in {"mnn", "mobiinfer"}
+
+    def _normalize_runtime(self, runtime: str) -> str:
+        if runtime in {"mnn", "mobiinfer"}:
+            return runtime
+        return "llama_cpp" if runtime in {"llama_cpp", "llama.cpp"} else runtime
 
     def _download_marker_path(self, item: ModelCatalogItem) -> Path:
         return self._safe_model_dir(item) / ".pc-server-download.json"
@@ -500,7 +544,11 @@ class ModelScopeService:
         model_dir.mkdir(parents=True, exist_ok=True)
         sizes: dict[str, int] = {}
         remote_files = self._remote_files(item) if state == "downloaded" else None
-        file_names = list(remote_files.keys()) if remote_files else self._required_model_files(item)
+        file_names = (
+            [file_name for file_name in remote_files if not self._is_download_metadata_file(file_name)]
+            if remote_files
+            else self._required_model_files(item)
+        )
         files: dict[str, dict[str, int | str | None]] = {}
         for file_name in file_names:
             path = model_dir / file_name
@@ -547,6 +595,9 @@ class ModelScopeService:
             except OSError:
                 continue
 
+    def _is_download_metadata_file(self, file_name: str) -> bool:
+        return Path(file_name).name in DOWNLOAD_METADATA_FILES
+
     def _verify_local_file(self, path: Path, metadata: dict[str, int | str | None]) -> bool:
         if not path.exists() or not path.is_file():
             return False
@@ -561,6 +612,26 @@ class ModelScopeService:
         if expected_sha256:
             return self._sha256(path) == str(expected_sha256).lower()
         return True
+
+    def _verify_marker_file(
+        self,
+        item: ModelCatalogItem,
+        model_dir: Path,
+        file_name: str,
+        metadata: dict[str, int | str | None],
+    ) -> bool:
+        path = model_dir / file_name
+        if self._is_user_editable_entry_file(item, file_name):
+            return path.exists() and path.is_file()
+        if not path.exists() or not path.is_file():
+            return False
+        expected_size = metadata.get("size")
+        if expected_size is None:
+            return True
+        try:
+            return path.stat().st_size == int(expected_size)
+        except (OSError, TypeError, ValueError):
+            return False
 
     def _sha256(self, path: Path) -> str:
         digest = hashlib.sha256()
