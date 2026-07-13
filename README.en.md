@@ -20,8 +20,8 @@ desktop/         Electron shell for desktop launch
 configs/         Model catalog and static config
 models/          Downloaded model files, ignored by Git
 logs/            Runtime logs, ignored by Git
-3rdparty/mobiinfer  MobiInfer upstream source as a Git submodule
-3rdparty/llama.cpp  llama.cpp upstream source as a Git submodule
+3rdparty/mobiinfer  Normal directory for MobiInfer source or prebuilt runtime files
+3rdparty/llama.cpp  Normal directory for llama.cpp source or prebuilt runtime files
 docs/            Project documentation
 scripts/         Developer scripts
 ```
@@ -115,10 +115,11 @@ desktop/resources-mac-arm64/
 Windows x64:
 
 ```powershell
-cd E:\WAIC\pc_server
+# Run from the repository root.
+$OpenSslRoot = $env:OPENSSL_ROOT_DIR
 
 .\scripts\windows\build-backend.ps1
-.\scripts\windows\build-mobiinfer.ps1 -Architecture x64 -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
+.\scripts\windows\build-mobiinfer.ps1 -Architecture x64 -OpenSslRoot $OpenSslRoot
 .\scripts\windows\build-llama-cpp.ps1 -Mode cpu -Architecture x64
 
 # Optional CUDA runtime
@@ -131,7 +132,7 @@ npm run build-win-x64
 macOS Apple Silicon:
 
 ```bash
-cd /path/to/pc_server
+# Run from the repository root.
 
 PC_SERVER_DESKTOP_TARGET_PLATFORM=darwin PC_SERVER_DESKTOP_TARGET_ARCH=arm64 ./scripts/build-backend.sh
 PC_SERVER_DESKTOP_TARGET_ARCH=arm64 ./scripts/build-mobiinfer.sh
@@ -146,7 +147,7 @@ npm run build-mac-arm
 Linux x64:
 
 ```bash
-cd /mnt/e/WAIC/pc_server
+# Run from the repository root.
 
 PC_SERVER_DESKTOP_TARGET_PLATFORM=linux PC_SERVER_DESKTOP_TARGET_ARCH=x64 ./scripts/build-backend.sh
 PC_SERVER_DESKTOP_TARGET_ARCH=x64 ./scripts/build-mobiinfer.sh
@@ -183,21 +184,10 @@ The current selectable runtime backends are:
 
 MobiInfer is integrated as a first-class runtime for catalog entries with `runtime: "mobiinfer"`.
 
-To initialize or reset the submodule, shallow-fetch the latest `origin/main`:
+`3rdparty/mobiinfer` is a normal directory, not a Git submodule. Place the
+MobiInfer source tree or a prebuilt `mnncli` binary there.
 
-```bash
-git submodule update --init --depth 1 3rdparty/mobiinfer
-git -C 3rdparty/mobiinfer fetch --depth 1 origin main
-git -C 3rdparty/mobiinfer checkout --detach FETCH_HEAD
-```
-
-To initialize all third-party runtimes in one step:
-
-```bash
-git submodule update --init --depth 1 3rdparty/mobiinfer 3rdparty/llama.cpp
-```
-
-After the submodule is present, try:
+If the source tree is present, try:
 
 ```bash
 ./scripts/build-mobiinfer.sh
@@ -211,25 +201,14 @@ The backend checks these build outputs by default:
 3rdparty/mobiinfer/build/apps/mnncli/mnncli
 ```
 
-If the binary is built elsewhere, set `MOBIINFER_BIN=/absolute/path/to/mnncli` before starting the backend.
+If the binary is built elsewhere, set `MOBIINFER_BIN=./path/to/mnncli` before starting the backend.
 
 See [docs/mobiinfer.md](docs/mobiinfer.md) for integration details.
 
 ## llama.cpp
 
-llama.cpp is pinned by this repository to:
-
-```text
-6eab47181cbd3532c88a105682b81b4729ab809b
-```
-
-To initialize or reset the submodule:
-
-```bash
-git submodule update --init 3rdparty/llama.cpp
-git -C 3rdparty/llama.cpp fetch --depth 1 origin 6eab47181cbd3532c88a105682b81b4729ab809b
-git -C 3rdparty/llama.cpp checkout --detach 6eab47181cbd3532c88a105682b81b4729ab809b
-```
+`3rdparty/llama.cpp` is a normal directory, not a Git submodule. Place the
+llama.cpp source tree or a prebuilt `llama-server` binary there.
 
 The frontend defaults to the generic llama.cpp fallback backend. The header and runtime service page can switch between llama.cpp CUDA, llama.cpp CPU, and MobiInfer; CUDA/CPU options are shown only when the backend detects the corresponding binaries.
 

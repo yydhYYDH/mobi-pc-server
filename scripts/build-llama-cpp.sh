@@ -43,7 +43,7 @@ fi
 
 if [[ ! -f "$LLAMA_CPP_DIR/CMakeLists.txt" ]]; then
   echo "Missing llama.cpp source at $LLAMA_CPP_DIR." >&2
-  echo "Run: git submodule update --init --depth 1 3rdparty/llama.cpp" >&2
+  echo "Place the llama.cpp source tree in 3rdparty/llama.cpp, or provide a prebuilt llama-server binary in one of the documented paths." >&2
   exit 1
 fi
 
