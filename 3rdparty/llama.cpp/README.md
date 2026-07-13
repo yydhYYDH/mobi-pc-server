@@ -1,8 +1,5 @@
 # llama.cpp
 
-This directory is intentionally tracked as a normal project directory, not as a
-Git submodule.
-
 Place the llama.cpp source tree and/or prebuilt `llama-server` binaries here.
 The backend and packaging scripts look for binaries under this directory, for
 example:

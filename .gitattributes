@@ -1,0 +1,5 @@
+3rdparty/llama.cpp/build-linux-x64-cuda/bin/libggml-cuda.so filter=lfs diff=lfs merge=lfs -text
+3rdparty/llama.cpp/build-linux-x64-cuda/bin/libggml-cuda.so.0 filter=lfs diff=lfs merge=lfs -text
+3rdparty/llama.cpp/build-linux-x64-cuda/bin/libggml-cuda.so.0.14.0 filter=lfs diff=lfs merge=lfs -text
+3rdparty/llama.cpp/build-linux-x64-cuda/bin/libggml-cuda.so.0.15.1 filter=lfs diff=lfs merge=lfs -text
+3rdparty/llama.cpp/build-cuda-windows-x64/bin/ggml-cuda.dll filter=lfs diff=lfs merge=lfs -text

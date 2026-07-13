@@ -1,8 +1,5 @@
 # MobiInfer
 
-This directory is intentionally tracked as a normal project directory, not as a
-Git submodule.
-
 Place the MobiInfer source tree and/or prebuilt `mnncli` binaries here. The
 backend and packaging scripts look for binaries under this directory, for
 example:
