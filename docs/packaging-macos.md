@@ -132,7 +132,7 @@ desktop/resources-mac-x64/backend/pc-server-backend
 
 注意：`PC_SERVER_DESKTOP_TARGET_ARCH` 只决定复制到哪个资源目录。PyInstaller 产物仍取决于当前 Python 解释器和运行环境。如果在 Apple Silicon 上生成 Intel 后端，需要使用 x64 Python/Rosetta 环境，或在 Intel Mac 上构建。
 
-正式执行 `npm run dist:mac:*` 前必须先生成对应架构的后端可执行文件；缺少 `pc-server-backend` 时资源准备脚本会中止。
+正式执行 `npm run build-mac-*` 前必须先生成对应架构的后端可执行文件；缺少 `pc-server-backend` 时资源准备脚本会中止。
 
 ## 3. 准备 llama.cpp
 
@@ -186,7 +186,7 @@ desktop/resources-mac-x64/mobiinfer/mnncli
 
 ```bash
 mkdir -p desktop/resources-mac-arm64/mobiinfer
-cp 3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli \
+cp 3rdparty/mobiinfer/apps/mnncli/build_mnncli_darwin_arm64/mnncli \
   desktop/resources-mac-arm64/mobiinfer/mnncli
 chmod +x desktop/resources-mac-arm64/mobiinfer/mnncli
 ```
@@ -216,15 +216,17 @@ Apple Silicon：
 
 ```bash
 cd /path/to/mobi-pc-server/desktop
-npm run dist:mac:arm64
+npm run build-mac-arm
 ```
 
 Intel：
 
 ```bash
 cd /path/to/mobi-pc-server/desktop
-npm run dist:mac:x64
+npm run build-mac-x64
 ```
+
+兼容旧命令仍可使用：`npm run dist:mac:arm64` 和 `npm run dist:mac:x64`。
 
 产物在：
 

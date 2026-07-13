@@ -10,6 +10,17 @@ BUILD_DIR="${LLAMA_CPP_BUILD_DIR:-}"
 CUDA_ARCH="${LLAMA_CPP_CUDA_ARCH:-89}"
 TARGET="${LLAMA_CPP_TARGET:-llama-server}"
 OSX_ARCHITECTURES="${LLAMA_CPP_OSX_ARCHITECTURES:-}"
+TARGET_PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
+TARGET_ARCH="${PC_SERVER_DESKTOP_TARGET_ARCH:-$(uname -m)}"
+
+case "$TARGET_ARCH" in
+  x64|x86_64|amd64)
+    TARGET_ARCH="x64"
+    ;;
+  arm64|aarch64)
+    TARGET_ARCH="arm64"
+    ;;
+esac
 
 if [[ -z "$BUILD_MODE" ]]; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -20,7 +31,7 @@ if [[ -z "$BUILD_MODE" ]]; then
 fi
 
 if [[ -z "$OSX_ARCHITECTURES" && "$(uname -s)" == "Darwin" ]]; then
-  case "${PC_SERVER_DESKTOP_TARGET_ARCH:-$(uname -m)}" in
+  case "$TARGET_ARCH" in
     x64|x86_64)
       OSX_ARCHITECTURES="x86_64"
       ;;
@@ -43,7 +54,7 @@ fi
 
 case "$BUILD_MODE" in
   cuda)
-    BUILD_DIR="${BUILD_DIR:-$LLAMA_CPP_DIR/build-cuda-native}"
+    BUILD_DIR="${BUILD_DIR:-$LLAMA_CPP_DIR/build-$TARGET_PLATFORM-$TARGET_ARCH-cuda}"
     CMAKE_FLAGS=(
       -DGGML_CUDA=ON
       -DGGML_NATIVE=ON
@@ -53,7 +64,7 @@ case "$BUILD_MODE" in
     )
     ;;
   cpu)
-    BUILD_DIR="${BUILD_DIR:-$LLAMA_CPP_DIR/build}"
+    BUILD_DIR="${BUILD_DIR:-$LLAMA_CPP_DIR/build-$TARGET_PLATFORM-$TARGET_ARCH-cpu}"
     CMAKE_FLAGS=(
       -DGGML_NATIVE=ON
       -DLLAMA_BUILD_UI=OFF
@@ -61,7 +72,7 @@ case "$BUILD_MODE" in
     )
     ;;
   metal)
-    BUILD_DIR="${BUILD_DIR:-$LLAMA_CPP_DIR/build-metal-native}"
+    BUILD_DIR="${BUILD_DIR:-$LLAMA_CPP_DIR/build-$TARGET_PLATFORM-$TARGET_ARCH-metal}"
     CMAKE_FLAGS=(
       -DGGML_METAL=ON
       -DGGML_NATIVE=OFF

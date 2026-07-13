@@ -45,12 +45,15 @@ function normalizedTargetArch() {
 
 function defaultResourcesDirectory(platform, arch) {
   if (platform === "win32") {
-    return "resources-win";
+    return `resources-win-${arch}`;
   }
   if (platform === "darwin") {
     return `resources-mac-${arch}`;
   }
-  return "resources-linux";
+  if (platform === "linux") {
+    return `resources-linux-${arch}`;
+  }
+  return `resources-${platform}-${arch}`;
 }
 
 function run(command, args, cwd) {
@@ -331,6 +334,7 @@ function prepareLinuxRuntimeResources() {
   const mobiinferDir = path.join(resourcesRoot, "mobiinfer");
   const llamaCppDir = path.join(resourcesRoot, "llama-cpp");
   const hdcDir = path.join(resourcesRoot, "hdc");
+  const platformArch = `linux-${targetArch}`;
 
   copyNativeFileIfCompatible(
     path.join(repoRoot, "3rdparty", "MNN", "apps", "mnncli", "build_mnncli", "mnncli"),
@@ -338,18 +342,31 @@ function prepareLinuxRuntimeResources() {
     "MNN executable"
   );
   copyNativeFileIfCompatible(
-    path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", "build_mnncli", "mnncli"),
+    path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", `build_mnncli_${platformArch}`, "mnncli"),
     path.join(mobiinferDir, "mnncli"),
     "MobiInfer executable"
-  );
+  ) ||
+    copyNativeFileIfCompatible(
+      path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", "build_mnncli", "mnncli"),
+      path.join(mobiinferDir, "mnncli"),
+      "MobiInfer executable"
+    );
   copyRuntimeDir(
-    path.join(repoRoot, "3rdparty", "llama.cpp", "build-cpu-native", "bin"),
+    path.join(repoRoot, "3rdparty", "llama.cpp", `build-${platformArch}-cpu`, "bin"),
     path.join(llamaCppDir, "cpu")
-  );
+  ) ||
+    copyRuntimeDir(
+      path.join(repoRoot, "3rdparty", "llama.cpp", "build-cpu-native", "bin"),
+      path.join(llamaCppDir, "cpu")
+    );
   copyRuntimeDir(
-    path.join(repoRoot, "3rdparty", "llama.cpp", "build-cuda-native", "bin"),
+    path.join(repoRoot, "3rdparty", "llama.cpp", `build-${platformArch}-cuda`, "bin"),
     path.join(llamaCppDir, "cuda")
-  );
+  ) ||
+    copyRuntimeDir(
+      path.join(repoRoot, "3rdparty", "llama.cpp", "build-cuda-native", "bin"),
+      path.join(llamaCppDir, "cuda")
+    );
 
   copyTargetHdcRuntime(hdcDir);
 
@@ -363,6 +380,7 @@ function prepareDarwinRuntimeResources() {
   const mobiinferDir = path.join(resourcesRoot, "mobiinfer");
   const llamaCppDir = path.join(resourcesRoot, "llama-cpp");
   const hdcDir = path.join(resourcesRoot, "hdc");
+  const platformArch = `darwin-${targetArch}`;
 
   copyNativeFileIfCompatible(
     path.join(repoRoot, "3rdparty", "MNN", "apps", "mnncli", "build_mnncli", "mnncli"),
@@ -370,12 +388,25 @@ function prepareDarwinRuntimeResources() {
     "MNN executable"
   );
   copyNativeFileIfCompatible(
-    path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", "build_mnncli", "mnncli"),
+    path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", `build_mnncli_${platformArch}`, "mnncli"),
     path.join(mobiinferDir, "mnncli"),
     "MobiInfer executable"
-  );
+  ) ||
+    copyNativeFileIfCompatible(
+      path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", "build_mnncli", "mnncli"),
+      path.join(mobiinferDir, "mnncli"),
+      "MobiInfer executable"
+    );
 
   const copiedLlamaCpp =
+    copyRuntimeDir(
+      path.join(repoRoot, "3rdparty", "llama.cpp", `build-${platformArch}-metal`, "bin"),
+      path.join(llamaCppDir, "cpu")
+    ) ||
+    copyRuntimeDir(
+      path.join(repoRoot, "3rdparty", "llama.cpp", `build-${platformArch}-cpu`, "bin"),
+      path.join(llamaCppDir, "cpu")
+    ) ||
     copyRuntimeDir(
       path.join(repoRoot, "3rdparty", "llama.cpp", "build-metal-native", "bin"),
       path.join(llamaCppDir, "cpu")

@@ -9,19 +9,38 @@ Param(
   [String]$OpenSslRoot,
   [String]$CMakeToolchainFile,
   [String]$VcpkgRoot,
-  [String]$VcpkgTriplet = "x64-windows-static"
+  [String]$VcpkgTriplet
 )
 
 $ErrorActionPreference = "Stop"
 
 $RootDir = Resolve-Path "$PSScriptRoot\..\.."
 $MobiInferDir = Join-Path $RootDir "3rdparty\mobiinfer"
-$MnnBuildDir = Join-Path $MobiInferDir "build_mnn_static_win"
 $MnnCliDir = Join-Path $MobiInferDir "apps\mnncli"
-$MnnCliBuildDir = Join-Path $MnnCliDir "build_mnncli_win"
+
+switch ($Architecture) {
+  "amd64" { $TargetArch = "x64" }
+  "x86_64" { $TargetArch = "x64" }
+  "x64" { $TargetArch = "x64" }
+  "arm64" { $TargetArch = "arm64" }
+  "aarch64" { $TargetArch = "arm64" }
+  default { $TargetArch = $Architecture }
+}
+
+$MnnBuildDir = Join-Path $MobiInferDir "build_mnn_static_win_$TargetArch"
+$MnnCliBuildDir = Join-Path $MnnCliDir "build_mnncli_win_$TargetArch"
+$Architecture = $TargetArch
 
 if (-not $InstallDir) {
-  $InstallDir = Join-Path $RootDir "desktop\resources-win\mobiinfer"
+  $InstallDir = Join-Path $RootDir "desktop\resources-win-$TargetArch\mobiinfer"
+}
+
+if (-not $VcpkgTriplet) {
+  if ($TargetArch -eq "arm64") {
+    $VcpkgTriplet = "arm64-windows-static"
+  } else {
+    $VcpkgTriplet = "x64-windows-static"
+  }
 }
 
 if (-not $OpenSslRoot -and $env:OPENSSL_ROOT_DIR) {

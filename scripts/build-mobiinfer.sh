@@ -3,9 +3,21 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 MOBIINFER_DIR="$ROOT_DIR/3rdparty/mobiinfer"
-MNN_BUILD_DIR="$MOBIINFER_DIR/build_mnn_static"
 MNNCLI_DIR="$MOBIINFER_DIR/apps/mnncli"
-MNNCLI_BUILD_DIR="$MNNCLI_DIR/build_mnncli"
+TARGET_PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
+TARGET_ARCH="${PC_SERVER_DESKTOP_TARGET_ARCH:-$(uname -m)}"
+
+case "$TARGET_ARCH" in
+  x64|x86_64|amd64)
+    TARGET_ARCH="x64"
+    ;;
+  arm64|aarch64)
+    TARGET_ARCH="arm64"
+    ;;
+esac
+
+MNN_BUILD_DIR="$MOBIINFER_DIR/build_mnn_static_${TARGET_PLATFORM}_${TARGET_ARCH}"
+MNNCLI_BUILD_DIR="$MNNCLI_DIR/build_mnncli_${TARGET_PLATFORM}_${TARGET_ARCH}"
 
 if [[ "${1:-}" == "--clean" ]]; then
   rm -rf "$MNN_BUILD_DIR" "$MNNCLI_BUILD_DIR"

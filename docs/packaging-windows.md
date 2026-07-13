@@ -4,10 +4,10 @@
 
 ## 产物结构
 
-Windows 包需要这些运行时资源：
+Windows 包需要这些运行时资源。资源目录按架构隔离，例如 x64 使用：
 
 ```text
-desktop/resources-win/
+desktop/resources-win-x64/
   frontend/                 由 frontend/dist 自动复制
   backend/
     pc-server-backend.exe   Windows 后端可执行文件
@@ -26,7 +26,7 @@ desktop/resources-win/
     hdc.exe                 Windows 版 hdc
 ```
 
-Electron Builder 会把 `desktop/resources-win/` 下的内容复制到最终安装包的 `resources/` 目录。Linux 打包使用独立的 `desktop/resources-linux/`，不要再把两个平台的运行时文件混放到同一个 staging 目录。
+arm64 使用同样结构的 `desktop/resources-win-arm64/`。Electron Builder 会把选中的 `desktop/resources-win-<arch>/` 下的内容复制到最终安装包的 `resources/` 目录。Linux 打包使用独立的 `desktop/resources-linux-<arch>/`，不要再把不同平台或架构的运行时文件混放到同一个 staging 目录。
 
 运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入安装目录。打包版会使用 `%APPDATA%\ClawMate`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
 
@@ -144,7 +144,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 ```text
 backend/dist/pc-server-backend.exe
-desktop/resources-win/backend/pc-server-backend.exe
+desktop/resources-win-x64/backend/pc-server-backend.exe
 ```
 
 如果你没有使用 `.venv-win`，可以显式指定 Python：
@@ -165,28 +165,30 @@ cd E:\WAIC\pc_server
 .\scripts\windows\build-mobiinfer.ps1 -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
 ```
 
-脚本会构建：
+脚本会按架构构建：
 
-- `3rdparty/mobiinfer/build_mnn_static_win/`
-- `3rdparty/mobiinfer/apps/mnncli/build_mnncli_win/`
+- `3rdparty/mobiinfer/build_mnn_static_win_x64/` 或 `build_mnn_static_win_arm64/`
+- `3rdparty/mobiinfer/apps/mnncli/build_mnncli_win_x64/` 或 `build_mnncli_win_arm64/`
+
+旧的 `build_mnn_static_win/` 和 `build_mnncli_win/` 只作为历史构建目录，不再是默认输出位置。
 
 并把产物复制到：
 
 ```text
-desktop/resources-win/mobiinfer/
+desktop/resources-win-x64/mobiinfer/
 ```
 
 至少需要：
 
 ```text
-desktop/resources-win/mobiinfer/
+desktop/resources-win-x64/mobiinfer/
   mnncli.exe
 ```
 
 如果构建生成了 DLL，脚本也会一起复制：
 
 ```text
-desktop/resources-win/mobiinfer/
+desktop/resources-win-x64/mobiinfer/
   MNN.dll
   *.dll
 ```
@@ -197,7 +199,8 @@ desktop/resources-win/mobiinfer/
 .\scripts\windows\build-mobiinfer.ps1 -Clean
 .\scripts\windows\build-mobiinfer.ps1 -SkipSmokeTest
 .\scripts\windows\build-mobiinfer.ps1 -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
-.\scripts\windows\build-mobiinfer.ps1 -InstallDir E:\WAIC\pc_server\desktop\resources-win\mobiinfer
+.\scripts\windows\build-mobiinfer.ps1 -Architecture arm64
+.\scripts\windows\build-mobiinfer.ps1 -InstallDir E:\WAIC\pc_server\desktop\resources-win-x64\mobiinfer
 ```
 
 如果脚本失败，通常是缺少 MSVC、CMake、Ninja 或 OpenSSL。可以先检查：
@@ -223,13 +226,13 @@ cd E:\WAIC\pc_server
 脚本会构建：
 
 ```text
-3rdparty/llama.cpp/build-windows/
+3rdparty/llama.cpp/build-windows-x64/
 ```
 
 并把产物复制到：
 
 ```text
-desktop/resources-win/llama-cpp/cpu/llama-server.exe
+desktop/resources-win-x64/llama-cpp/cpu/llama-server.exe
 ```
 
 构建 CUDA 版时，先确保 CUDA Toolkit 的 `nvcc` 在 PATH 里，或显式传入 CUDA Toolkit 路径，然后运行：
@@ -251,10 +254,11 @@ cd E:\WAIC\pc_server
 .\scripts\windows\build-llama-cpp.ps1 -Clean
 .\scripts\windows\build-llama-cpp.ps1 -Mode cpu
 .\scripts\windows\build-llama-cpp.ps1 -Mode cuda -CudaArch 89
+.\scripts\windows\build-llama-cpp.ps1 -Mode cpu -Architecture arm64
 .\scripts\windows\build-llama-cpp.ps1 -Mode cuda -CudaArch 89 -AllowUnsupportedCudaCompiler
 .\scripts\windows\build-llama-cpp.ps1 -SkipSmokeTest
-.\scripts\windows\build-llama-cpp.ps1 -Mode cpu -InstallDir E:\WAIC\pc_server\desktop\resources-win\llama-cpp\cpu
-.\scripts\windows\build-llama-cpp.ps1 -Mode cuda -InstallDir E:\WAIC\pc_server\desktop\resources-win\llama-cpp\cuda
+.\scripts\windows\build-llama-cpp.ps1 -Mode cpu -InstallDir E:\WAIC\pc_server\desktop\resources-win-x64\llama-cpp\cpu
+.\scripts\windows\build-llama-cpp.ps1 -Mode cuda -InstallDir E:\WAIC\pc_server\desktop\resources-win-x64\llama-cpp\cuda
 ```
 
 检查命令：
@@ -273,7 +277,7 @@ where nvcc
 把 Windows 版 `hdc.exe` 放到：
 
 ```text
-desktop/resources-win/hdc/hdc.exe
+desktop/resources-win-x64/hdc/hdc.exe
 ```
 
 当前验证过的 DevEco Studio SDK 版本是 `hdc 3.2.0c`，来源目录为：
@@ -285,11 +289,11 @@ E:\Software\DevEco Studio\sdk\default\openharmony\toolchains
 这个版本除了 `hdc.exe`，还需要同目录的 `libusb_shared.dll`：
 
 ```text
-desktop/resources-win/hdc/hdc.exe
-desktop/resources-win/hdc/libusb_shared.dll
+desktop/resources-win-x64/hdc/hdc.exe
+desktop/resources-win-x64/hdc/libusb_shared.dll
 ```
 
-如果后续升级 SDK，重新检查 `toolchains` 目录里是否还有新的 DLL 依赖，并把依赖文件一起放到 `desktop/resources-win/hdc/`。
+如果后续升级 SDK，重新检查 `toolchains` 目录里是否还有新的 DLL 依赖，并把依赖文件一起放到对应架构的 `desktop/resources-win-<arch>/hdc/`。
 
 ## 6. 构建 Windows 安装包
 
@@ -427,7 +431,7 @@ backend/dist/pc-server-backend.exe
 复制到：
 
 ```text
-desktop/resources-win/backend/pc-server-backend.exe
+desktop/resources-win-x64/backend/pc-server-backend.exe
 ```
 
 ### WSL 构建的 MobiInfer 能不能放进 Windows 包

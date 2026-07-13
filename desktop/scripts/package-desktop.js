@@ -34,30 +34,48 @@ function archForTarget() {
   if (hasArg("--x64")) {
     return "x64";
   }
-  if (hasArg("--arm64")) {
+  if (hasArg("--arm64") || hasArg("--arm")) {
     return "arm64";
   }
   return hostElectronArch();
 }
 
+function electronBuilderArgs() {
+  const builderArgs = args.length > 0 ? args : [target];
+  return builderArgs.map((arg) => (arg === "--arm" ? "--arm64" : arg));
+}
+
+function platformResourceName(platform, arch) {
+  if (platform === "win32") {
+    return `resources-win-${arch}`;
+  }
+  if (platform === "darwin") {
+    return `resources-mac-${arch}`;
+  }
+  if (platform === "linux") {
+    return `resources-linux-${arch}`;
+  }
+  return `resources-${platform}-${arch}`;
+}
+
 function resourcesDirForTarget() {
   if (targetMatches("--win")) {
-    return "resources-win";
+    return platformResourceName("win32", archForTarget());
   }
   if (targetMatches("--mac")) {
-    return `resources-mac-${archForTarget()}`;
+    return platformResourceName("darwin", archForTarget());
   }
   if (targetMatches("--linux")) {
-    return "resources-linux";
+    return platformResourceName("linux", archForTarget());
   }
 
   if (process.platform === "win32") {
-    return "resources-win";
+    return platformResourceName("win32", archForTarget());
   }
   if (process.platform === "darwin") {
-    return `resources-mac-${archForTarget()}`;
+    return platformResourceName("darwin", archForTarget());
   }
-  return "resources-linux";
+  return platformResourceName("linux", archForTarget());
 }
 
 function platformForTarget() {
@@ -100,4 +118,4 @@ const env = {
 console.log(`Using desktop resource staging directory: ${resourcesDir}`);
 run(npmCommand(), ["run", "build"], env);
 run(npmCommand(), ["run", "prepare:resources"], env);
-run(electronBuilderCommand(), args.length > 0 ? args : [target], env);
+run(electronBuilderCommand(), electronBuilderArgs(), env);

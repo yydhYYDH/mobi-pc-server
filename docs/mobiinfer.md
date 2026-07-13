@@ -48,6 +48,18 @@ The legacy upstream runtime API is no longer exposed by the backend.
 The backend checks these paths in order:
 
 ```text
+desktop/resources-linux-x64/mobiinfer/mnncli
+desktop/resources-linux-arm64/mobiinfer/mnncli
+desktop/resources-win-x64/mobiinfer/mnncli.exe
+desktop/resources-win-arm64/mobiinfer/mnncli.exe
+desktop/resources-mac-arm64/mobiinfer/mnncli
+desktop/resources-mac-x64/mobiinfer/mnncli
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_x64/mnncli
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_arm64/mnncli
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_win_x64/mnncli.exe
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_win_arm64/mnncli.exe
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_darwin_arm64/mnncli
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_darwin_x64/mnncli
 3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli
 3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli.exe
 3rdparty/mobiinfer/apps/mnncli/build/mnncli

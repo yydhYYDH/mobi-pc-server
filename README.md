@@ -96,7 +96,89 @@ PC_SERVER_SKIP_FRONTEND=1
 
 ## 打包
 
-详细打包说明见：
+打包前先安装前端和桌面端依赖：
+
+```bash
+cd frontend
+npm install
+
+cd ../desktop
+npm install
+```
+
+不同平台、架构的原生运行时文件会放到独立 staging 目录：
+
+```text
+desktop/resources-win-x64/
+desktop/resources-win-arm64/
+desktop/resources-linux-x64/
+desktop/resources-linux-arm64/
+desktop/resources-mac-x64/
+desktop/resources-mac-arm64/
+```
+
+### Windows x64
+
+在 Windows 原生 PowerShell 或 Developer PowerShell 里执行：
+
+```powershell
+cd E:\WAIC\pc_server
+
+.\scripts\windows\build-backend.ps1
+.\scripts\windows\build-mobiinfer.ps1 -Architecture x64 -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
+.\scripts\windows\build-llama-cpp.ps1 -Mode cpu -Architecture x64
+
+# 可选：需要 CUDA 版 llama.cpp 时再构建
+.\scripts\windows\build-llama-cpp.ps1 -Mode cuda -Architecture x64 -CudaArch 89
+
+cd desktop
+npm run build-win-x64
+```
+
+产物会写到 `desktop/release/`。Windows arm64 对应使用 `-Architecture arm64` 和 `npm run build-win-arm`。
+
+### macOS
+
+Apple Silicon：
+
+```bash
+cd /path/to/pc_server
+
+PC_SERVER_DESKTOP_TARGET_PLATFORM=darwin PC_SERVER_DESKTOP_TARGET_ARCH=arm64 ./scripts/build-backend.sh
+PC_SERVER_DESKTOP_TARGET_ARCH=arm64 ./scripts/build-mobiinfer.sh
+LLAMA_CPP_BUILD_MODE=metal PC_SERVER_DESKTOP_TARGET_ARCH=arm64 \
+  LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-mac-arm64/llama-cpp/cpu" \
+  ./scripts/build-llama-cpp.sh
+
+cd desktop
+npm run build-mac-arm
+```
+
+Intel Mac 把 `arm64` 换成 `x64`，资源目录换成 `desktop/resources-mac-x64/llama-cpp/cpu`，最后执行 `npm run build-mac-x64`。
+
+### Linux x64
+
+```bash
+cd /mnt/e/WAIC/pc_server
+
+PC_SERVER_DESKTOP_TARGET_PLATFORM=linux PC_SERVER_DESKTOP_TARGET_ARCH=x64 ./scripts/build-backend.sh
+PC_SERVER_DESKTOP_TARGET_ARCH=x64 ./scripts/build-mobiinfer.sh
+LLAMA_CPP_BUILD_MODE=cpu PC_SERVER_DESKTOP_TARGET_ARCH=x64 \
+  LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-linux-x64/llama-cpp/cpu" \
+  ./scripts/build-llama-cpp.sh
+
+# 可选：需要 CUDA 版 llama.cpp 时再构建
+LLAMA_CPP_BUILD_MODE=cuda PC_SERVER_DESKTOP_TARGET_ARCH=x64 \
+  LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-linux-x64/llama-cpp/cuda" \
+  ./scripts/build-llama-cpp.sh
+
+cd desktop
+npm run build-linux-x64
+```
+
+Linux arm64 把 `x64` 换成 `arm64`，资源目录换成 `desktop/resources-linux-arm64/...`，最后执行 `npm run build-linux-arm`。
+
+更详细说明见：
 
 - Windows：[docs/packaging-windows.md](docs/packaging-windows.md)
 - macOS：[docs/packaging-macos.md](docs/packaging-macos.md)
@@ -137,6 +219,18 @@ git submodule update --init 3rdparty/mobiinfer 3rdparty/llama.cpp
 后端默认查找：
 
 ```text
+desktop/resources-linux-x64/mobiinfer/mnncli
+desktop/resources-linux-arm64/mobiinfer/mnncli
+desktop/resources-win-x64/mobiinfer/mnncli.exe
+desktop/resources-win-arm64/mobiinfer/mnncli.exe
+desktop/resources-mac-arm64/mobiinfer/mnncli
+desktop/resources-mac-x64/mobiinfer/mnncli
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_x64/mnncli
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_arm64/mnncli
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_win_x64/mnncli.exe
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_win_arm64/mnncli.exe
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_darwin_arm64/mnncli
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_darwin_x64/mnncli
 3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli
 3rdparty/mobiinfer/apps/mnncli/build/mnncli
 3rdparty/mobiinfer/build/apps/mnncli/mnncli
@@ -154,10 +248,10 @@ submodule 准备好后，可以尝试：
 ./scripts/build-mobiinfer.sh
 ```
 
-该脚本会执行 `3rdparty/mobiinfer/apps/mnncli/build.sh` 的两阶段流程：先构建 MobiInfer 静态库，再构建 `mnncli`。默认期望的二进制路径是：
+该脚本会执行两阶段流程：先构建 MobiInfer 静态库，再构建 `mnncli`。默认期望的二进制路径按平台和架构区分，例如 Linux x64 是：
 
 ```text
-3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_x64/mnncli
 ```
 
 更多集成说明见 [docs/mobiinfer.md](docs/mobiinfer.md)。

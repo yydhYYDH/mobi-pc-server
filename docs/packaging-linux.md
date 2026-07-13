@@ -4,10 +4,10 @@
 
 ## 产物结构
 
-Linux 包使用 Electron Builder，运行时资源来自：
+Linux 包使用 Electron Builder，运行时资源按架构隔离。x64 运行时资源来自：
 
 ```text
-desktop/resources-linux/
+desktop/resources-linux-x64/
   frontend/               由 frontend/dist 自动复制
   backend/
     pc-server-backend     Linux 后端可执行文件
@@ -23,7 +23,7 @@ desktop/resources-linux/
     hdc                   Linux 版 hdc
 ```
 
-Electron Builder 会把这些资源复制到最终应用的 `resources/` 目录。
+arm64 使用同样结构的 `desktop/resources-linux-arm64/`。Electron Builder 会把选中的 `desktop/resources-linux-<arch>/` 复制到最终应用的 `resources/` 目录。
 
 运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入安装目录或 AppImage 挂载目录。打包版会使用 `$XDG_CONFIG_HOME/ClawMate` 或 `~/.config/ClawMate`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
 
@@ -85,7 +85,7 @@ cd /mnt/e/WAIC/pc_server
 
 ```text
 backend/dist/pc-server-backend
-desktop/resources-linux/backend/pc-server-backend
+desktop/resources-linux-x64/backend/pc-server-backend
 ```
 
 如果要指定 Python：
@@ -118,25 +118,25 @@ cd /mnt/e/WAIC/pc_server
 默认期望产物类似：
 
 ```text
-3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_x64/mnncli
 ```
 
 把 Linux 运行时文件复制到：
 
 ```text
-desktop/resources-linux/mobiinfer/
+desktop/resources-linux-x64/mobiinfer/
 ```
 
 至少需要：
 
 ```text
-desktop/resources-linux/mobiinfer/mnncli
+desktop/resources-linux-x64/mobiinfer/mnncli
 ```
 
 如果 MobiInfer 构建输出 `.so` 动态库，也复制到同一目录：
 
 ```text
-desktop/resources-linux/mobiinfer/*.so
+desktop/resources-linux-x64/mobiinfer/*.so
 ```
 
 注意：Linux 构建出来的 `mnncli` 不能放进 Windows 包。
@@ -146,7 +146,7 @@ desktop/resources-linux/mobiinfer/*.so
 把 Linux 版 `hdc` 放到：
 
 ```text
-desktop/resources-linux/hdc/hdc
+desktop/resources-linux-x64/hdc/hdc
 ```
 
 如果 `hdc` 依赖其他 `.so`，也放在同一目录，或者确保目标机器系统路径中能找到。
@@ -154,7 +154,7 @@ desktop/resources-linux/hdc/hdc
 也可以在打包时通过环境变量指定 Linux 版 `hdc`：
 
 ```bash
-HDC_BIN_LINUX=/absolute/path/to/linux/hdc npm run dist:linux -- --x64
+HDC_BIN_LINUX=/absolute/path/to/linux/hdc npm run build-linux-x64
 ```
 
 `HDC_BIN_LINUX` 优先于通用的 `HDC_BIN`。在 macOS 上打 Linux 包时，不要传 macOS
@@ -173,7 +173,7 @@ npm run prepare:resources
 该命令会：
 
 - 执行 `frontend/npm run build`。
-- 复制 `frontend/dist` 到 `desktop/resources-linux/frontend`。
+- 复制 `frontend/dist` 到 `desktop/resources-linux-<arch>/frontend`。
 - 检查后端可执行文件是否存在。
 
 ## 6. 构建 Linux 包
@@ -195,8 +195,10 @@ desktop/release/linux-unpacked/
 
 ```bash
 cd /mnt/e/WAIC/pc_server/desktop
-npm run dist:linux
+npm run build-linux-x64
 ```
+
+arm64 包使用 `npm run build-linux-arm`。兼容旧命令仍可使用：`npm run dist:linux`。
 
 产物：
 

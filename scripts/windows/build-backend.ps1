@@ -2,7 +2,18 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = Resolve-Path "$PSScriptRoot\..\.."
 $BackendDir = Join-Path $RootDir "backend"
-$DesktopBackendDir = Join-Path $RootDir "desktop\resources-win\backend"
+$TargetArch = $env:PC_SERVER_DESKTOP_TARGET_ARCH
+if (-not $TargetArch) {
+  $TargetArch = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
+}
+switch ($TargetArch) {
+  "amd64" { $TargetArch = "x64" }
+  "x86_64" { $TargetArch = "x64" }
+  "x64" { $TargetArch = "x64" }
+  "arm64" { $TargetArch = "arm64" }
+  "aarch64" { $TargetArch = "arm64" }
+}
+$DesktopBackendDir = Join-Path $RootDir "desktop\resources-win-$TargetArch\backend"
 $PythonBin = $env:PC_SERVER_PYTHON
 
 if (-not $PythonBin) {

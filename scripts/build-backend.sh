@@ -21,10 +21,10 @@ case "$TARGET_PLATFORM" in
     DESKTOP_BACKEND_DIR="$ROOT_DIR/desktop/resources-mac-$TARGET_ARCH/backend"
     ;;
   Linux|linux)
-    DESKTOP_BACKEND_DIR="$ROOT_DIR/desktop/resources-linux/backend"
+    DESKTOP_BACKEND_DIR="$ROOT_DIR/desktop/resources-linux-$TARGET_ARCH/backend"
     ;;
   *)
-    DESKTOP_BACKEND_DIR="$ROOT_DIR/desktop/resources-linux/backend"
+    DESKTOP_BACKEND_DIR="$ROOT_DIR/desktop/resources-linux-$TARGET_ARCH/backend"
     ;;
 esac
 

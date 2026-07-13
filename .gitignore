@@ -19,8 +19,8 @@ desktop/tsconfig.tsbuildinfo
 desktop/release/
 desktop/out/
 desktop/resources/
-desktop/resources-win/
-desktop/resources-linux/
+desktop/resources-win*/
+desktop/resources-linux*/
 desktop/resources-mac-*/
 .worktrees/
 .electron-builder-cache/

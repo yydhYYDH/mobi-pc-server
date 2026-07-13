@@ -608,9 +608,18 @@ class RuntimeServerService:
             if path.exists():
                 return path
 
+        machine = platform.machine().lower()
+        arch = "arm64" if machine in {"arm64", "aarch64"} else "x64"
+        system = platform.system().lower()
+        platform_name = "darwin" if system == "darwin" else "win" if system == "windows" else "linux"
+        resource_platform = "mac" if platform_name == "darwin" else platform_name
+        executable_name = "mnncli.exe" if platform_name == "win" else "mnncli"
         candidates = [
             RESOURCES_DIR / "mobiinfer/mnncli",
             RESOURCES_DIR / "mobiinfer/mnncli.exe",
+            REPO_ROOT / f"desktop/resources-{resource_platform}-{arch}/mobiinfer/{executable_name}",
+            REPO_ROOT
+            / f"3rdparty/mobiinfer/apps/mnncli/build_mnncli_{platform_name}_{arch}/{executable_name}",
             REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli",
             REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli.exe",
             REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build/mnncli",

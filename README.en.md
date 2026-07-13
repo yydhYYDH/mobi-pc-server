@@ -91,9 +91,84 @@ PC_SERVER_SKIP_FRONTEND=1
 
 ## Packaging
 
+Install frontend and desktop dependencies first:
+
+```bash
+cd frontend
+npm install
+
+cd ../desktop
+npm install
+```
+
+Native runtime resources are staged by platform and architecture:
+
+```text
+desktop/resources-win-x64/
+desktop/resources-win-arm64/
+desktop/resources-linux-x64/
+desktop/resources-linux-arm64/
+desktop/resources-mac-x64/
+desktop/resources-mac-arm64/
+```
+
+Windows x64:
+
+```powershell
+cd E:\WAIC\pc_server
+
+.\scripts\windows\build-backend.ps1
+.\scripts\windows\build-mobiinfer.ps1 -Architecture x64 -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
+.\scripts\windows\build-llama-cpp.ps1 -Mode cpu -Architecture x64
+
+# Optional CUDA runtime
+.\scripts\windows\build-llama-cpp.ps1 -Mode cuda -Architecture x64 -CudaArch 89
+
+cd desktop
+npm run build-win-x64
+```
+
+macOS Apple Silicon:
+
+```bash
+cd /path/to/pc_server
+
+PC_SERVER_DESKTOP_TARGET_PLATFORM=darwin PC_SERVER_DESKTOP_TARGET_ARCH=arm64 ./scripts/build-backend.sh
+PC_SERVER_DESKTOP_TARGET_ARCH=arm64 ./scripts/build-mobiinfer.sh
+LLAMA_CPP_BUILD_MODE=metal PC_SERVER_DESKTOP_TARGET_ARCH=arm64 \
+  LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-mac-arm64/llama-cpp/cpu" \
+  ./scripts/build-llama-cpp.sh
+
+cd desktop
+npm run build-mac-arm
+```
+
+Linux x64:
+
+```bash
+cd /mnt/e/WAIC/pc_server
+
+PC_SERVER_DESKTOP_TARGET_PLATFORM=linux PC_SERVER_DESKTOP_TARGET_ARCH=x64 ./scripts/build-backend.sh
+PC_SERVER_DESKTOP_TARGET_ARCH=x64 ./scripts/build-mobiinfer.sh
+LLAMA_CPP_BUILD_MODE=cpu PC_SERVER_DESKTOP_TARGET_ARCH=x64 \
+  LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-linux-x64/llama-cpp/cpu" \
+  ./scripts/build-llama-cpp.sh
+
+# Optional CUDA runtime
+LLAMA_CPP_BUILD_MODE=cuda PC_SERVER_DESKTOP_TARGET_ARCH=x64 \
+  LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-linux-x64/llama-cpp/cuda" \
+  ./scripts/build-llama-cpp.sh
+
+cd desktop
+npm run build-linux-x64
+```
+
+For arm64 Windows/Linux or Intel macOS, use the matching `arm64`/`x64` target architecture, resource directory, and npm script such as `build-win-arm`, `build-linux-arm`, or `build-mac-x64`.
+
 See the dedicated packaging docs:
 
 - Windows: `docs/packaging-windows.md`
+- macOS: `docs/packaging-macos.md`
 - Linux/WSL: `docs/packaging-linux.md`
 
 ## Runtime Backends

@@ -56,13 +56,14 @@ function windowIconPath(): string | undefined {
 }
 
 function hostResourceDirectory(): string {
+  const arch = process.arch === "x64" ? "x64" : "arm64";
   if (process.platform === "win32") {
-    return "resources-win";
+    return `resources-win-${arch}`;
   }
   if (process.platform === "darwin") {
-    return `resources-mac-${process.arch === "x64" ? "x64" : "arm64"}`;
+    return `resources-mac-${arch}`;
   }
-  return "resources-linux";
+  return `resources-linux-${arch}`;
 }
 
 function logBuffer(label: string, data: Buffer, error = false): void {

@@ -21,19 +21,29 @@ $ErrorActionPreference = "Stop"
 $RootDir = Resolve-Path "$PSScriptRoot\..\.."
 $LlamaCppDir = Join-Path $RootDir "3rdparty\llama.cpp"
 
+switch ($Architecture) {
+  "amd64" { $TargetArch = "x64" }
+  "x86_64" { $TargetArch = "x64" }
+  "x64" { $TargetArch = "x64" }
+  "arm64" { $TargetArch = "arm64" }
+  "aarch64" { $TargetArch = "arm64" }
+  default { $TargetArch = $Architecture }
+}
+$Architecture = $TargetArch
+
 if (-not $BuildDir) {
   if ($Mode -eq "cuda") {
-    $BuildDir = Join-Path $LlamaCppDir "build-cuda-windows"
+    $BuildDir = Join-Path $LlamaCppDir "build-cuda-windows-$TargetArch"
   } else {
-    $BuildDir = Join-Path $LlamaCppDir "build-windows"
+    $BuildDir = Join-Path $LlamaCppDir "build-windows-$TargetArch"
   }
 }
 
 if (-not $InstallDir) {
   if ($Mode -eq "cuda") {
-    $InstallDir = Join-Path $RootDir "desktop\resources-win\llama-cpp\cuda"
+    $InstallDir = Join-Path $RootDir "desktop\resources-win-$TargetArch\llama-cpp\cuda"
   } else {
-    $InstallDir = Join-Path $RootDir "desktop\resources-win\llama-cpp\cpu"
+    $InstallDir = Join-Path $RootDir "desktop\resources-win-$TargetArch\llama-cpp\cpu"
   }
 }
 

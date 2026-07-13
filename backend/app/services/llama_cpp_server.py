@@ -62,15 +62,22 @@ class LlamaCppServerAdapter:
         return None
 
     def _runtime_candidates(self) -> list[tuple[str, Path]]:
+        machine = platform.machine().lower()
+        arch = "arm64" if machine in {"arm64", "aarch64"} else "x64"
         if platform.system() == "Windows":
             return [
                 ("cuda", RESOURCES_DIR / "llama-cpp/cuda/llama-server.exe"),
+                ("cuda", REPO_ROOT / f"desktop/resources-win-{arch}/llama-cpp/cuda/llama-server.exe"),
                 ("cuda", REPO_ROOT / "desktop/resources-win/llama-cpp/cuda/llama-server.exe"),
+                ("cuda", REPO_ROOT / f"3rdparty/llama.cpp/build-cuda-windows-{arch}/bin/llama-server.exe"),
                 ("cuda", REPO_ROOT / "3rdparty/llama.cpp/build-cuda-windows/bin/llama-server.exe"),
                 ("cpu", RESOURCES_DIR / "llama-cpp/cpu/llama-server.exe"),
+                ("cpu", REPO_ROOT / f"desktop/resources-win-{arch}/llama-cpp/cpu/llama-server.exe"),
                 ("cpu", REPO_ROOT / "desktop/resources-win/llama-cpp/cpu/llama-server.exe"),
+                ("cpu", REPO_ROOT / f"3rdparty/llama.cpp/build-windows-{arch}/bin/llama-server.exe"),
                 ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-windows/bin/llama-server.exe"),
                 ("auto", RESOURCES_DIR / "llama-cpp/llama-server.exe"),
+                ("auto", REPO_ROOT / f"desktop/resources-win-{arch}/llama-cpp/llama-server.exe"),
                 ("auto", REPO_ROOT / "desktop/resources-win/llama-cpp/llama-server.exe"),
                 ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server.exe"),
                 ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/server.exe"),
@@ -80,11 +87,15 @@ class LlamaCppServerAdapter:
         if platform.system() == "Darwin":
             return [
                 ("cpu", RESOURCES_DIR / "llama-cpp/cpu/llama-server"),
+                ("cpu", REPO_ROOT / f"desktop/resources-mac-{arch}/llama-cpp/cpu/llama-server"),
                 ("cpu", REPO_ROOT / "desktop/resources-mac-arm64/llama-cpp/cpu/llama-server"),
                 ("cpu", REPO_ROOT / "desktop/resources-mac-x64/llama-cpp/cpu/llama-server"),
+                ("cpu", REPO_ROOT / f"3rdparty/llama.cpp/build-darwin-{arch}-metal/bin/llama-server"),
+                ("cpu", REPO_ROOT / f"3rdparty/llama.cpp/build-darwin-{arch}-cpu/bin/llama-server"),
                 ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-metal-native/bin/llama-server"),
                 ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-cpu-native/bin/llama-server"),
                 ("auto", RESOURCES_DIR / "llama-cpp/llama-server"),
+                ("auto", REPO_ROOT / f"desktop/resources-mac-{arch}/llama-cpp/llama-server"),
                 ("auto", REPO_ROOT / "desktop/resources-mac-arm64/llama-cpp/llama-server"),
                 ("auto", REPO_ROOT / "desktop/resources-mac-x64/llama-cpp/llama-server"),
                 ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server"),
@@ -94,12 +105,17 @@ class LlamaCppServerAdapter:
 
         return [
             ("cuda", RESOURCES_DIR / "llama-cpp/cuda/llama-server"),
+            ("cuda", REPO_ROOT / f"desktop/resources-linux-{arch}/llama-cpp/cuda/llama-server"),
             ("cuda", REPO_ROOT / "desktop/resources-linux/llama-cpp/cuda/llama-server"),
+            ("cuda", REPO_ROOT / f"3rdparty/llama.cpp/build-linux-{arch}-cuda/bin/llama-server"),
             ("cuda", REPO_ROOT / "3rdparty/llama.cpp/build-cuda-native/bin/llama-server"),
             ("cpu", RESOURCES_DIR / "llama-cpp/cpu/llama-server"),
+            ("cpu", REPO_ROOT / f"desktop/resources-linux-{arch}/llama-cpp/cpu/llama-server"),
             ("cpu", REPO_ROOT / "desktop/resources-linux/llama-cpp/cpu/llama-server"),
+            ("cpu", REPO_ROOT / f"3rdparty/llama.cpp/build-linux-{arch}-cpu/bin/llama-server"),
             ("cpu", REPO_ROOT / "3rdparty/llama.cpp/build-cpu-native/bin/llama-server"),
             ("auto", RESOURCES_DIR / "llama-cpp/llama-server"),
+            ("auto", REPO_ROOT / f"desktop/resources-linux-{arch}/llama-cpp/llama-server"),
             ("auto", REPO_ROOT / "desktop/resources-linux/llama-cpp/llama-server"),
             ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/llama-server"),
             ("auto", REPO_ROOT / "3rdparty/llama.cpp/build/bin/server"),
