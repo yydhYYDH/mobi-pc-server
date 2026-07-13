@@ -196,24 +196,18 @@ Linux arm64 把 `x64` 换成 `arm64`，资源目录换成 `desktop/resources-lin
 
 MobiInfer 作为独立运行时接入，用于加载 `runtime: "mobiinfer"` 的模型配置。
 
-MobiInfer 作为 submodule 固定在当前仓库记录的 commit：
-
-```text
-798dbf4deddbb592bdf3ba07938fb31406d1578e
-```
-
-初始化或重置 MobiInfer 时，先拉 submodule，再显式 checkout 到这个 commit：
+初始化或重置 MobiInfer 时，使用浅拉取方式获取远端 `main` 的最新版本：
 
 ```bash
-git submodule update --init 3rdparty/mobiinfer
-git -C 3rdparty/mobiinfer fetch --depth 1 origin 798dbf4deddbb592bdf3ba07938fb31406d1578e
-git -C 3rdparty/mobiinfer checkout --detach 798dbf4deddbb592bdf3ba07938fb31406d1578e
+git submodule update --init --depth 1 3rdparty/mobiinfer
+git -C 3rdparty/mobiinfer fetch --depth 1 origin main
+git -C 3rdparty/mobiinfer checkout --detach FETCH_HEAD
 ```
 
 如果你是第一次完整初始化第三方依赖，也可以一次性执行：
 
 ```bash
-git submodule update --init 3rdparty/mobiinfer 3rdparty/llama.cpp
+git submodule update --init --depth 1 3rdparty/mobiinfer 3rdparty/llama.cpp
 ```
 
 后端默认查找：

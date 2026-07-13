@@ -2,12 +2,6 @@
 
 MobiInfer is integrated as a first-class runtime under `3rdparty/mobiinfer`.
 
-The repository currently pins the submodule to:
-
-```text
-798dbf4deddbb592bdf3ba07938fb31406d1578e
-```
-
 At this stage the backend assumes:
 
 - the repository layout keeps the fork's `apps/mnncli` layout
@@ -16,18 +10,18 @@ At this stage the backend assumes:
 
 ## Submodule Setup
 
-To initialize or reset the local MobiInfer checkout:
+To initialize or reset the local MobiInfer checkout, shallow-fetch the latest `origin/main`:
 
 ```bash
-git submodule update --init 3rdparty/mobiinfer
-git -C 3rdparty/mobiinfer fetch --depth 1 origin 798dbf4deddbb592bdf3ba07938fb31406d1578e
-git -C 3rdparty/mobiinfer checkout --detach 798dbf4deddbb592bdf3ba07938fb31406d1578e
+git submodule update --init --depth 1 3rdparty/mobiinfer
+git -C 3rdparty/mobiinfer fetch --depth 1 origin main
+git -C 3rdparty/mobiinfer checkout --detach FETCH_HEAD
 ```
 
 If you want all inference runtimes locally in one step:
 
 ```bash
-git submodule update --init 3rdparty/mobiinfer 3rdparty/llama.cpp
+git submodule update --init --depth 1 3rdparty/mobiinfer 3rdparty/llama.cpp
 ```
 
 ## Backend API

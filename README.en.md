@@ -183,24 +183,18 @@ The current selectable runtime backends are:
 
 MobiInfer is integrated as a first-class runtime for catalog entries with `runtime: "mobiinfer"`.
 
-The repository currently pins the `3rdparty/mobiinfer` submodule to:
-
-```text
-798dbf4deddbb592bdf3ba07938fb31406d1578e
-```
-
-To initialize or reset the submodule:
+To initialize or reset the submodule, shallow-fetch the latest `origin/main`:
 
 ```bash
-git submodule update --init 3rdparty/mobiinfer
-git -C 3rdparty/mobiinfer fetch --depth 1 origin 798dbf4deddbb592bdf3ba07938fb31406d1578e
-git -C 3rdparty/mobiinfer checkout --detach 798dbf4deddbb592bdf3ba07938fb31406d1578e
+git submodule update --init --depth 1 3rdparty/mobiinfer
+git -C 3rdparty/mobiinfer fetch --depth 1 origin main
+git -C 3rdparty/mobiinfer checkout --detach FETCH_HEAD
 ```
 
 To initialize all third-party runtimes in one step:
 
 ```bash
-git submodule update --init 3rdparty/mobiinfer 3rdparty/llama.cpp
+git submodule update --init --depth 1 3rdparty/mobiinfer 3rdparty/llama.cpp
 ```
 
 After the submodule is present, try:
