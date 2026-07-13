@@ -297,8 +297,10 @@ desktop/resources-win/hdc/libusb_shared.dll
 
 ```powershell
 cd E:\WAIC\pc_server\desktop
-npm run dist:win
+npm run build-win
 ```
+
+兼容旧命令仍可使用：`npm run dist:win`。
 
 产物在：
 
@@ -374,7 +376,7 @@ https://npmmirror.com/mirrors/electron-builder-binaries/nsis-3.0.4.1/nsis-3.0.4.
 
 ```powershell
 cd E:\WAIC\pc_server\desktop
-npm run dist:win
+npm run build-win
 ```
 
 ## 常见问题
