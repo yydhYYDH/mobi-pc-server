@@ -1,6 +1,6 @@
 ﻿# Windows 打包说明
 
-本文档说明如何在 Windows 原生环境里打包你的智伴。不要在 WSL 里生成 Windows 包；WSL 适合生成 Linux 包。
+本文档说明如何在 Windows 原生环境里打包你的智伴。
 
 ## 产物结构
 
@@ -137,7 +137,6 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 然后回到项目根目录运行：
 
 ```powershell
-cd E:\WAIC\pc_server
 .\scripts\windows\build-backend.ps1
 ```
 
