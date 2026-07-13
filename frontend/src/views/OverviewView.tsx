@@ -1,6 +1,6 @@
 import React from "react";
 
-import type { BackendId, CatalogModel, DeviceBusy, DownloadStatus, HdcStatus, MnnStatus, ModelBusy, ServerBusy } from "../api/types";
+import type { BackendId, CatalogModel, DeviceBusy, DownloadStatus, HdcStatus, RuntimeStatus, ModelBusy, ServerBusy } from "../api/types";
 import { ActionButton, ProgressBar, StatusPill } from "../components";
 import { getConnectedHdcTargetAction, normalizeHdcTarget } from "../domain/hdcTarget";
 import { backendLabel, statusLabel } from "../domain/runtime";
@@ -24,7 +24,7 @@ export function OverviewView(props: {
   modelBusy: ModelBusy;
   models: CatalogModel[];
   modelsCount: number;
-  mnn: MnnStatus | null;
+  runtimeStatus: RuntimeStatus | null;
   onAutoConnect: () => Promise<void>;
   onLoadModel: (modelId: string) => Promise<void>;
   onOpenDevices: () => void;
@@ -39,7 +39,7 @@ export function OverviewView(props: {
   selectedBackend: BackendId;
   serverState: string;
   serverBusy: ServerBusy;
-  stopMnn: () => Promise<void>;
+  stopRuntimeService: () => Promise<void>;
   setHdcTarget: (target: string) => void;
   setSelectedLaunchModelId: (modelId: string) => void;
 }) {
@@ -55,7 +55,7 @@ export function OverviewView(props: {
   const selectedProgress = selectedDownloadStatus?.progress ?? (selectedDownloaded ? 100 : 0);
   const selectedState = selectedDownloadStatus?.state ?? (selectedDownloaded ? "downloaded" : "idle");
   const runtimeActive = props.serverState === "running" || props.serverState === "starting";
-  const selectedModelRunning = runtimeActive && props.mnn?.active_model_id === selectedModel?.id;
+  const selectedModelRunning = runtimeActive && props.runtimeStatus?.active_model_id === selectedModel?.id;
   const canLaunchSelected =
     Boolean(selectedModel) &&
     selectedDownloaded &&
@@ -80,7 +80,7 @@ export function OverviewView(props: {
     : "";
   const deviceType = primaryDevice?.connection_type === "network" ? "无线调试" : "USB 连接";
   const activeModelLabel =
-    props.activeModelName ?? props.mnn?.active_model_id ?? `${backendLabel(props.selectedBackend)} 服务`;
+    props.activeModelName ?? props.runtimeStatus?.active_model_id ?? `${backendLabel(props.selectedBackend)} 服务`;
   const deviceSummary = !hdcAvailable
     ? "需要先安装并配置 HDC"
     : hdcConnected
@@ -238,7 +238,7 @@ export function OverviewView(props: {
                   busy={props.serverBusy === "stop"}
                   busyText="停止中..."
                   disabled={props.serverBusy !== null || props.modelBusy !== null}
-                  onClick={() => void props.stopMnn()}
+                  onClick={() => void props.stopRuntimeService()}
                 >
                   停止服务
                 </ActionButton>

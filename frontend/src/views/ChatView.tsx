@@ -1,6 +1,6 @@
 import React from "react";
 
-import type { ChatImageAttachment, ChatMessage, ChatTimingMetrics, MnnStatus } from "../api/types";
+import type { ChatImageAttachment, ChatMessage, ChatTimingMetrics, RuntimeStatus } from "../api/types";
 import { EmptyState, PanelTitle, StatusPill } from "../components";
 import { serverOwnerLabel } from "../domain/runtime";
 
@@ -35,7 +35,7 @@ export function ChatView(props: {
   imageBusy: boolean;
   activeModelSupportsImages: boolean;
   activeModelName: string | undefined;
-  mnn: MnnStatus | null;
+  runtimeStatus: RuntimeStatus | null;
   runningBackendLabel: string;
   selectedImage: ChatImageAttachment | null;
   clearSelectedImage: () => void;
@@ -60,9 +60,9 @@ export function ChatView(props: {
       <PanelTitle
         action={
           <div className="chat-title-actions">
-            <StatusPill dot tone={props.mnn?.state === "running" ? "running" : "stopped"}>
-              {props.mnn?.state === "running" && props.mnn.port
-                ? `:${props.mnn.port} · ${props.runningBackendLabel} · ${serverOwnerLabel(props.mnn)}`
+            <StatusPill dot tone={props.runtimeStatus?.state === "running" ? "running" : "stopped"}>
+              {props.runtimeStatus?.state === "running" && props.runtimeStatus.port
+                ? `:${props.runtimeStatus.port} · ${props.runningBackendLabel} · ${serverOwnerLabel(props.runtimeStatus)}`
                 : "未连接"}
             </StatusPill>
             <button
@@ -77,7 +77,7 @@ export function ChatView(props: {
             </button>
           </div>
         }
-        kicker={props.activeModelName ?? props.mnn?.active_model_id ?? "OpenAI-compatible endpoint"}
+        kicker={props.activeModelName ?? props.runtimeStatus?.active_model_id ?? "OpenAI-compatible endpoint"}
         title="对话测试"
       />
       <div className="chat-window-wrap">

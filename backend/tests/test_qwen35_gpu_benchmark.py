@@ -14,15 +14,17 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-DEFAULT_MNN_PORT = 18088
+DEFAULT_MOBIINFER_PORT = 18088
 DEFAULT_LLAMA_CPP_PORT = 18090
-DEFAULT_MNN_MODEL = "MNN/Qwen3.5-0.8B-MNN"
+DEFAULT_MOBIINFER_MODEL = "mnn-mobi-visual"
 DEFAULT_LLAMA_CPP_MODEL = "qwen3.5-0.8b-q4-k-m-gguf"
-DEFAULT_MNN_CONFIG = REPO_ROOT / "models/Qwen3.5-0.8B-MNN/config.json"
+DEFAULT_MOBIINFER_CONFIG = (
+    REPO_ROOT / "models/mnn_mobi_gptq_new_sym_e2e_2B_w8a8_half_rl_n64_s512_visual/config.json"
+)
 DEFAULT_LLAMA_CPP_MODEL_PATH = (
     REPO_ROOT / "models/qwen3.5-0.8b-q4-k-m/Qwen3.5-0.8B-Q4_K_M.gguf"
 )
-DEFAULT_MNNCLI_BIN = REPO_ROOT / "3rdparty/MNN/apps/mnncli/build_mnncli/mnncli"
+DEFAULT_MOBIINFER_BIN = REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli"
 DEFAULT_LLAMA_SERVER_BIN = REPO_ROOT / "3rdparty/llama.cpp/build-cuda-native/bin/llama-server"
 DEFAULT_PROMPT_CHARS = "64,512,2048"
 DEFAULT_DECODE_TOKENS = "32,128,512"
@@ -220,32 +222,32 @@ def _stop_process(process: subprocess.Popen[str]) -> None:
 
 
 def _target_configs() -> list[BenchmarkTarget]:
-    mnn_port = _env_int("QWEN35_MNN_PORT", DEFAULT_MNN_PORT)
+    mobiinfer_port = _env_int("QWEN35_MOBIINFER_PORT", DEFAULT_MOBIINFER_PORT)
     llama_cpp_port = _env_int("QWEN35_LLAMA_CPP_PORT", DEFAULT_LLAMA_CPP_PORT)
-    mnn_model = os.getenv("QWEN35_MNN_MODEL", DEFAULT_MNN_MODEL)
+    mobiinfer_model = os.getenv("QWEN35_MOBIINFER_MODEL", DEFAULT_MOBIINFER_MODEL)
     llama_cpp_model = os.getenv("QWEN35_LLAMA_CPP_MODEL", DEFAULT_LLAMA_CPP_MODEL)
-    mnn_config = _env_path("QWEN35_MNN_CONFIG", DEFAULT_MNN_CONFIG)
+    mobiinfer_config = _env_path("QWEN35_MOBIINFER_CONFIG", DEFAULT_MOBIINFER_CONFIG)
     llama_cpp_model_path = _env_path("QWEN35_LLAMA_CPP_MODEL_PATH", DEFAULT_LLAMA_CPP_MODEL_PATH)
-    mnncli_bin = _env_path("MNNCLI_BIN", DEFAULT_MNNCLI_BIN)
+    mobiinfer_bin = _env_path("MOBIINFER_BIN", DEFAULT_MOBIINFER_BIN)
     llama_server_bin = _env_path("LLAMA_SERVER_BIN", DEFAULT_LLAMA_SERVER_BIN)
     llama_ctx = _env_int("QWEN35_LLAMA_CPP_CTX_SIZE", 4096)
     llama_gpu_layers = _env_int("QWEN35_LLAMA_CPP_N_GPU_LAYERS", 999)
 
     return [
         BenchmarkTarget(
-            name="mnn",
-            url=f"http://127.0.0.1:{mnn_port}/v1/chat/completions",
-            model=mnn_model,
+            name="mobiinfer",
+            url=f"http://127.0.0.1:{mobiinfer_port}/v1/chat/completions",
+            model=mobiinfer_model,
             command=[
-                str(mnncli_bin),
+                str(mobiinfer_bin),
                 "serve",
-                mnn_model,
+                mobiinfer_model,
                 "--config",
-                str(mnn_config),
+                str(mobiinfer_config),
                 "--host",
                 "127.0.0.1",
                 "--port",
-                str(mnn_port),
+                str(mobiinfer_port),
             ],
         ),
         BenchmarkTarget(
@@ -308,7 +310,7 @@ def _summarize(target_name: str, case: BenchmarkCase, samples: list[BenchmarkSam
 
 
 class Qwen35GpuBenchmarkTest(unittest.TestCase):
-    def test_qwen35_08b_gpu_inference_speed_mnn_vs_llama_cpp(self) -> None:
+    def test_qwen35_08b_gpu_inference_speed_mobiinfer_vs_llama_cpp(self) -> None:
         if os.getenv("RUN_QWEN35_GPU_BENCHMARK") != "1":
             raise unittest.SkipTest("Set RUN_QWEN35_GPU_BENCHMARK=1 to run the GPU benchmark.")
 

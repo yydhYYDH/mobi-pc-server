@@ -1,18 +1,18 @@
 import React from "react";
 
-import type { BackendId, CatalogModel, DownloadStatus, LocalModel, MnnStatus } from "../api/types";
+import type { BackendId, CatalogModel, DownloadStatus, LocalModel, RuntimeStatus } from "../api/types";
 import { backendSupportsRuntime } from "../domain/runtime";
 
 export function useModelState(params: {
   downloads: DownloadStatus[];
   localModels: LocalModel[];
-  mnn: MnnStatus | null;
+  runtimeStatus: RuntimeStatus | null;
   models: CatalogModel[];
   selectedBackend: BackendId;
   selectedLaunchModelId: string;
   setSelectedLaunchModelId: (modelId: string) => void;
 }) {
-  const { downloads, localModels, mnn, models, selectedBackend, selectedLaunchModelId, setSelectedLaunchModelId } =
+  const { downloads, localModels, runtimeStatus, models, selectedBackend, selectedLaunchModelId, setSelectedLaunchModelId } =
     params;
 
   const downloadStatus = React.useCallback(
@@ -50,8 +50,8 @@ export function useModelState(params: {
   );
 
   const activeModelName = React.useMemo(
-    () => models.find((model) => model.id === mnn?.active_model_id)?.name,
-    [mnn?.active_model_id, models]
+    () => models.find((model) => model.id === runtimeStatus?.active_model_id)?.name,
+    [runtimeStatus?.active_model_id, models]
   );
 
   React.useEffect(() => {
@@ -63,10 +63,10 @@ export function useModelState(params: {
       return;
     }
     const activeModel = selectableModels.find(
-      (model) => model.id === mnn?.active_model_id && mnn?.backend === selectedBackend
+      (model) => model.id === runtimeStatus?.active_model_id && runtimeStatus?.backend === selectedBackend
     );
     setSelectedLaunchModelId(activeModel?.id ?? selectableModels[0].id);
-  }, [mnn?.active_model_id, mnn?.backend, selectableModels, selectedBackend, selectedLaunchModelId, setSelectedLaunchModelId]);
+  }, [runtimeStatus?.active_model_id, runtimeStatus?.backend, selectableModels, selectedBackend, selectedLaunchModelId, setSelectedLaunchModelId]);
 
   return {
     activeModelName,

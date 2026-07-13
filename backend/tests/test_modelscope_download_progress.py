@@ -162,8 +162,8 @@ def test_failed_download_status_preserves_worker_error(monkeypatch, tmp_path) ->
     )
 
 
-def test_mnn_config_can_be_edited_after_download(monkeypatch, tmp_path) -> None:
-    model_dir = tmp_path / "mnn-model"
+def test_mobiinfer_config_can_be_edited_after_download(monkeypatch, tmp_path) -> None:
+    model_dir = tmp_path / "mobiinfer-model"
     model_dir.mkdir()
     config = model_dir / "config.json"
     config.write_text('{"thread_num": 8}\n', encoding="utf-8")
@@ -181,12 +181,12 @@ def test_mnn_config_can_be_edited_after_download(monkeypatch, tmp_path) -> None:
 
     service = ModelScopeService()
     item = ModelCatalogItem(
-        id="mnn-model",
-        name="MNN Model",
-        modelscope_id="example/mnn-model",
-        local_dir="models/mnn-model",
+        id="mobiinfer-model",
+        name="MobiInfer Model",
+        modelscope_id="example/mobiinfer-model",
+        local_dir="models/mobiinfer-model",
         entry_file="config.json",
-        runtime="mnn",
+        runtime="mobiinfer",
     )
     monkeypatch.setattr(service, "_safe_model_dir", lambda _item: model_dir)
     monkeypatch.setattr(
@@ -198,8 +198,8 @@ def test_mnn_config_can_be_edited_after_download(monkeypatch, tmp_path) -> None:
     assert service._is_model_complete(item) is True  # noqa: SLF001
 
 
-def test_download_verification_keeps_weights_strict_but_allows_mnn_config(monkeypatch, tmp_path) -> None:
-    model_dir = tmp_path / "mnn-model"
+def test_download_verification_keeps_weights_strict_but_allows_mobiinfer_config(monkeypatch, tmp_path) -> None:
+    model_dir = tmp_path / "mobiinfer-model"
     model_dir.mkdir()
     (model_dir / "config.json").write_text('{"thread_num": 8}\n', encoding="utf-8")
     weight = model_dir / "llm.mnn.weight"
@@ -207,12 +207,12 @@ def test_download_verification_keeps_weights_strict_but_allows_mnn_config(monkey
 
     service = ModelScopeService()
     item = ModelCatalogItem(
-        id="mnn-model",
-        name="MNN Model",
-        modelscope_id="example/mnn-model",
-        local_dir="models/mnn-model",
+        id="mobiinfer-model",
+        name="MobiInfer Model",
+        modelscope_id="example/mobiinfer-model",
+        local_dir="models/mobiinfer-model",
         entry_file="config.json",
-        runtime="mnn",
+        runtime="mobiinfer",
     )
     monkeypatch.setattr(service, "_safe_model_dir", lambda _item: model_dir)
     monkeypatch.setattr(

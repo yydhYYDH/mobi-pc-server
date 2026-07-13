@@ -3,12 +3,12 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-MnnState = Literal["stopped", "starting", "running", "stopping", "error"]
+RuntimeState = Literal["stopped", "starting", "running", "stopping", "error"]
 InferenceBackend = Literal["mobiinfer", "llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"]
 
 
-class MnnStatus(BaseModel):
-    state: MnnState
+class RuntimeStatus(BaseModel):
+    state: RuntimeState
     backend: InferenceBackend = "llama_cpp"
     active_model_id: str | None = None
     port: int | None = None

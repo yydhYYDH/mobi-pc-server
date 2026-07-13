@@ -1,15 +1,15 @@
 import React from "react";
 
 import { deleteModelById, downloadModelById, pauseModelDownloadById } from "../api/models";
-import type { CatalogModel, MnnStatus, ModelBusyAction } from "../api/types";
+import type { CatalogModel, RuntimeStatus, ModelBusyAction } from "../api/types";
 
 export function useModelActions(params: {
   load: () => Promise<void>;
-  mnn: MnnStatus | null;
+  runtimeStatus: RuntimeStatus | null;
   models: CatalogModel[];
   setError: (error: string | null) => void;
 }) {
-  const { load, mnn, models, setError } = params;
+  const { load, runtimeStatus, models, setError } = params;
   const [modelBusy, setModelBusyState] = React.useState<{
     modelId: string;
     action: ModelBusyAction;
@@ -33,7 +33,7 @@ export function useModelActions(params: {
 
   async function deleteModel(modelId: string) {
     const targetModel = models.find((model) => model.id === modelId);
-    if (mnn?.state === "running" && mnn.active_model_id === modelId) {
+    if (runtimeStatus?.state === "running" && runtimeStatus.active_model_id === modelId) {
       setError("当前模型正在运行，请先停止服务或切换模型后再删除。");
       return;
     }

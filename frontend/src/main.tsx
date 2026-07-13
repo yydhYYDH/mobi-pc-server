@@ -37,7 +37,7 @@ function App() {
     load,
     localModels,
     logs,
-    mnn,
+    runtimeStatus,
     models,
     refreshLogs,
     setError,
@@ -51,19 +51,19 @@ function App() {
     useModelState({
       downloads,
       localModels,
-      mnn,
+      runtimeStatus,
       models,
       selectedBackend,
       selectedLaunchModelId,
       setSelectedLaunchModelId
     });
 
-  const { deleteModel, downloadModel, modelBusy, pauseDownload, setModelBusy } = useModelActions({ load, mnn, models, setError });
+  const { deleteModel, downloadModel, modelBusy, pauseDownload, setModelBusy } = useModelActions({ load, runtimeStatus, models, setError });
 
-  const { loadModel, serverBusy, stopMnn } = useRuntimeActions({
+  const { loadModel, serverBusy, stopRuntimeService } = useRuntimeActions({
     isDownloaded,
     load,
-    mnn,
+    runtimeStatus,
     modelBusy,
     selectedBackend,
     setError,
@@ -81,7 +81,7 @@ function App() {
     hdcTarget,
     recentHdcTargets,
     setHdcTarget
-  } = useHdcActions({ hdc, mnn, selectedBackend, setHdc });
+  } = useHdcActions({ hdc, runtimeStatus, selectedBackend, setHdc });
 
   const {
     activeModelSupportsImages,
@@ -99,7 +99,7 @@ function App() {
     selectImageFile,
     sendChat,
     setChatInput,
-  } = useChatTest(mnn, models);
+  } = useChatTest(runtimeStatus, models);
 
 
   React.useEffect(() => {
@@ -133,10 +133,10 @@ function App() {
     };
   }, []);
 
-  const serverState = mnn?.state ?? "unknown";
+  const serverState = runtimeStatus?.state ?? "unknown";
   const hdcAvailable = hdc?.available ?? false;
   const connectedDevices = hdc?.devices.length ?? 0;
-  const systemReady = serverState === "running" && Boolean(mnn?.active_model_id);
+  const systemReady = serverState === "running" && Boolean(runtimeStatus?.active_model_id);
   const navItems: NavItem[] = [
     { id: "overview", label: "总览", hint: "状态与快捷操作" },
     { id: "models", label: "模型", hint: `${downloadedCount}/${models.length} 已下载` },
@@ -169,14 +169,14 @@ function App() {
           onBackendChange={setSelectedBackend}
           onRefresh={load}
           selectedBackend={selectedBackend}
-          runtimeManagedByBackend={mnn?.managed_by_backend ?? false}
+          runtimeManagedByBackend={runtimeStatus?.managed_by_backend ?? false}
           serverBusy={serverBusy}
           serverState={serverState}
         />
 
-        <DataState error={error} loading={isRefreshing && !mnn && models.length === 0} loadingText="正在同步本地服务状态..." preserveContentOnError>
+        <DataState error={error} loading={isRefreshing && !runtimeStatus && models.length === 0} loadingText="正在同步本地服务状态..." preserveContentOnError>
         <ActiveViewRenderer
-          activeModelId={mnn?.active_model_id ?? null}
+          activeModelId={runtimeStatus?.active_model_id ?? null}
           activeModelName={activeModelName}
           activeLog={activeLog}
           activeView={activeView}
@@ -213,7 +213,7 @@ function App() {
           loadError={error && models.length === 0 ? error : null}
           logFilter={logFilter}
           logRef={logRef}
-          mnn={mnn}
+          runtimeStatus={runtimeStatus}
           modelBusy={modelBusy}
           models={models}
           onOpenDevices={() => setActiveView("devices")}
@@ -240,7 +240,7 @@ function App() {
           setLogFilter={setLogFilter}
           setSelectedBackend={setSelectedBackend}
           setSelectedLaunchModelId={setSelectedLaunchModelId}
-          stopMnn={stopMnn}
+          stopRuntimeService={stopRuntimeService}
           visibleLogLines={visibleLogLines}
         />
         </DataState>

@@ -1,4 +1,4 @@
-import type { BackendId, CatalogModel, DownloadStatus, MnnStatus, ModelBusy, ServerBusy } from "../api/types";
+import type { BackendId, CatalogModel, DownloadStatus, RuntimeStatus, ModelBusy, ServerBusy } from "../api/types";
 import { ActionButton, PanelTitle, StatusPill } from "../components";
 import { serverOwnerLabel, statusLabel } from "../domain/runtime";
 
@@ -10,7 +10,7 @@ export function ServerView(props: {
   isDownloading: (modelId: string) => boolean;
   loadModel: (modelId: string) => Promise<void>;
   modelBusy: ModelBusy;
-  mnn: MnnStatus | null;
+  runtimeStatus: RuntimeStatus | null;
   onStopMnn: () => Promise<void>;
   selectableModels: CatalogModel[];
   selectedLaunchModelId: string;
@@ -32,8 +32,8 @@ export function ServerView(props: {
       : selectedModel ? selectedModel.modelscope_id : "未选择模型";
   const runtimeActive = props.serverState === "running" || props.serverState === "starting";
   const managedRuntimeActive =
-    Boolean(props.mnn?.managed_by_backend) && ["starting", "running", "stopping"].includes(props.serverState);
-  const selectedModelRunning = runtimeActive && props.mnn?.active_model_id === selectedModel?.id;
+    Boolean(props.runtimeStatus?.managed_by_backend) && ["starting", "running", "stopping"].includes(props.serverState);
+  const selectedModelRunning = runtimeActive && props.runtimeStatus?.active_model_id === selectedModel?.id;
   const canLoadSelected =
     Boolean(selectedModel) &&
     selectedDownloaded &&
@@ -91,13 +91,13 @@ export function ServerView(props: {
             </span>
           </dd>
           <dt>端口</dt>
-          <dd>{props.mnn?.port ?? "未监听"}</dd>
+          <dd>{props.runtimeStatus?.port ?? "未监听"}</dd>
           <dt>托管方式</dt>
-          <dd>{serverOwnerLabel(props.mnn)}</dd>
+          <dd>{serverOwnerLabel(props.runtimeStatus)}</dd>
           <dt>当前模型</dt>
-          <dd>{props.activeModelName ?? props.mnn?.active_model_id ?? "无"}</dd>
+          <dd>{props.activeModelName ?? props.runtimeStatus?.active_model_id ?? "无"}</dd>
           <dt>消息</dt>
-          <dd>{props.mnn?.message ?? "无"}</dd>
+          <dd>{props.runtimeStatus?.message ?? "无"}</dd>
         </dl>
         <div className="actions">
           <ActionButton

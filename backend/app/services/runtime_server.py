@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal
 
 from app.core.paths import LOGS_DIR, REPO_ROOT, RESOURCES_DIR
-from app.schemas.mnn import InferenceBackend, MnnStatus
+from app.schemas.runtime import InferenceBackend, RuntimeStatus
 from app.services.llama_cpp_server import LlamaCppRuntime, LlamaCppServerAdapter
 from app.services.logs import LLM_SERVER_LOG, LogService
 from app.services.modelscope import ModelScopeService
@@ -18,7 +18,7 @@ from app.services.modelscope import ModelScopeService
 
 DEFAULT_MOBIINFER_PORT = 8089
 DEFAULT_LLAMA_CPP_PORT = 8090
-ModelRuntime = Literal["mnn", "mobiinfer", "llama_cpp"]
+ModelRuntime = Literal["mobiinfer", "llama_cpp"]
 
 BACKEND_LABELS: dict[InferenceBackend, str] = {
     "mobiinfer": "MobiInfer",
@@ -27,7 +27,6 @@ BACKEND_LABELS: dict[InferenceBackend, str] = {
     "llama_cpp_cpu": "llama.cpp CPU",
 }
 MODEL_RUNTIME_LABELS: dict[ModelRuntime, str] = {
-    "mnn": "MNN-compatible",
     "mobiinfer": "MobiInfer",
     "llama_cpp": "llama.cpp",
 }
@@ -41,29 +40,29 @@ BACKEND_PORTS: dict[InferenceBackend, int] = {
 PORT_SEARCH_LIMIT = 40
 
 BACKEND_RUNTIME_COMPATIBILITY: dict[InferenceBackend, set[ModelRuntime]] = {
-    "mobiinfer": {"mnn", "mobiinfer"},
+    "mobiinfer": {"mobiinfer"},
     "llama_cpp": {"llama_cpp"},
     "llama_cpp_cuda": {"llama_cpp"},
     "llama_cpp_cpu": {"llama_cpp"},
 }
 
 
-class MnnServerService:
+class RuntimeServerService:
     def __init__(self) -> None:
-        self._status = MnnStatus(state="stopped", backend="llama_cpp")
+        self._status = RuntimeStatus(state="stopped", backend="llama_cpp")
         self._process: subprocess.Popen[str] | None = None
         self._llama_cpp = LlamaCppServerAdapter()
         self._models = ModelScopeService()
         self._logs = LogService()
 
-    def status(self, backend: InferenceBackend | None = None) -> MnnStatus:
+    def status(self, backend: InferenceBackend | None = None) -> RuntimeStatus:
         if backend and not (self._process and self._process.poll() is None):
             self._status.backend = backend
         if self._process and self._process.poll() is not None:
             backend = self._status.backend
             label = BACKEND_LABELS[backend]
             self._append_log(backend, f"{label} process exited with code {self._process.returncode}.")
-            self._status = MnnStatus(
+            self._status = RuntimeStatus(
                 state="error",
                 backend=backend,
                 active_model_id=self._status.active_model_id,
@@ -78,7 +77,7 @@ class MnnServerService:
                         self._status.backend,
                         f"{BACKEND_LABELS[self._status.backend]} model is ready on port {self._status.port}.",
                     )
-                    self._status = MnnStatus(
+                    self._status = RuntimeStatus(
                         state="running",
                         backend=self._status.backend,
                         active_model_id=self._status.active_model_id,
@@ -101,7 +100,7 @@ class MnnServerService:
                         "the next local inference launch will select another port."
                     ),
                 )
-                self._status = MnnStatus(
+                self._status = RuntimeStatus(
                     state="stopped",
                     backend=self._status.backend,
                     active_model_id=self._status.active_model_id,
@@ -119,7 +118,7 @@ class MnnServerService:
                         f"service on port {port}. Its stdout/stderr are not managed by PC Server."
                     ),
                 )
-            self._status = MnnStatus(
+            self._status = RuntimeStatus(
                 state="running",
                 backend=self._status.backend,
                 active_model_id=self._status.active_model_id,
@@ -133,10 +132,10 @@ class MnnServerService:
                 self._status.backend,
                 f"External {BACKEND_LABELS[self._status.backend]} service on port {port} is no longer reachable.",
             )
-            self._status = MnnStatus(state="stopped", backend=self._status.backend)
+            self._status = RuntimeStatus(state="stopped", backend=self._status.backend)
         return self._status
 
-    def start(self) -> MnnStatus:
+    def start(self) -> RuntimeStatus:
         if self._status.active_model_id:
             self._append_log(
                 self._status.backend,
@@ -147,14 +146,14 @@ class MnnServerService:
         self._append_log(self._status.backend, "Start requested without an active model.")
         if self._status.state == "error" and self._status.message:
             return self._status
-        self._status = MnnStatus(
+        self._status = RuntimeStatus(
             state="error",
             backend=self._status.backend,
             message=f"Load a model before starting {BACKEND_LABELS[self._status.backend]} server.",
         )
         return self._status
 
-    def stop(self) -> MnnStatus:
+    def stop(self) -> RuntimeStatus:
         backend = self._status.backend
         label = BACKEND_LABELS[backend]
         port = self._status.port or BACKEND_PORTS[backend]
@@ -184,7 +183,7 @@ class MnnServerService:
                 backend,
                 f"Port {port} is still open after stop; treating as external service.",
             )
-            self._status = MnnStatus(
+            self._status = RuntimeStatus(
                 state="running",
                 backend=backend,
                 active_model_id=active_model_id,
@@ -198,10 +197,10 @@ class MnnServerService:
             return self._status
 
         self._append_log(backend, f"{label} service stopped.")
-        self._status = MnnStatus(state="stopped", backend=backend, active_model_id=active_model_id)
+        self._status = RuntimeStatus(state="stopped", backend=backend, active_model_id=active_model_id)
         return self._status
 
-    def load_model(self, model_id: str, backend: InferenceBackend = "llama_cpp") -> MnnStatus:
+    def load_model(self, model_id: str, backend: InferenceBackend = "llama_cpp") -> RuntimeStatus:
         self._append_log(backend, f"Load model requested: {model_id}.")
         entry_path = self._models.entry_path(model_id)
         mmproj_path = self._models.mmproj_path(model_id) if backend in {"llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"} else None
@@ -211,7 +210,7 @@ class MnnServerService:
             compatible = ", ".join(
                 MODEL_RUNTIME_LABELS[item] for item in sorted(BACKEND_RUNTIME_COMPATIBILITY[backend])
             )
-            self._status = MnnStatus(
+            self._status = RuntimeStatus(
                 state="error",
                 backend=backend,
                 active_model_id=model_id,
@@ -226,7 +225,7 @@ class MnnServerService:
         if not runtime:
             label = BACKEND_LABELS[backend]
             self._append_log(backend, f"{label} binary was not found.")
-            self._status = MnnStatus(
+            self._status = RuntimeStatus(
                 state="error",
                 backend=backend,
                 active_model_id=model_id,
@@ -239,7 +238,7 @@ class MnnServerService:
         port = self._select_port(backend)
         if port is None:
             default_port = BACKEND_PORTS[backend]
-            self._status = MnnStatus(
+            self._status = RuntimeStatus(
                 state="error",
                 backend=backend,
                 active_model_id=model_id,
@@ -272,7 +271,7 @@ class MnnServerService:
         )
         self._append_log(backend, f"{BACKEND_LABELS[backend]} process created pid={self._process.pid}.")
 
-        self._status = MnnStatus(
+        self._status = RuntimeStatus(
             state="starting",
             backend=backend,
             active_model_id=model_id,
@@ -287,7 +286,7 @@ class MnnServerService:
                 backend,
                 f"{BACKEND_LABELS[backend]} exited during startup with code {self._process.returncode}.",
             )
-            self._status = MnnStatus(
+            self._status = RuntimeStatus(
                 state="error",
                 backend=backend,
                 active_model_id=model_id,
@@ -302,7 +301,7 @@ class MnnServerService:
 
         if ready:
             self._append_log(backend, f"{BACKEND_LABELS[backend]} model is ready on port {port}.")
-            self._status = MnnStatus(
+            self._status = RuntimeStatus(
                 state="running",
                 backend=backend,
                 active_model_id=model_id,
@@ -589,8 +588,6 @@ class MnnServerService:
             return "llama_cpp"
         if runtime == "mobiinfer":
             return "mobiinfer"
-        if runtime == "mnn":
-            return "mnn"
         return "mobiinfer"
 
     def _find_backend_runtime(self, backend: InferenceBackend) -> Path | LlamaCppRuntime | None:
@@ -614,8 +611,6 @@ class MnnServerService:
         candidates = [
             RESOURCES_DIR / "mobiinfer/mnncli",
             RESOURCES_DIR / "mobiinfer/mnncli.exe",
-            RESOURCES_DIR / "mnn/mobiinfer-mnncli",
-            RESOURCES_DIR / "mnn/mobiinfer-mnncli.exe",
             REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli",
             REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli.exe",
             REPO_ROOT / "3rdparty/mobiinfer/apps/mnncli/build/mnncli",

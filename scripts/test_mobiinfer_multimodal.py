@@ -11,23 +11,23 @@ from typing import Any
 
 
 DEFAULT_BACKEND_URL = "http://127.0.0.1:8000"
-DEFAULT_MODEL = "MNN/Qwen3.5-0.8B-MNN"
+DEFAULT_MODEL = "mnn-mobi-visual"
 DEFAULT_PROMPT = "请用一句话描述这张图片。"
 LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Start/load MNN through the local backend and send an image prompt."
+        description="Start/load MobiInfer through the local backend and send an image prompt."
     )
-    parser.add_argument("image", help="Path to the image file sent to MNN.")
+    parser.add_argument("image", help="Path to the image file sent to MobiInfer.")
     parser.add_argument("--backend-url", default=DEFAULT_BACKEND_URL)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--prompt", default=DEFAULT_PROMPT)
     parser.add_argument("--max-tokens", type=int, default=128)
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--timeout", type=float, default=180.0)
-    parser.add_argument("--skip-load", action="store_true", help="Do not call /api/mnn/load-model first.")
+    parser.add_argument("--skip-load", action="store_true", help="Do not call /api/mobiinfer/load-model first.")
     parser.add_argument("--direct-url", help="Send directly to an already-running /v1/chat/completions endpoint.")
     return parser.parse_args()
 
@@ -63,17 +63,15 @@ def main() -> int:
 
     if not args.skip_load and not args.direct_url:
         status = post_json(
-            f"{backend_url}/api/mnn/load-model",
-            {"model_id": args.model, "backend": "mnn"},
+            f"{backend_url}/api/mobiinfer/load-model",
+            {"model_id": args.model, "backend": "mobiinfer"},
             args.timeout,
         )
         print(json.dumps({"load_model": status}, ensure_ascii=False, indent=2))
         if status.get("state") != "running":
-            print("MNN backend did not reach running state.", file=sys.stderr)
+            print("MobiInfer backend did not reach running state.", file=sys.stderr)
             return 1
 
-    # PC mnncli_server currently accepts string content only. For image input,
-    # MNN LLM expects an inline local image marker in the user content.
     content = f"<img>{image_path}</img>{args.prompt}"
     payload = {
         "model": args.model,

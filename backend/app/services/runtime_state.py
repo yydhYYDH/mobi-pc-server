@@ -1,4 +1,4 @@
-from app.services.mnn_server import MnnServerService
+from app.services.runtime_server import RuntimeServerService
 
 
-runtime_service = MnnServerService()
+runtime_service = RuntimeServerService()

@@ -1,7 +1,7 @@
 import React from "react";
 
 import { autoConnectHdcTarget, connectHdcTarget, disconnectHdcTarget } from "../api/devices";
-import type { BackendId, HdcStatus, MnnStatus } from "../api/types";
+import type { BackendId, HdcStatus, RuntimeStatus } from "../api/types";
 import {
   getPreferredDetectedHdcTarget,
   nextAutoFilledHdcTarget,
@@ -43,11 +43,11 @@ function writeRecentHdcTarget(target: string) {
 
 export function useHdcActions(params: {
   hdc: HdcStatus | null;
-  mnn: MnnStatus | null;
+  runtimeStatus: RuntimeStatus | null;
   selectedBackend: BackendId;
   setHdc: (status: HdcStatus) => void;
 }) {
-  const { hdc, mnn, selectedBackend, setHdc } = params;
+  const { hdc, runtimeStatus, selectedBackend, setHdc } = params;
   const [recentHdcTargets, setRecentHdcTargets] = React.useState<string[]>(() => readRecentHdcTargets());
   const [hdcTarget, setHdcTargetState] = React.useState(() => readRecentHdcTargets()[0] ?? "");
   const [deviceBusy, setDeviceBusy] = React.useState<"auto" | "connect" | "disconnect" | null>(null);
@@ -56,7 +56,7 @@ export function useHdcActions(params: {
   const deviceBusyRef = React.useRef<typeof deviceBusy>(null);
   const hdcTargetUserEditedRef = React.useRef(false);
   const lastAutoHdcTargetRef = React.useRef("");
-  const expectedLlmPort = mnn?.state === "running" && mnn.port ? mnn.port : defaultRuntimePort(selectedBackend);
+  const expectedLlmPort = runtimeStatus?.state === "running" && runtimeStatus.port ? runtimeStatus.port : defaultRuntimePort(selectedBackend);
   const autoDiscovering = shouldPollHdcDiscovery({
     available: hdc?.available ?? false,
     devices: hdc?.devices ?? []

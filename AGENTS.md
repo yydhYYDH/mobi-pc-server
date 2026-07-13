@@ -2,43 +2,40 @@
 
 ## Project Goal
 
-This repository will implement a PC-side control application for running an MNN server, downloading and managing MNN-compatible models from ModelScope, and connecting to HarmonyOS phones through `hdc`.
+This repository implements a PC-side control application for running local inference services, downloading and managing models from ModelScope, and connecting to HarmonyOS phones through `hdc`.
 
-The first implementation should use:
+Current first-class runtime dependencies:
 
 - Frontend: Web UI built with React, Vite, and TypeScript.
-- Backend: Local HTTP/WebSocket service, preferably FastAPI for the first version.
-- Native inference dependency: MNN added as `3rdparty/MNN`.
+- Backend: Local HTTP service built with FastAPI.
+- Desktop shell: Electron.
+- Native inference dependencies: MobiInfer under `3rdparty/mobiinfer`, llama.cpp under `3rdparty/llama.cpp`.
 - Model source: ModelScope.
 - Device bridge: `hdc` command-line tool.
 - Version control: Git.
 
-The initial product shape is a local developer console: start the backend, open the Web UI in a browser, then use the UI to download models, start/stop the MNN server, load models, view logs, and inspect connected HarmonyOS devices.
+The product shape is a local developer console: start the backend, open the Web UI or Electron shell, then use the UI to download models, start/stop the selected runtime, load models, view logs, and inspect connected HarmonyOS devices.
 
-## Recommended Repository Layout
-
-Use this structure unless the implementation later proves a different layout is clearly better:
+## Repository Layout
 
 ```text
 pc_server/
   AGENTS.md
   README.md
-  .gitignore
+  README.en.md
   frontend/
-    package.json
-    vite.config.ts
-    src/
   backend/
-    pyproject.toml
     app/
-      main.py
       api/
       core/
       services/
-        mnn_server.py
+        runtime_server.py
+        llama_cpp_server.py
         modelscope.py
         hdc.py
       schemas/
+        runtime.py
+  desktop/
   configs/
     models.json
   models/
@@ -46,7 +43,8 @@ pc_server/
   logs/
     .gitkeep
   3rdparty/
-    MNN/
+    mobiinfer/
+    llama.cpp/
   scripts/
   docs/
 ```
@@ -54,39 +52,38 @@ pc_server/
 Expected ownership:
 
 - `frontend/`: browser UI only. It should not execute local commands directly.
-- `backend/`: local process manager, model manager, MNN integration, and `hdc` integration.
+- `backend/`: local process manager, model manager, MobiInfer/llama.cpp integration, and `hdc` integration.
+- `desktop/`: Electron shell and packaging glue.
 - `configs/models.json`: model catalog shown by the UI.
 - `models/`: downloaded model files. Do not commit large model artifacts.
 - `logs/`: runtime logs. Do not commit generated logs.
-- `3rdparty/MNN`: upstream MNN source or submodule.
+- `3rdparty/mobiinfer`: upstream MobiInfer source or submodule.
+- `3rdparty/llama.cpp`: upstream llama.cpp source or submodule.
 
 ## Git Rules
 
 This project must be managed with Git.
 
-Recommended setup:
+MobiInfer should stay isolated under `3rdparty/mobiinfer`:
 
 ```bash
-git init
-git submodule add https://github.com/alibaba/MNN.git 3rdparty/MNN
+git submodule update --init 3rdparty/mobiinfer
 ```
 
-If submodules are inconvenient for local development, a Git subtree is acceptable, but keep MNN isolated under `3rdparty/MNN` and document the update procedure in `docs/mnn.md`.
+Do not modify upstream MobiInfer source casually. Prefer one of these approaches:
 
-Do not modify upstream MNN source casually. Prefer one of these approaches:
-
-- Build MNN from `3rdparty/MNN` as-is.
+- Build MobiInfer from `3rdparty/mobiinfer` as-is.
 - Add project-specific wrappers in `backend/` or `scripts/`.
-- If patches are required, store patch files under `patches/MNN/` and document why each patch exists.
+- If patches are required, store patch files under `patches/mobiinfer/` and document why each patch exists.
 
 Generated content that should normally be ignored:
 
 - `models/*`
 - `logs/*`
-- build output from MNN
+- native runtime build output
 - Python virtual environments
 - Node dependencies
-- frontend build output
+- frontend/desktop build output
 
 Runtime and benchmark command output should be written under `logs/` by default. Keep committed docs focused on commands, environment, summary metrics, and qualitative conclusions; do not commit generated full logs.
 
@@ -94,10 +91,10 @@ Runtime and benchmark command output should be written under `logs/` by default.
 
 Use a browser-based frontend with a local backend.
 
-The frontend talks only to the backend through HTTP and WebSocket APIs. The backend owns all local side effects:
+The frontend talks only to the backend through HTTP APIs. The backend owns all local side effects:
 
-- Starting and stopping the MNN server.
-- Loading and unloading models.
+- Starting and stopping local inference runtimes.
+- Loading models.
 - Downloading models from ModelScope.
 - Reading and writing local config.
 - Running `hdc` commands.
@@ -107,27 +104,29 @@ This keeps the frontend simple and prevents shell command construction from leak
 
 ## Backend Responsibilities
 
-The backend should expose stable APIs for the frontend.
-
-Suggested API groups:
+Stable API groups include:
 
 - `GET /api/health`
 - `GET /api/models/catalog`
 - `GET /api/models/local`
 - `POST /api/models/download`
 - `POST /api/models/delete`
-- `GET /api/mnn/status`
-- `POST /api/mnn/start`
-- `POST /api/mnn/stop`
-- `POST /api/mnn/load-model`
+- `GET /api/mobiinfer/status`
+- `POST /api/mobiinfer/start`
+- `POST /api/mobiinfer/stop`
+- `POST /api/mobiinfer/load-model`
+- `GET /api/llama-cpp/status`
+- `POST /api/llama-cpp/start`
+- `POST /api/llama-cpp/stop`
+- `POST /api/llama-cpp/load-model`
+- `GET /api/runtime/chat/completions`
 - `GET /api/devices/hdc`
 - `POST /api/devices/hdc/connect`
 - `POST /api/devices/hdc/disconnect`
-- `WS /api/events`
 
 The backend should keep an internal state model for:
 
-- MNN server status: stopped, starting, running, stopping, error.
+- Runtime status: stopped, starting, running, stopping, error.
 - Active model: none, loading, loaded, failed.
 - Model download status: not downloaded, downloading, downloaded, failed.
 - Device status: no hdc, no device, connected, unauthorized, error.
@@ -138,20 +137,12 @@ Use structured response schemas. Do not return raw subprocess output as the only
 
 The frontend should be a control panel, not a process manager.
 
-Expected first screens:
+Expected screens:
 
-- Server panel: start/stop MNN server, show port, status, active model, recent errors.
+- Server panel: start/stop runtime, show port, status, active model, recent errors.
 - Model panel: show available ModelScope models, download status, load button, delete local copy.
 - Device panel: show `hdc` availability, connected HarmonyOS devices, connect/disconnect actions.
-- Logs panel: show backend, MNN, model download, and `hdc` events.
-
-Recommended frontend stack:
-
-- React
-- Vite
-- TypeScript
-- TanStack Query for API state, if the UI becomes non-trivial.
-- WebSocket or Server-Sent Events for logs and progress.
+- Logs panel: show backend, runtime, model download, and `hdc` events.
 
 Keep UI state derived from backend APIs wherever possible. Avoid inventing a second source of truth in the browser.
 
@@ -170,9 +161,9 @@ Suggested shape:
     "revision": "master",
     "description": "Short user-facing description",
     "size": "unknown",
-    "runtime": "mnn",
+    "runtime": "mobiinfer",
     "local_dir": "models/example-model",
-    "entry_file": "model.mnn"
+    "entry_file": "config.json"
   }
 ]
 ```
@@ -187,26 +178,24 @@ The backend should:
 
 Do not commit downloaded model files.
 
-## MNN Server Integration
+## MobiInfer Integration
 
-MNN should be added under `3rdparty/MNN`.
+MobiInfer lives under `3rdparty/mobiinfer`.
 
-The backend should treat MNN as a native runtime dependency. Prefer a small wrapper layer that can:
+The backend should treat MobiInfer as a native runtime dependency. Keep MobiInfer command construction in `backend/app/services/runtime_server.py`; the frontend must never assemble runtime command-line arguments.
 
-- Locate the MNN build output.
-- Start the MNN server process.
+The wrapper layer should:
+
+- Locate the MobiInfer `mnncli` build output.
+- Start the MobiInfer server process.
 - Pass model path and runtime options.
 - Capture stdout/stderr.
 - Stop the process cleanly.
 - Detect failed startup.
 
-Keep MNN-specific command construction in one backend module, for example `backend/app/services/mnn_server.py`.
-
-The frontend must never assemble MNN command-line arguments.
-
 ## HarmonyOS `hdc` Integration
 
-The backend should encapsulate all `hdc` usage in one service module, for example `backend/app/services/hdc.py`.
+The backend should encapsulate all `hdc` usage in `backend/app/services/hdc.py`.
 
 Minimum supported actions:
 
@@ -228,82 +217,15 @@ All subprocess calls must:
 
 ## Security and Process Safety
 
-This is a local tool, but still treat subprocess execution carefully.
-
 Rules:
 
 - Do not pass user-provided strings into a shell.
 - Prefer `subprocess.run([...], shell=False)` in Python.
 - Validate model IDs against `configs/models.json`.
 - Validate paths stay inside the repository's `models/` directory.
-- Add timeouts for downloads, MNN startup checks, and `hdc` calls.
+- Add timeouts for downloads, runtime startup checks, and `hdc` calls.
 - Stream logs through the backend after redacting secrets if any appear.
 
-## Implementation Phases
+## Preferred Technical Choice
 
-Phase 1: Repository bootstrap
-
-- Initialize Git.
-- Add `.gitignore`.
-- Add `README.md`.
-- Create `frontend/`, `backend/`, `configs/`, `models/`, `logs/`, `3rdparty/`, and `docs/`.
-- Add MNN as `3rdparty/MNN`.
-
-Phase 2: Backend skeleton
-
-- Create FastAPI app.
-- Add health endpoint.
-- Add model catalog loader.
-- Add structured config paths.
-- Add WebSocket or SSE event stream.
-
-Phase 3: Model management
-
-- Add ModelScope download service.
-- Add local model discovery.
-- Add progress reporting.
-- Add delete local model action.
-
-Phase 4: MNN server control
-
-- Build or locate MNN server binary.
-- Add start/stop/status APIs.
-- Add model loading API.
-- Capture logs and expose them to the UI.
-- Prefer MNN's `apps/mnncli` and its `serve` command before adding a custom server.
-
-Phase 5: `hdc` device control
-
-- Add `hdc` detection.
-- Add device listing.
-- Add connect/disconnect support.
-- Surface device status in the UI.
-
-Phase 6: Frontend control panel
-
-- Create Vite React app.
-- Add server, model, device, and logs panels.
-- Wire API calls and event stream.
-- Show clear loading and error states.
-
-Phase 7: Packaging and documentation
-
-- Document local setup.
-- Document MNN build steps.
-- Document ModelScope credentials or cache behavior if needed.
-- Document HarmonyOS `hdc` setup.
-- Add smoke tests for backend services.
-
-## Preferred First Technical Choice
-
-Start with Web frontend plus local backend.
-
-Do not start with Electron yet. Electron can wrap the same frontend and backend later after the core MNN, ModelScope, and `hdc` flows are stable.
-
-Recommended first version:
-
-- `frontend/`: React + Vite + TypeScript.
-- `backend/`: FastAPI + Python subprocess/service wrappers.
-- `3rdparty/MNN`: Git submodule.
-
-This optimizes for fast iteration, simple debugging, and a clean boundary between UI and local system operations.
+Keep the Web frontend plus local backend architecture. Do not introduce Electron-only runtime behavior; Electron should wrap the same frontend and backend after core MobiInfer, llama.cpp, ModelScope, and `hdc` flows are stable.

@@ -2,7 +2,7 @@ import React from "react";
 
 import { streamChatCompletion, type ChatCompletionContent } from "../api/chat";
 import { getExampleImage } from "../api/exampleImages";
-import type { BackendId, CatalogModel, ChatImageAttachment, ChatMessage, MnnStatus } from "../api/types";
+import type { BackendId, CatalogModel, ChatImageAttachment, ChatMessage, RuntimeStatus } from "../api/types";
 import { backendLabel, modelSupportsImages, normalizeBackend } from "../domain/runtime";
 
 const DEFAULT_EXAMPLE_IMAGE_ID = "taobao_1_4.jpg";
@@ -115,7 +115,7 @@ function fileToDataUri(file: File) {
   });
 }
 
-export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
+export function useChatTest(runtimeStatus: RuntimeStatus | null, models: CatalogModel[]) {
   const [chatInput, setChatInput] = React.useState(DEFAULT_CHAT_PROMPT);
   const [chatMessages, setChatMessages] = React.useState<ChatMessage[]>([]);
   const [chatBusy, setChatBusy] = React.useState(false);
@@ -123,14 +123,14 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
   const [selectedImage, setSelectedImage] = React.useState<ChatImageAttachment | null>(null);
   const [imageBusy, setImageBusy] = React.useState(false);
   const defaultImageLoadedForRef = React.useRef<string | null>(null);
-  const runningBackend = normalizeBackend(mnn?.backend);
+  const runningBackend = normalizeBackend(runtimeStatus?.backend);
   const activeModel = React.useMemo(
-    () => models.find((model) => model.id === mnn?.active_model_id) ?? null,
-    [mnn?.active_model_id, models]
+    () => models.find((model) => model.id === runtimeStatus?.active_model_id) ?? null,
+    [runtimeStatus?.active_model_id, models]
   );
   const activeModelSupportsImages = modelSupportsImages(activeModel);
   const imageDisabledReason =
-    mnn?.state !== "running"
+    runtimeStatus?.state !== "running"
       ? "推理服务未运行，图片测试暂不可用。"
       : !activeModel
         ? "当前没有已加载模型，图片测试暂不可用。"
@@ -145,7 +145,7 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
   }, [activeModelSupportsImages, selectedImage]);
 
   React.useEffect(() => {
-    const activeModelKey = mnn?.active_model_id ?? "";
+    const activeModelKey = runtimeStatus?.active_model_id ?? "";
     if (!activeModelSupportsImages || selectedImage || defaultImageLoadedForRef.current === activeModelKey) {
       return;
     }
@@ -179,7 +179,7 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
     return () => {
       cancelled = true;
     };
-  }, [activeModelSupportsImages, mnn?.active_model_id, selectedImage]);
+  }, [activeModelSupportsImages, runtimeStatus?.active_model_id, selectedImage]);
 
   async function selectImageFile(file: File | null) {
     if (!file) {
@@ -212,8 +212,8 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
     if (!prompt || chatBusy || imageBusy) {
       return;
     }
-    if (mnn?.state !== "running" || !mnn.port) {
-      setChatError(mnn?.message || "请确认推理服务正在运行。");
+    if (runtimeStatus?.state !== "running" || !runtimeStatus.port) {
+      setChatError(runtimeStatus?.message || "请确认推理服务正在运行。");
       return;
     }
     if (selectedImage && !activeModelSupportsImages) {
@@ -231,7 +231,7 @@ export function useChatTest(mnn: MnnStatus | null, models: CatalogModel[]) {
     try {
       const content = buildChatContent(runningBackend, prompt, selectedImage);
       let responseText = "";
-      await streamChatCompletion(mnn.active_model_id ?? "default", content, {
+      await streamChatCompletion(runtimeStatus.active_model_id ?? "default", content, {
         onText: (text) => {
           responseText += text;
           setChatMessages((current) => {

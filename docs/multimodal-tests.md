@@ -4,7 +4,7 @@ These scripts send one image plus one text prompt through the local backend.
 
 ## MobiInfer
 
-MobiInfer uses the MNN-compatible `mnncli serve` entrypoint. For image input, use the inline local image marker:
+MobiInfer uses the `mnncli serve` entrypoint provided by the MobiInfer fork. For image input, use the inline local image marker:
 
 ```text
 <img>/absolute/path/to/image.jpg</img>请描述这张图片。
@@ -13,9 +13,8 @@ MobiInfer uses the MNN-compatible `mnncli serve` entrypoint. For image input, us
 Run:
 
 ```bash
-python scripts/test_mnn_multimodal.py /absolute/path/to/image.jpg \
-  --model mnn-mobi-visual \
-  --backend mobiinfer
+python scripts/test_mobiinfer_multimodal.py /absolute/path/to/image.jpg \
+  --model mnn-mobi-visual
 ```
 
 The script calls:

@@ -110,11 +110,9 @@ PC_SERVER_SKIP_FRONTEND=1
 - llama.cpp CPU
 - MobiInfer
 
-MNN 不再作为独立可选后端暴露。`runtime: "mnn"` 的模型配置仍表示 MNN-compatible 模型格式，这类模型由 MobiInfer 后端加载。历史 MNN 构建和补丁说明保留在 [docs/mnn.md](docs/mnn.md)，仅作为归档和实验参考。
-
 ## MobiInfer
 
-MobiInfer 目前按 MNN-compatible fork 接入，用于加载 MNN-compatible 模型配置。
+MobiInfer 作为独立运行时接入，用于加载 `runtime: "mobiinfer"` 的模型配置。
 
 MobiInfer 作为 submodule 固定在当前仓库记录的 commit：
 

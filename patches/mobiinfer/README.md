@@ -46,14 +46,14 @@ If mobiinfer is updated, re-check whether upstream has fixed the conflict before
 
 Fixes the remaining MSVC build issues for `apps/mnncli` after `0001` is applied.
 
-The patch enables C++20 for `mnncli` and `model_downloader`, uses the MSVC static runtime to match the static MNN build, enables `CPPHTTPLIB_OPENSSL_SUPPORT` for the downloader on Windows, links `mnncli` to the OpenSSL `VC/x64/MT` static libraries explicitly, uses `/EHsc` for MSVC exception handling, adapts `LOG_ERROR` overload dispatch, and uses `_mkdir` on Windows.
+The patch enables C++20 for `mnncli` and `model_downloader`, uses the MSVC static runtime to match the MobiInfer static build, enables `CPPHTTPLIB_OPENSSL_SUPPORT` for the downloader on Windows, links `mnncli` to the OpenSSL `VC/x64/MT` static libraries explicitly, uses `/EHsc` for MSVC exception handling, adapts `LOG_ERROR` overload dispatch, and uses `_mkdir` on Windows.
 
 Verified on Windows with:
 
 ```powershell
 cd E:\WAIC\pc_server
-cmd /c "call ""E:\Software\Visual Studio Community 2026\product\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 && powershell -ExecutionPolicy Bypass -File scripts\windows\build-mobiinfer.ps1 -OpenSslRoot ""E:\Software\OpenSSL-Win64"" -InstallDir ""E:\WAIC\pc_server\desktop\resources\mnn"" -SkipSmokeTest"
-desktop\resources\mnn\mnncli.exe --help
+cmd /c "call ""E:\Software\Visual Studio Community 2026\product\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 && powershell -ExecutionPolicy Bypass -File scripts\windows\build-mobiinfer.ps1 -OpenSslRoot ""E:\Software\OpenSSL-Win64"" -InstallDir ""E:\WAIC\pc_server\desktop\resources\mobiinfer"" -SkipSmokeTest"
+desktop\resources\mobiinfer\mnncli.exe --help
 ```
 
 ### 0003-fix-windows-mtok-binary-tokenizer-offset.patch

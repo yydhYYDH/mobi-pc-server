@@ -2,15 +2,15 @@ import pytest
 from fastapi import HTTPException
 
 from app.api import runtime
-from app.schemas.mnn import MnnStatus
-from app.services.mnn_server import MnnServerService
+from app.schemas.runtime import RuntimeStatus
+from app.services.runtime_server import RuntimeServerService
 
 
 def test_chat_completion_reports_runtime_error_message(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         runtime.runtime_service,
         "status",
-        lambda: MnnStatus(
+        lambda: RuntimeStatus(
             state="error",
             backend="llama_cpp",
             message="Model entry file does not exist: /tmp/ClawMate/models/demo/model.gguf",
@@ -25,9 +25,9 @@ def test_chat_completion_reports_runtime_error_message(monkeypatch: pytest.Monke
 
 
 def test_start_without_active_model_preserves_existing_error_message(monkeypatch: pytest.MonkeyPatch) -> None:
-    service = MnnServerService()
+    service = RuntimeServerService()
     monkeypatch.setattr(service, "_append_log", lambda backend, message: None)
-    service._status = MnnStatus(  # noqa: SLF001 - this test fixes service state transitions.
+    service._status = RuntimeStatus(  # noqa: SLF001 - this test fixes service state transitions.
         state="error",
         backend="llama_cpp",
         message="llama.cpp server binary was not found.",
@@ -40,9 +40,9 @@ def test_start_without_active_model_preserves_existing_error_message(monkeypatch
 
 
 def test_stop_preserves_active_model_for_restart(monkeypatch: pytest.MonkeyPatch) -> None:
-    service = MnnServerService()
+    service = RuntimeServerService()
     monkeypatch.setattr(service, "_append_log", lambda backend, message: None)
-    service._status = MnnStatus(  # noqa: SLF001 - this test fixes service state transitions.
+    service._status = RuntimeStatus(  # noqa: SLF001 - this test fixes service state transitions.
         state="running",
         backend="mobiinfer",
         active_model_id="demo-mnn",
@@ -58,9 +58,9 @@ def test_stop_preserves_active_model_for_restart(monkeypatch: pytest.MonkeyPatch
 
     restarted: list[tuple[str, str]] = []
 
-    def fake_load_model(model_id: str, backend: str) -> MnnStatus:
+    def fake_load_model(model_id: str, backend: str) -> RuntimeStatus:
         restarted.append((model_id, backend))
-        return MnnStatus(state="starting", backend="mobiinfer", active_model_id=model_id)
+        return RuntimeStatus(state="starting", backend="mobiinfer", active_model_id=model_id)
 
     monkeypatch.setattr(service, "load_model", fake_load_model)
 
@@ -71,10 +71,10 @@ def test_stop_preserves_active_model_for_restart(monkeypatch: pytest.MonkeyPatch
 
 
 def test_stop_reports_a_listener_that_cannot_be_identified(monkeypatch: pytest.MonkeyPatch) -> None:
-    service = MnnServerService()
+    service = RuntimeServerService()
     messages: list[str] = []
     monkeypatch.setattr(service, "_append_log", lambda _backend, message: messages.append(message))
-    service._status = MnnStatus(  # noqa: SLF001 - this test fixes service state transitions.
+    service._status = RuntimeStatus(  # noqa: SLF001 - this test fixes service state transitions.
         state="running",
         backend="llama_cpp_cuda",
         active_model_id="demo-llama",

@@ -1,6 +1,6 @@
 # MobiInfer Integration
 
-MobiInfer is currently integrated as an MNN-compatible fork under `3rdparty/mobiinfer`.
+MobiInfer is integrated as a first-class runtime under `3rdparty/mobiinfer`.
 
 The repository currently pins the submodule to:
 
@@ -10,9 +10,9 @@ The repository currently pins the submodule to:
 
 At this stage the backend assumes:
 
-- the repository layout stays compatible with MNN's `apps/mnncli` layout
+- the repository layout keeps the fork's `apps/mnncli` layout
 - the runtime entrypoint is still `mnncli serve`
-- model config shape remains compatible with the existing MNN catalog entries
+- catalog entries use `runtime: "mobiinfer"`
 
 ## Submodule Setup
 
@@ -41,7 +41,7 @@ POST /api/mobiinfer/stop
 POST /api/mobiinfer/load-model
 ```
 
-The legacy upstream MNN runtime API is no longer exposed by the backend.
+The legacy upstream runtime API is no longer exposed by the backend.
 
 ## Binary Discovery
 
@@ -66,7 +66,7 @@ MOBIINFER_BIN=/absolute/path/to/mnncli
 
 ## Build Helper
 
-If the fork keeps MNN's upstream build entrypoint, you can use:
+If the fork keeps the upstream build entrypoint, you can use:
 
 ```bash
 ./scripts/build-mobiinfer.sh
@@ -88,4 +88,4 @@ To run a catalog model with MobiInfer from the UI, set its runtime in `configs/m
 }
 ```
 
-Existing `runtime: "mnn"` entries are treated as MNN-compatible model configs and are loaded through the MobiInfer backend.
+Use `runtime: "mobiinfer"` for models that should be loaded by MobiInfer.

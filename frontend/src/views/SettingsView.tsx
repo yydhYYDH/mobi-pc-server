@@ -1,4 +1,4 @@
-import type { BackendId, HdcStatus, MnnStatus } from "../api/types";
+import type { BackendId, HdcStatus, RuntimeStatus } from "../api/types";
 import { PanelTitle } from "../components";
 import { backendLabel, serverOwnerLabel } from "../domain/runtime";
 
@@ -6,7 +6,7 @@ export function SettingsView(props: {
   apiBase: string;
   hdc: HdcStatus | null;
   hdcLlmPort: string;
-  mnn: MnnStatus | null;
+  runtimeStatus: RuntimeStatus | null;
   selectedBackend: BackendId;
 }) {
   return (
@@ -19,9 +19,9 @@ export function SettingsView(props: {
           <dt>当前后端</dt>
           <dd>{backendLabel(props.selectedBackend)}</dd>
           <dt>后端端口</dt>
-          <dd>{props.mnn?.port ?? "未监听"}</dd>
+          <dd>{props.runtimeStatus?.port ?? "未监听"}</dd>
           <dt>进程来源</dt>
-          <dd>{serverOwnerLabel(props.mnn)}</dd>
+          <dd>{serverOwnerLabel(props.runtimeStatus)}</dd>
           <dt>hdc 路径</dt>
           <dd>{props.hdc?.path ?? "未找到"}</dd>
           <dt>HDC Server</dt>

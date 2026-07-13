@@ -12,14 +12,14 @@ import {
   readModelDownloads
 } from "../api/models";
 import { getRuntimeStatus, readRuntimeStatus } from "../api/runtime";
-import type { BackendId, CatalogModel, DownloadStatus, HdcStatus, LocalModel, MnnStatus, ViewId } from "../api/types";
+import type { BackendId, CatalogModel, DownloadStatus, HdcStatus, LocalModel, RuntimeStatus, ViewId } from "../api/types";
 
 export function useDashboardData(params: {
   activeView: ViewId;
   selectedBackend: BackendId;
 }) {
   const { activeView, selectedBackend } = params;
-  const [mnn, setMnn] = React.useState<MnnStatus | null>(null);
+  const [runtimeStatus, setRuntimeStatus] = React.useState<RuntimeStatus | null>(null);
   const [models, setModels] = React.useState<CatalogModel[]>([]);
   const [localModels, setLocalModels] = React.useState<LocalModel[]>([]);
   const [downloads, setDownloads] = React.useState<DownloadStatus[]>([]);
@@ -39,7 +39,7 @@ export function useDashboardData(params: {
       setIsRefreshing(true);
     }
     try {
-      const [mnnResponse, modelsResponse, localModelsResponse, downloadsResponse, hdcResponse, logsResponse] =
+      const [runtimeResponse, modelsResponse, localModelsResponse, downloadsResponse, hdcResponse, logsResponse] =
         await Promise.all([
           getRuntimeStatus(selectedBackend),
           getModelCatalog(),
@@ -49,8 +49,8 @@ export function useDashboardData(params: {
           getSoftwareLogs(LOG_LINES)
         ]);
 
-      const [nextMnn, nextModels, nextLocalModels, nextDownloads, nextHdc, nextLogs] = await Promise.all([
-        readRuntimeStatus(mnnResponse),
+      const [nextRuntimeStatus, nextModels, nextLocalModels, nextDownloads, nextHdc, nextLogs] = await Promise.all([
+        readRuntimeStatus(runtimeResponse),
         readModelCatalog(modelsResponse),
         readLocalModels(localModelsResponse),
         readModelDownloads(downloadsResponse),
@@ -58,7 +58,7 @@ export function useDashboardData(params: {
         readSoftwareLogs(logsResponse)
       ]);
 
-      setMnn(nextMnn);
+      setRuntimeStatus(nextRuntimeStatus);
       setModels(nextModels);
       setLocalModels(nextLocalModels);
       setDownloads(nextDownloads);
@@ -127,12 +127,12 @@ export function useDashboardData(params: {
           getHdcStatus(),
           getRuntimeStatus(selectedBackend)
         ]);
-        const [nextHdc, nextMnn] = await Promise.all([
+        const [nextHdc, nextRuntimeStatus] = await Promise.all([
           readHdcStatus(hdcResponse),
           readRuntimeStatus(runtimeResponse)
         ]);
         setHdc(nextHdc);
-        setMnn(nextMnn);
+        setRuntimeStatus(nextRuntimeStatus);
         setLastUpdatedAt(new Date());
       } catch {
         // Keep the last successful dashboard snapshot; the next full refresh will surface errors.
@@ -165,7 +165,7 @@ export function useDashboardData(params: {
     load,
     localModels,
     logs,
-    mnn,
+    runtimeStatus,
     models,
     refreshLogs,
     setError,

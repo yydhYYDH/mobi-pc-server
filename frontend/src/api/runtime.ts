@@ -1,5 +1,5 @@
 import { API_BASE, apiErrorMessage, readApiJson } from "./client";
-import type { BackendId, MnnStatus } from "./types";
+import type { BackendId, RuntimeStatus } from "./types";
 
 export type RuntimeOption = {
   id: BackendId;
@@ -26,7 +26,7 @@ async function readRuntimeActionStatus(response: Response, fallback: string) {
   if (!response.ok) {
     throw new Error(await apiErrorMessage(response, fallback));
   }
-  const status = await response.json() as MnnStatus;
+  const status = await response.json() as RuntimeStatus;
   if (status.state === "error") {
     throw new Error(status.message || fallback);
   }
@@ -51,7 +51,7 @@ export async function stopRuntime(backend: BackendId) {
   if (!response.ok) {
     throw new Error(await apiErrorMessage(response, "停止失败"));
   }
-  return response.json() as Promise<MnnStatus>;
+  return response.json() as Promise<RuntimeStatus>;
 }
 
 export async function loadRuntimeModel(backend: BackendId, modelId: string) {
@@ -64,5 +64,5 @@ export async function loadRuntimeModel(backend: BackendId, modelId: string) {
 }
 
 export function readRuntimeStatus(response: Response) {
-  return readApiJson<MnnStatus>(response, "推理服务状态");
+  return readApiJson<RuntimeStatus>(response, "推理服务状态");
 }

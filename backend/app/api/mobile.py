@@ -8,12 +8,12 @@ from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 
 from app.api.devices import service as hdc_service
 from app.schemas.devices import HdcStatus
-from app.schemas.mnn import MnnStatus
+from app.schemas.runtime import RuntimeStatus
 from app.services.hdc import PHONE_LLM_URL, PHONE_PC_SERVER_URL
 from app.services.logs import BACKEND_SERVER_LOG, LogService
 from app.services.mobile_events import mobile_event_broker, mobile_event_state
 from app.services.modelscope import ModelScopeService
-from app.services.mnn_server import BACKEND_LABELS
+from app.services.runtime_server import BACKEND_LABELS
 from app.services.runtime_state import runtime_service
 
 
@@ -81,7 +81,7 @@ def mobile_status(include_slow_checks: bool = True) -> dict[str, Any]:
             runtime = runtime_service.status()
         except Exception as exc:
             errors.append(f"runtime status failed: {exc}")
-            runtime = MnnStatus(state="error", message=str(exc))
+            runtime = RuntimeStatus(state="error", message=str(exc))
 
         try:
             catalog = {item.id: item.name for item in models.read_catalog()}
@@ -90,7 +90,7 @@ def mobile_status(include_slow_checks: bool = True) -> dict[str, Any]:
             catalog = {}
     else:
         hdc = HdcStatus(available=True)
-        runtime = MnnStatus(state="stopped")
+        runtime = RuntimeStatus(state="stopped")
         catalog = {}
 
     device = hdc.devices[0] if hdc.devices else None

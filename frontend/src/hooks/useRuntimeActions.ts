@@ -1,22 +1,22 @@
 import React from "react";
 
 import { loadRuntimeModel, stopRuntime } from "../api/runtime";
-import type { BackendId, MnnStatus, ModelBusy, ModelBusyAction } from "../api/types";
+import type { BackendId, RuntimeStatus, ModelBusy, ModelBusyAction } from "../api/types";
 
 export function useRuntimeActions(params: {
   isDownloaded: (modelId: string) => boolean;
   load: () => Promise<void>;
-  mnn: MnnStatus | null;
+  runtimeStatus: RuntimeStatus | null;
   modelBusy: ModelBusy;
   selectedBackend: BackendId;
   setError: (error: string | null) => void;
   setModelBusy: (modelId: string | null, action?: ModelBusyAction) => void;
 }) {
-  const { isDownloaded, load, mnn, modelBusy, selectedBackend, setError, setModelBusy } = params;
+  const { isDownloaded, load, runtimeStatus, modelBusy, selectedBackend, setError, setModelBusy } = params;
   const [serverBusy, setServerBusy] = React.useState<"start" | "stop" | null>(null);
 
-  async function stopMnn() {
-    if (serverBusy !== null || mnn?.state === "stopped" || mnn?.state === "stopping") {
+  async function stopRuntimeService() {
+    if (serverBusy !== null || runtimeStatus?.state === "stopped" || runtimeStatus?.state === "stopping") {
       return;
     }
     setServerBusy("stop");
@@ -53,6 +53,6 @@ export function useRuntimeActions(params: {
   return {
     loadModel,
     serverBusy,
-    stopMnn
+    stopRuntimeService
   };
 }

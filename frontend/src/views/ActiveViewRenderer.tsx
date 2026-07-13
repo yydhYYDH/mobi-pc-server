@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 
 import type { SoftwareLogKey } from "../api/logs";
-import type { BackendId, CatalogModel, ChatImageAttachment, ChatMessage, DeviceBusy, DownloadStatus, HdcStatus, MnnStatus, ModelBusy, ServerBusy, ViewId } from "../api/types";
+import type { BackendId, CatalogModel, ChatImageAttachment, ChatMessage, DeviceBusy, DownloadStatus, HdcStatus, RuntimeStatus, ModelBusy, ServerBusy, ViewId } from "../api/types";
 import { ChatView } from "./ChatView";
 import { DevicesView } from "./DevicesView";
 import { LogsView } from "./LogsView";
@@ -47,7 +47,7 @@ export function ActiveViewRenderer(props: {
   loadError?: string | null;
   logFilter: string;
   logRef: RefObject<HTMLPreElement | null>;
-  mnn: MnnStatus | null;
+  runtimeStatus: RuntimeStatus | null;
   modelBusy: ModelBusy;
   models: CatalogModel[];
   onOpenDevices: () => void;
@@ -75,7 +75,7 @@ export function ActiveViewRenderer(props: {
   setLogFilter: (logFilter: string) => void;
   setSelectedBackend: (backend: BackendId) => void;
   setSelectedLaunchModelId: (modelId: string) => void;
-  stopMnn: () => Promise<void>;
+  stopRuntimeService: () => Promise<void>;
   visibleLogLines: string[];
 }) {
   switch (props.activeView) {
@@ -97,7 +97,7 @@ export function ActiveViewRenderer(props: {
           modelBusy={props.modelBusy}
           models={props.models}
           modelsCount={props.models.length}
-          mnn={props.mnn}
+          runtimeStatus={props.runtimeStatus}
           onAutoConnect={props.autoConnectHdc}
           autoDiscovering={props.autoDiscovering}
           onLoadModel={props.loadModel}
@@ -113,7 +113,7 @@ export function ActiveViewRenderer(props: {
           selectedBackend={props.selectedBackend}
           serverState={props.serverState}
           serverBusy={props.serverBusy}
-          stopMnn={props.stopMnn}
+          stopRuntimeService={props.stopRuntimeService}
           setHdcTarget={props.setHdcTarget}
           setSelectedLaunchModelId={props.setSelectedLaunchModelId}
         />
@@ -147,8 +147,8 @@ export function ActiveViewRenderer(props: {
           isDownloading={props.isDownloading}
           loadModel={props.loadModel}
           modelBusy={props.modelBusy}
-          mnn={props.mnn}
-          onStopMnn={props.stopMnn}
+          runtimeStatus={props.runtimeStatus}
+          onStopMnn={props.stopRuntimeService}
           selectableModels={props.selectableModels}
           selectedLaunchModelId={props.selectedLaunchModelId}
           selectedBackend={props.selectedBackend}
@@ -184,7 +184,7 @@ export function ActiveViewRenderer(props: {
           imageBusy={props.imageBusy}
           activeModelSupportsImages={props.activeModelSupportsImages}
           activeModelName={props.activeModelName}
-          mnn={props.mnn}
+          runtimeStatus={props.runtimeStatus}
           runningBackendLabel={props.runningBackendLabel}
           selectedImage={props.selectedImage}
           clearSelectedImage={props.clearSelectedImage}
@@ -215,7 +215,7 @@ export function ActiveViewRenderer(props: {
           apiBase={props.apiBase}
           hdc={props.hdc}
           hdcLlmPort={props.hdcLlmPort}
-          mnn={props.mnn}
+          runtimeStatus={props.runtimeStatus}
           selectedBackend={props.selectedBackend}
         />
       );

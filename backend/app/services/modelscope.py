@@ -518,11 +518,11 @@ class ModelScopeService:
             return False
         if Path(file_name).name != "config.json":
             return False
-        return self._normalize_runtime(item.runtime) in {"mnn", "mobiinfer"}
+        return self._normalize_runtime(item.runtime) == "mobiinfer"
 
     def _normalize_runtime(self, runtime: str) -> str:
-        if runtime in {"mnn", "mobiinfer"}:
-            return runtime
+        if runtime in {"mobiinfer", "mnn"}:
+            return "mobiinfer"
         return "llama_cpp" if runtime in {"llama_cpp", "llama.cpp"} else runtime
 
     def _download_marker_path(self, item: ModelCatalogItem) -> Path:

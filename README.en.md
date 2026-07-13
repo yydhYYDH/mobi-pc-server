@@ -104,11 +104,9 @@ The current selectable runtime backends are:
 - llama.cpp CPU
 - MobiInfer
 
-MNN is no longer exposed as a standalone selectable backend. Catalog entries with `runtime: "mnn"` still mean an MNN-compatible model format; those models are loaded through the MobiInfer backend. Historical MNN build and patch notes remain in `docs/mnn.md` as archive and experiment references.
-
 ## MobiInfer
 
-MobiInfer is integrated as an MNN-compatible fork for loading MNN-compatible model configs.
+MobiInfer is integrated as a first-class runtime for catalog entries with `runtime: "mobiinfer"`.
 
 The repository currently pins the `3rdparty/mobiinfer` submodule to:
 

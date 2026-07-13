@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.mnn import LoadModelRequest, MnnStatus
+from app.schemas.runtime import LoadModelRequest, RuntimeStatus
 from app.services.llama_cpp_server import LlamaCppServerAdapter
 from app.services.runtime_state import runtime_service
 
@@ -9,8 +9,8 @@ router = APIRouter()
 llama_cpp_adapter = LlamaCppServerAdapter()
 
 
-@router.get("/status", response_model=MnnStatus)
-def status() -> MnnStatus:
+@router.get("/status", response_model=RuntimeStatus)
+def status() -> RuntimeStatus:
     return runtime_service.status("llama_cpp")
 
 
@@ -34,19 +34,19 @@ def runtimes() -> list[dict[str, str | bool]]:
     ]
 
 
-@router.post("/start", response_model=MnnStatus)
-def start() -> MnnStatus:
+@router.post("/start", response_model=RuntimeStatus)
+def start() -> RuntimeStatus:
     runtime_service.status("llama_cpp")
     return runtime_service.start()
 
 
-@router.post("/stop", response_model=MnnStatus)
-def stop() -> MnnStatus:
+@router.post("/stop", response_model=RuntimeStatus)
+def stop() -> RuntimeStatus:
     return runtime_service.stop()
 
 
-@router.post("/load-model", response_model=MnnStatus)
-def load_model(request: LoadModelRequest) -> MnnStatus:
+@router.post("/load-model", response_model=RuntimeStatus)
+def load_model(request: LoadModelRequest) -> RuntimeStatus:
     try:
         backend = request.backend if request.backend in {"llama_cpp", "llama_cpp_cuda", "llama_cpp_cpu"} else "llama_cpp"
         return runtime_service.load_model(request.model_id, backend)

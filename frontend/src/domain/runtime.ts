@@ -1,4 +1,4 @@
-import type { BackendId, CatalogModel, DownloadStatus, MnnStatus } from "../api/types";
+import type { BackendId, CatalogModel, DownloadStatus, RuntimeStatus } from "../api/types";
 
 const STATUS_LABELS: Record<string, string> = {
   stopped: "已停止",
@@ -38,11 +38,11 @@ export function statusLabel(status: string | undefined) {
   return STATUS_LABELS[status ?? "unknown"] ?? status ?? "未知";
 }
 
-export function serverOwnerLabel(mnn: MnnStatus | null) {
-  if (mnn?.state !== "running") {
+export function serverOwnerLabel(runtimeStatus: RuntimeStatus | null) {
+  if (runtimeStatus?.state !== "running") {
     return "未运行";
   }
-  return mnn.managed_by_backend ? "后端托管" : "外部进程";
+  return runtimeStatus.managed_by_backend ? "后端托管" : "外部进程";
 }
 
 export function normalizeBackend(runtime: string | null | undefined): BackendId {
@@ -56,9 +56,6 @@ export function normalizeBackend(runtime: string | null | undefined): BackendId 
     return "llama_cpp";
   }
   if (runtime === "mobiinfer") {
-    return "mobiinfer";
-  }
-  if (runtime === "mnn") {
     return "mobiinfer";
   }
   return "llama_cpp";
