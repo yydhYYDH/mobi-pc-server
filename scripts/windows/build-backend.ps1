@@ -43,7 +43,6 @@ Push-Location $BackendDir
   --hidden-import wechat_collect.render `
   --add-data "app\legacy\harmony_agent.py;app\legacy" `
   --add-data "app\legacy\serve_model.py;app\legacy" `
-  --add-data "app\legacy\screen.jpeg;app\legacy" `
   --add-data "app\legacy\prompts;app\legacy\prompts" `
   --add-data "app\legacy\wechat_collect;app\legacy\wechat_collect" `
   app\main.py
