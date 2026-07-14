@@ -52,6 +52,20 @@ export function initializePersistentData(options: InitializePersistentDataOption
   }
 
   copyMissingEntries(options.bundledConfigsDir, options.configsDir);
+  copyBundledModelCatalog(options.bundledConfigsDir, options.configsDir);
+}
+
+function copyBundledModelCatalog(bundledConfigsDir: string, configsDir: string): void {
+  const source = path.join(bundledConfigsDir, "models.json");
+  const target = path.join(configsDir, "models.json");
+
+  if (!fs.existsSync(source) || !fs.lstatSync(source).isFile()) {
+    return;
+  }
+
+  fs.mkdirSync(configsDir, { recursive: true });
+  fs.copyFileSync(source, target);
+  fs.chmodSync(target, fs.statSync(source).mode);
 }
 
 function copyMissingEntries(source: string, target: string): void {
