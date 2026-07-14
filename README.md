@@ -72,27 +72,6 @@ npm run dev
 开发模式下，Electron 会启动 Vite 前端和 FastAPI 后端，等待
 `http://127.0.0.1:5173` 与 `http://127.0.0.1:8000/api/health` 可用后打开桌面窗口。
 
-如果后端已经单独启动，不希望 Electron 再启动后端：
-
-```bash
-PC_SERVER_SKIP_BACKEND=1 npm run dev
-```
-
-如果前端已经单独启动，不希望 Electron 再启动前端：
-
-```bash
-PC_SERVER_SKIP_FRONTEND=1 npm run dev
-```
-
-桌面开发常用环境变量：
-
-```text
-PC_SERVER_BACKEND_HOST=127.0.0.1
-PC_SERVER_BACKEND_PORT=8000
-PC_SERVER_FRONTEND_URL=http://127.0.0.1:5173
-PC_SERVER_SKIP_BACKEND=1
-PC_SERVER_SKIP_FRONTEND=1
-```
 
 ## 打包
 
@@ -119,16 +98,6 @@ npm install
 ```bash
 git submodule update --init --depth 1 3rdparty/mobiinfer 3rdparty/llama.cpp
 ```
-
-
-submodule 准备好后，可以尝试构建mobiinfer和llama.cpp：
-
-```bash
-./scripts/build-mobiinfer.sh
-./scripts/build-llama-cpp.sh
-```
-
-`build-mobiinfer.sh`脚本会执行两阶段流程：先构建 MobiInfer 静态库，再构建 `mnncli`。
 
 ### Windows x64
 
