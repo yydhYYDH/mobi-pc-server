@@ -1,13 +1,47 @@
-# 你的智伴 (ClawMate)
+<p align="center">
+  <img src="assets/icon-128.jpg" width="128" alt="Logo">
+</p>
 
-PC-side control application for running local inference services, downloading models from ModelScope, and connecting to HarmonyOS phones through `hdc`.
+<p align="center">
+  Your intelligent companion: autonomous perception, decision-making, and proactive services for an always-on digital twin.
+</p>
 
-## Stack
+<p align="center">
+  <a href="README.en.md">English</a> | <a href="README.md">Chinese</a>
+</p>
+
+-----
+
+## About
+
+ClawMate is an on-device agent application for HarmonyOS NEXT. It supports photo-library analysis, personal profiling, recommendations, and digital-twin capabilities, delivering a complete mobile-agent experience from understanding personal data to performing real actions on a phone.
+
+<p align="center">
+  <img src="assets/app.jpg" height="280" alt="App screenshot">
+  <img src="assets/mobi-pc-server.png" width="280" alt="Desktop screenshot">
+</p>
+
+This repository provides installation packages for the HarmonyOS and desktop applications, as well as the desktop application's source code.
+
+## Installation
+
+### HarmonyOS and Desktop Applications
+
+Download the HarmonyOS and desktop applications from the [Releases page](https://github.com/yydhYYDH/mobi-pc-server/releases).
+
+| Platform | Download |
+|--|--|
+| HarmonyOS NEXT | ClawMate.hap |
+| macOS (Apple Silicon) | ClawMate-desktop-mac-arm64.dmg |
+| Windows | ClawMate-desktop-windows-x64.exe |
+| Linux | ClawMate-desktop-linux-x64.AppImage |
+
+## Desktop Application Stack
 
 - Frontend: React + Vite + TypeScript
 - Backend: FastAPI
 - Desktop shell: Electron
-- Native runtime: MobiInfer under `3rdparty/mobiinfer`, llama.cpp under `3rdparty/llama.cpp`
+- Native runtimes: MobiInfer under `3rdparty/mobiinfer` and llama.cpp under `3rdparty/llama.cpp`
 - Model source: ModelScope
 - Device bridge: HarmonyOS `hdc`
 
@@ -16,26 +50,21 @@ PC-side control application for running local inference services, downloading mo
 ```text
 frontend/        Browser control panel
 backend/         Local API service and process wrappers
-desktop/         Electron shell for desktop launch
-configs/         Model catalog and static config
+desktop/         Electron desktop shell
+configs/         Model catalog and static configuration
 models/          Downloaded model files, ignored by Git
 logs/            Runtime logs, ignored by Git
-3rdparty/mobiinfer  Normal directory for MobiInfer source or prebuilt runtime files
-3rdparty/llama.cpp  Normal directory for llama.cpp source or prebuilt runtime files
+3rdparty/mobiinfer  Normal directory for MobiInfer prebuilt runtime files
+3rdparty/llama.cpp  Normal directory for llama.cpp prebuilt runtime files
 docs/            Project documentation
-scripts/         Developer scripts
+scripts/         Development scripts
 ```
 
 ## Development
 
-Use Node.js 20 or newer:
+Node.js 20 or later is required.
 
-```bash
-nvm install 20
-nvm use 20
-```
-
-Backend:
+Start the backend:
 
 ```bash
 cd backend
@@ -45,7 +74,7 @@ pip install -e ".[dev]"
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Frontend:
+Start the frontend:
 
 ```bash
 cd frontend
@@ -53,9 +82,13 @@ npm install
 npm run dev
 ```
 
-The frontend expects the backend at `http://127.0.0.1:8000`.
+The frontend uses this backend address by default:
 
-Desktop shell:
+```text
+http://127.0.0.1:8000
+```
+
+Start the desktop development build:
 
 ```bash
 cd desktop
@@ -63,103 +96,37 @@ npm install
 npm run dev
 ```
 
-In development, Electron starts both the Vite frontend and the FastAPI backend,
-waits for `http://127.0.0.1:5173` and `http://127.0.0.1:8000/api/health`, then
-opens the desktop window.
-
-If the backend is already running and should not be started by Electron:
-
-```bash
-PC_SERVER_SKIP_BACKEND=1 npm run dev
-```
-
-If the frontend is already running and should not be started by Electron:
-
-```bash
-PC_SERVER_SKIP_FRONTEND=1 npm run dev
-```
-
-Useful desktop environment variables:
-
-```text
-PC_SERVER_BACKEND_HOST=127.0.0.1
-PC_SERVER_BACKEND_PORT=8000
-PC_SERVER_FRONTEND_URL=http://127.0.0.1:5173
-PC_SERVER_SKIP_BACKEND=1
-PC_SERVER_SKIP_FRONTEND=1
-```
-
 ## Packaging
 
-Packaging with HarmonyOS device support requires `hdc`. You can obtain it in either of these ways:
+Packaging HarmonyOS device support requires `hdc`. Obtain it by either of the following methods:
 
-1. Install [DevEco Studio](https://developer.huawei.com/consumer/cn/deveco-studio/) and use its SDK Manager to install the matching HarmonyOS SDK and device tools.
-2. Download **Command Line Tools** from Huawei's official [DevEco Studio Resources and Development Tools](https://developer.huawei.com/consumer/cn/deveco-studio/resources/) page, then extract `hdc` from the archive.
+1. Install [DevEco Studio](https://developer.huawei.com/consumer/cn/deveco-studio/) and use its SDK Manager to install the corresponding HarmonyOS SDK and device tools.
+2. Download **Command Line Tools** from Huawei's official [DevEco Studio Resources and Development Tools](https://developer.huawei.com/consumer/cn/deveco-studio/resources/) page, then extract `hdc`.
 
 Add the directory containing `hdc` to your system `PATH`, or explicitly provide its path before packaging.
 
-Run the release script:
+First, pull the prebuilt llama.cpp and MobiInfer runtimes:
 
 ```bash
-scripts/release.sh
+git lfs pull
 ```
 
-On Windows:
+Try the one-command release scripts:
 
-```powershell
-scripts/windows/release.ps1
-```
+- Linux/macOS:
 
-For more detailed packaging information, see:
+  ```bash
+  scripts/release.sh
+  ```
 
-- Windows: `docs/packaging-windows.md`
-- macOS: `docs/packaging-macos.md`
-- Linux/WSL: `docs/packaging-linux.md`
+- Windows:
 
-## Runtime Backends
+  ```powershell
+  scripts/windows/release.ps1
+  ```
 
-The current selectable runtime backends are:
+For detailed packaging instructions, see:
 
-- llama.cpp CUDA
-- llama.cpp CPU
-- MobiInfer
-
-## MobiInfer
-
-MobiInfer is integrated as a first-class runtime for catalog entries with `runtime: "mobiinfer"`.
-
-`3rdparty/mobiinfer` is a normal directory, not a Git submodule. Place the
-MobiInfer source tree or a prebuilt `mnncli` binary there.
-
-If the source tree is present, try:
-
-```bash
-./scripts/build-mobiinfer.sh
-```
-
-The backend checks these build outputs by default:
-
-```text
-3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli
-3rdparty/mobiinfer/apps/mnncli/build/mnncli
-3rdparty/mobiinfer/build/apps/mnncli/mnncli
-```
-
-If the binary is built elsewhere, set `MOBIINFER_BIN=./path/to/mnncli` before starting the backend.
-
-See [docs/mobiinfer.md](docs/mobiinfer.md) for integration details.
-
-## llama.cpp
-
-`3rdparty/llama.cpp` is a normal directory, not a Git submodule. Place the
-llama.cpp source tree or a prebuilt `llama-server` binary there.
-
-The frontend defaults to the generic llama.cpp fallback backend. The header and runtime service page can switch between llama.cpp CUDA, llama.cpp CPU, and MobiInfer; CUDA/CPU options are shown only when the backend detects the corresponding binaries.
-
-## Models
-
-Model options are defined in `configs/models.json`. Downloaded model files go under `models/<model-id>/` and are not committed.
-
-## HarmonyOS Devices
-
-Install `hdc`, ensure it is available on `PATH`, then use the backend API or frontend device panel to inspect connected devices.
+- Windows: [docs/packaging-windows.md](docs/packaging-windows.md)
+- macOS: [docs/packaging-macos.md](docs/packaging-macos.md)
+- Linux/WSL: [docs/packaging-linux.md](docs/packaging-linux.md)
