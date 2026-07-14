@@ -1,9 +1,14 @@
 
-<img src="desktop/build/icon.ico" width="128" alt="图标">
+<p align="center">
+  <img src="assets/icon-128.jpg" width="128" alt="图标">
 
-你的智伴：自主感知，自主决策与主动式服务，实现全时陪伴的数字分身
+<p align="center">
+  你的智伴：自主感知，自主决策与主动式服务，实现全时陪伴的数字分身
+</p>
 
-[English](README.en.md) | [中文](README.md)
+<p align="center">
+  <a href="README.en.md">English</a> | <a href="README.md">中文</a>
+</p>
 
 ----- 
 ## 关于
@@ -95,6 +100,12 @@ npm run dev
 2. 从华为官方 [DevEco Studio 资源与开发工具](https://developer.huawei.com/consumer/cn/deveco-studio/resources/) 下载 **Command Line Tools**，解压后取得 `hdc`。
 
 将 `hdc` 所在目录加入系统环境变量，或在打包前显式指定其路径。
+
+首先拉取预编译好的llama.cpp和mobiinfer
+
+```bash
+git lfs pull
+```
 
 尝试一键运行脚本：
 * Linux/Mac:
