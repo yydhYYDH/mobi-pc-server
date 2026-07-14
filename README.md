@@ -1,10 +1,32 @@
-# 你的智伴
 
-PC 侧控制台应用，用于启动和管理本地推理服务、从 ModelScope 下载模型，并通过 `hdc` 连接 HarmonyOS 设备。
+<img src="desktop/build/icon.png" width="128" alt="图标">
 
-英文版 README 保留在 [README.en.md](README.en.md)。
+你的智伴：自主感知，自主决策与主动式服务，实现全时陪伴的数字分身
 
-## 技术栈
+[English](README.en.md) | [简体中文](README.md)
+----- 
+## 关于
+你的智伴(ClawMate) 是一款面向 HarmonyOS NEXT 的端侧智能体应用，支持图库分析、个人画像、推荐事项和数字分身等能力，形成从“理解个人数据”到“执行真实手机操作”的完整移动智能体体验。
+
+<p>
+<img src="assets/app.jpg" width="128" alt="app截屏">
+<img src="assets/mobi-pc-server.png" width="512" alt="pc截屏">
+</p>
+
+## 安装
+本仓库提供鸿蒙应用和与之配套的桌面应用的安装包，并提供桌面应用的源码。
+
+### 鸿蒙和桌面应用
+`你的智伴`提供了鸿蒙应用和桌面应用，可以直接从[Release页面](https://github.com/yydhYYDH/mobi-pc-server/releases)下载。
+
+| Platform | Download |
+|--|--|
+| HarmonyOS NEXT |	ClawMate.hap |
+|macOS (Apple Silicon) |	ClawMate-desktop-mac-arm64.dmg |
+|Windows | ClawMate-desktop-windows-x64.exe |
+|Linux | ClawMate-desktop-linux-x64.AppImage |
+
+## 桌面应用技术栈
 
 - 前端：React + Vite + TypeScript
 - 后端：FastAPI

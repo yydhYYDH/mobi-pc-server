@@ -134,62 +134,25 @@ desktop/resources-mac-x64/backend/pc-server-backend
 
 ## 3. 准备 llama.cpp
 
-macOS 不使用 CUDA。推荐先构建 Metal 版，并放入 `llama-cpp/cpu/` 目录。后端仍通过现有 CPU 入口发现它。
-构建脚本按 llama.cpp server README 的方式执行 `cmake --build ... --target llama-server`，只生成 `llama-server` 目标，并把同目录运行时动态库一起复制到资源目录。
+不在本仓库构建 `llama.cpp`。取得目标 macOS 架构的预编译运行时后，复制 `llama-server` 及其全部 `.dylib` 依赖到：
 
-Apple Silicon：
-
-```bash
-# Run from the repository root.
-LLAMA_CPP_BUILD_MODE=metal \
-PC_SERVER_DESKTOP_TARGET_ARCH=arm64 \
-LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-mac-arm64/llama-cpp/cpu" \
-./scripts/build-llama-cpp.sh
+```text
+desktop/resources-mac-arm64/llama-cpp/cpu/
+desktop/resources-mac-x64/llama-cpp/cpu/
 ```
 
-Intel：
-
-```bash
-# Run from the repository root.
-LLAMA_CPP_BUILD_MODE=metal \
-PC_SERVER_DESKTOP_TARGET_ARCH=x64 \
-LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-mac-x64/llama-cpp/cpu" \
-./scripts/build-llama-cpp.sh
-```
-
-如果目标机器不支持 Metal，改用 CPU 构建：
-
-```bash
-LLAMA_CPP_BUILD_MODE=cpu \
-LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-mac-arm64/llama-cpp/cpu" \
-./scripts/build-llama-cpp.sh
-```
+macOS 不使用 CUDA；Metal 版或 CPU 版均放在 `cpu/` 目录。运行时文件必须与目标架构一致，且保留可执行权限。
 
 ## 4. 准备 MobiInfer
 
-macOS 包如果需要内置 MobiInfer，把目标架构的 `mnncli` 放到：
+不在本仓库构建 MobiInfer。将目标 macOS 架构的预编译 `mnncli` 及其运行所需的动态库直接复制到：
 
 ```text
 desktop/resources-mac-arm64/mobiinfer/mnncli
 desktop/resources-mac-x64/mobiinfer/mnncli
 ```
 
-可以先尝试现有脚本：
-
-```bash
-./scripts/build-mobiinfer.sh
-```
-
-如果构建成功，把产物复制到对应资源目录：
-
-```bash
-mkdir -p desktop/resources-mac-arm64/mobiinfer
-cp 3rdparty/mobiinfer/apps/mnncli/build_mnncli_darwin_arm64/mnncli \
-  desktop/resources-mac-arm64/mobiinfer/mnncli
-chmod +x desktop/resources-mac-arm64/mobiinfer/mnncli
-```
-
-注意：当前 MobiInfer 脚本包含部分 Linux/x86 取向的 CMake 参数。Apple Silicon 构建如遇到 AVX512 或 OpenCV 相关错误，需要按 MobiInfer 上游 CMake 选项调整后再复制产物。
+复制后确认 `mnncli` 保留可执行权限。不要将 Intel 和 Apple Silicon 的二进制或动态库混用。
 
 ## 5. 准备 hdc
 

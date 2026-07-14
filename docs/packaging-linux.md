@@ -103,21 +103,9 @@ docker run --rm --platform linux/amd64 \
 打包脚本会校验本地二进制格式。Linux 包只接受 ELF 可执行文件；如果误传 macOS
 Mach-O 或 Windows PE 二进制，脚本会跳过或终止，避免产出安装后无法启动后端的包。
 
-## 3. 构建 Linux 版 MobiInfer
+## 3. 准备 Linux 版 MobiInfer
 
-Linux 包需要 Linux 版 MobiInfer 二进制。可以使用项目脚本：
-
-```bash
-./scripts/build-mobiinfer.sh
-```
-
-默认期望产物类似：
-
-```text
-3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_x64/mnncli
-```
-
-把 Linux 运行时文件复制到：
+不在本仓库构建 MobiInfer。取得与目标 Linux 架构匹配的预编译运行时后，将 `mnncli` 及其全部 `.so` 依赖直接复制到：
 
 ```text
 desktop/resources-linux-x64/mobiinfer/
@@ -129,15 +117,31 @@ desktop/resources-linux-x64/mobiinfer/
 desktop/resources-linux-x64/mobiinfer/mnncli
 ```
 
-如果 MobiInfer 构建输出 `.so` 动态库，也复制到同一目录：
+目录中应同时包含 MobiInfer 所需的动态库：
 
 ```text
 desktop/resources-linux-x64/mobiinfer/*.so
 ```
 
-注意：Linux 构建出来的 `mnncli` 不能放进 Windows 包。
+确保 `mnncli` 保留可执行权限。不要将 Windows PE 或 macOS Mach-O 二进制放入 Linux 资源目录。
 
-## 4. 准备 hdc
+## 4. 准备 Linux 版 llama.cpp
+
+不在本仓库构建 `llama.cpp`。取得与目标 Linux 架构匹配的预编译运行时后，完整复制 CPU 和可选 CUDA 目录；不要只复制 `llama-server`，同目录的 `.so` 动态库也必须保留。
+
+```text
+desktop/resources-linux-x64/llama-cpp/
+  cpu/
+    llama-server
+    *.so
+  cuda/                    可选；提供 CUDA 加速时复制
+    llama-server
+    *.so
+```
+
+运行时优先探测 CUDA 版，无法使用时回退至 CPU 版。
+
+## 5. 准备 hdc
 
 把 Linux 版 `hdc` 放到：
 
@@ -157,7 +161,7 @@ HDC_BIN_LINUX=../desktop/resources-linux-x64/hdc/hdc npm run build-linux-x64
 版 `hdc`；脚本会识别并跳过不兼容的二进制。未内置 `hdc` 的包仍会在目标 Linux
 系统启动后从 `PATH` 查找 `hdc`，目标机未安装时界面会显示 `HDC 未找到`。
 
-## 5. 准备前端资源
+## 6. 准备前端资源
 
 通常不需要手动复制，打包命令会自动运行：
 
@@ -172,7 +176,7 @@ npm run prepare:resources
 - 复制 `frontend/dist` 到 `desktop/resources-linux-<arch>/frontend`。
 - 检查后端可执行文件是否存在。
 
-## 6. 构建 Linux 包
+## 7. 构建 Linux 包
 
 生成 unpacked 目录包：
 
