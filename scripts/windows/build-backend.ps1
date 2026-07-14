@@ -4,7 +4,20 @@ $RootDir = Resolve-Path "$PSScriptRoot\..\.."
 $BackendDir = Join-Path $RootDir "backend"
 $TargetArch = $env:PC_SERVER_DESKTOP_TARGET_ARCH
 if (-not $TargetArch) {
-  $TargetArch = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
+  try {
+    $ProcessArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
+    if ($null -ne $ProcessArchitecture) {
+      $TargetArch = $ProcessArchitecture.ToString().ToLowerInvariant()
+    }
+  } catch {
+    Write-Warning "Unable to detect the process architecture automatically: $($_.Exception.Message)"
+  }
+}
+if (-not $TargetArch) {
+  $TargetArch = $env:PROCESSOR_ARCHITEW6432
+}
+if (-not $TargetArch) {
+  $TargetArch = $env:PROCESSOR_ARCHITECTURE
 }
 switch ($TargetArch) {
   "amd64" { $TargetArch = "x64" }
@@ -12,6 +25,16 @@ switch ($TargetArch) {
   "x64" { $TargetArch = "x64" }
   "arm64" { $TargetArch = "arm64" }
   "aarch64" { $TargetArch = "arm64" }
+}
+if ($TargetArch -notin @("x64", "arm64")) {
+  Write-Host "Unable to determine the target architecture automatically."
+  Write-Host "Confirm the architecture for the package you are building:"
+  Write-Host "  x64   - Intel or AMD 64-bit Windows"
+  Write-Host "  arm64 - Windows on ARM"
+  Write-Host "  x86   - not supported by this desktop package"
+  Write-Host "Then set it before rerunning, for example:"
+  Write-Host "  `$env:PC_SERVER_DESKTOP_TARGET_ARCH = 'x64'"
+  throw "Set PC_SERVER_DESKTOP_TARGET_ARCH to x64 or arm64 after confirming the target architecture."
 }
 $DesktopBackendDir = Join-Path $RootDir "desktop\resources-win-$TargetArch\backend"
 $PythonBin = $env:PC_SERVER_PYTHON
@@ -43,7 +66,6 @@ Push-Location $BackendDir
   --hidden-import wechat_collect.render `
   --add-data "app\legacy\harmony_agent.py;app\legacy" `
   --add-data "app\legacy\serve_model.py;app\legacy" `
-  --add-data "app\legacy\screen.jpeg;app\legacy" `
   --add-data "app\legacy\prompts;app\legacy\prompts" `
   --add-data "app\legacy\wechat_collect;app\legacy\wechat_collect" `
   app\main.py

@@ -167,6 +167,28 @@ function copyRuntimeEntry(source, target) {
   fs.chmodSync(target, stats.mode);
 }
 
+function copyWindowsDlls(source, target) {
+  if (!source || !fs.existsSync(source)) {
+    return false;
+  }
+
+  let copied = false;
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    const sourcePath = path.join(source, entry.name);
+    if (entry.isDirectory()) {
+      copied = copyWindowsDlls(sourcePath, target) || copied;
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".dll")) {
+      continue;
+    }
+    if (nativeExecutableMatchesTarget(sourcePath, targetPlatform)) {
+      copied = copyFileIfExists(sourcePath, path.join(target, entry.name)) || copied;
+    }
+  }
+  return copied;
+}
+
 function spawnOutput(command, args) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
@@ -305,7 +327,6 @@ function cleanPlatformRuntimeResources() {
 
   for (const directory of [
     packagedBackend,
-    path.join(resourcesRoot, "mnn"),
     path.join(resourcesRoot, "mobiinfer"),
     path.join(resourcesRoot, "llama-cpp"),
     path.join(resourcesRoot, "hdc")
@@ -329,18 +350,78 @@ function seedBackendExecutable() {
   }
 }
 
+function prepareWindowsRuntimeResources() {
+  const mobiinferDir = path.join(resourcesRoot, "mobiinfer");
+  const llamaCppDir = path.join(resourcesRoot, "llama-cpp");
+  const hdcDir = path.join(resourcesRoot, "hdc");
+  const mobiinferBuildDir = path.join(
+    repoRoot,
+    "3rdparty",
+    "mobiinfer",
+    "apps",
+    "mnncli",
+    `build_mnncli_win_${targetArch}`
+  );
+  const legacyMobiinferBuildDir = path.join(
+    repoRoot,
+    "3rdparty",
+    "mobiinfer",
+    "apps",
+    "mnncli",
+    "build_mnncli_win"
+  );
+
+  const copiedMobiInfer =
+    copyNativeFileIfCompatible(
+      path.join(mobiinferBuildDir, "mnncli.exe"),
+      path.join(mobiinferDir, "mnncli.exe"),
+      "MobiInfer executable"
+    ) ||
+    copyNativeFileIfCompatible(
+      path.join(legacyMobiinferBuildDir, "mnncli.exe"),
+      path.join(mobiinferDir, "mnncli.exe"),
+      "MobiInfer executable"
+    );
+
+  if (copiedMobiInfer) {
+    copyWindowsDlls(mobiinferBuildDir, mobiinferDir);
+    copyWindowsDlls(
+      path.join(repoRoot, "3rdparty", "mobiinfer", `build_mnn_static_win_${targetArch}`),
+      mobiinferDir
+    );
+    copyWindowsDlls(legacyMobiinferBuildDir, mobiinferDir);
+    copyWindowsDlls(path.join(repoRoot, "3rdparty", "mobiinfer", "build_mnn_static_win"), mobiinferDir);
+  }
+
+  copyRuntimeDir(
+    path.join(repoRoot, "3rdparty", "llama.cpp", `build-windows-${targetArch}`, "bin"),
+    path.join(llamaCppDir, "cpu")
+  ) ||
+    copyRuntimeDir(
+      path.join(repoRoot, "3rdparty", "llama.cpp", "build-windows", "bin"),
+      path.join(llamaCppDir, "cpu")
+    );
+  copyRuntimeDir(
+    path.join(repoRoot, "3rdparty", "llama.cpp", `build-cuda-windows-${targetArch}`, "bin"),
+    path.join(llamaCppDir, "cuda")
+  ) ||
+    copyRuntimeDir(
+      path.join(repoRoot, "3rdparty", "llama.cpp", "build-cuda-windows", "bin"),
+      path.join(llamaCppDir, "cuda")
+    );
+
+  copyTargetHdcRuntime(hdcDir);
+  for (const directory of [mobiinferDir, hdcDir]) {
+    ensureGitkeep(directory);
+  }
+}
+
 function prepareLinuxRuntimeResources() {
-  const mnnDir = path.join(resourcesRoot, "mnn");
   const mobiinferDir = path.join(resourcesRoot, "mobiinfer");
   const llamaCppDir = path.join(resourcesRoot, "llama-cpp");
   const hdcDir = path.join(resourcesRoot, "hdc");
   const platformArch = `linux-${targetArch}`;
 
-  copyNativeFileIfCompatible(
-    path.join(repoRoot, "3rdparty", "MNN", "apps", "mnncli", "build_mnncli", "mnncli"),
-    path.join(mnnDir, "mnncli"),
-    "MNN executable"
-  );
   copyNativeFileIfCompatible(
     path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", `build_mnncli_${platformArch}`, "mnncli"),
     path.join(mobiinferDir, "mnncli"),
@@ -370,23 +451,17 @@ function prepareLinuxRuntimeResources() {
 
   copyTargetHdcRuntime(hdcDir);
 
-  for (const directory of [mnnDir, mobiinferDir, hdcDir]) {
+  for (const directory of [mobiinferDir, hdcDir]) {
     ensureGitkeep(directory);
   }
 }
 
 function prepareDarwinRuntimeResources() {
-  const mnnDir = path.join(resourcesRoot, "mnn");
   const mobiinferDir = path.join(resourcesRoot, "mobiinfer");
   const llamaCppDir = path.join(resourcesRoot, "llama-cpp");
   const hdcDir = path.join(resourcesRoot, "hdc");
   const platformArch = `darwin-${targetArch}`;
 
-  copyNativeFileIfCompatible(
-    path.join(repoRoot, "3rdparty", "MNN", "apps", "mnncli", "build_mnncli", "mnncli"),
-    path.join(mnnDir, "mnncli"),
-    "MNN executable"
-  );
   copyNativeFileIfCompatible(
     path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", `build_mnncli_${platformArch}`, "mnncli"),
     path.join(mobiinferDir, "mnncli"),
@@ -427,7 +502,7 @@ function prepareDarwinRuntimeResources() {
 
   copyTargetHdcRuntime(hdcDir);
 
-  for (const directory of [mnnDir, mobiinferDir, hdcDir]) {
+  for (const directory of [mobiinferDir, hdcDir]) {
     ensureGitkeep(directory);
   }
 }
@@ -442,9 +517,8 @@ copyDir(frontendDist, packagedFrontend);
 copyDir(configsRoot, packagedConfigs);
 fs.rmSync(packagedExampleImages, { recursive: true, force: true });
 fs.mkdirSync(packagedExampleImages, { recursive: true });
-fs.copyFileSync(path.join(exampleImagesRoot, "taobao_full_1.jpg"), path.join(packagedExampleImages, "taobao_full_1.jpg"));
+fs.copyFileSync(path.join(exampleImagesRoot, "taobao_1_4.jpg"), path.join(packagedExampleImages, "taobao_1_4.jpg"));
 fs.mkdirSync(packagedBackend, { recursive: true });
-fs.mkdirSync(path.join(resourcesRoot, "mnn"), { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "mobiinfer"), { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "llama-cpp"), { recursive: true });
 fs.mkdirSync(path.join(resourcesRoot, "llama-cpp", "cpu"), { recursive: true });
@@ -455,6 +529,9 @@ seedBackendExecutable();
 
 if (targetPlatform === "linux") {
   prepareLinuxRuntimeResources();
+}
+if (targetPlatform === "win32") {
+  prepareWindowsRuntimeResources();
 }
 if (targetPlatform === "darwin") {
   prepareDarwinRuntimeResources();
@@ -476,16 +553,6 @@ if (!fs.existsSync(backendExecutable)) {
   console.warn(message);
 } else {
   assertNativeExecutableForTarget(backendExecutable, targetPlatform, "Backend executable");
-}
-
-const mnnExecutable = path.join(resourcesRoot, "mnn", expectedExecutableName("mnncli"));
-if (!fs.existsSync(mnnExecutable)) {
-  const message =
-    `MNN executable not found: ${mnnExecutable}\n` +
-    `Build MNN mnncli and copy it to ${path.relative(desktopRoot, path.join(resourcesRoot, "mnn"))} before packaging.`;
-  console.warn(message);
-} else {
-  assertNativeExecutableForTarget(mnnExecutable, targetPlatform, "MNN executable");
 }
 
 const mobiinferExecutable = path.join(resourcesRoot, "mobiinfer", expectedExecutableName("mnncli"));

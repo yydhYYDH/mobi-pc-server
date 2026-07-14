@@ -56,9 +56,6 @@ PYINSTALLER_ARGS=(
   --add-data "app/legacy/wechat_collect:app/legacy/wechat_collect"
 )
 
-if [[ -f "app/legacy/screen.jpeg" ]]; then
-  PYINSTALLER_ARGS+=(--add-data "app/legacy/screen.jpeg:app/legacy")
-fi
 
 "$PYTHON_BIN" -m PyInstaller "${PYINSTALLER_ARGS[@]}" app/main.py
 

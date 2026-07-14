@@ -181,7 +181,7 @@ $MnnConfigureArgs += $GeneratorArgs
 $MnnConfigureArgs += $ExtraCMakeArgs
 Invoke-Checked cmake -BuildDir $MnnBuildDir @MnnConfigureArgs
 
-Invoke-Checked cmake -BuildDir $MnnBuildDir "--build" $MnnBuildDir "--config" $BuildType
+Invoke-Checked cmake -BuildDir $MnnBuildDir "--build" $MnnBuildDir "--config" $BuildType "--target" "MNN"
 
 $MnnLib = Find-FirstFile -Root $MnnBuildDir -Filter "MNN.lib"
 if (-not $MnnLib) {
@@ -206,7 +206,7 @@ $MnnCliConfigureArgs += $GeneratorArgs
 $MnnCliConfigureArgs += $ExtraCMakeArgs
 Invoke-Checked cmake -BuildDir $MnnCliBuildDir @MnnCliConfigureArgs
 
-Invoke-Checked cmake -BuildDir $MnnCliBuildDir "--build" $MnnCliBuildDir "--config" $BuildType
+Invoke-Checked cmake -BuildDir $MnnCliBuildDir "--build" $MnnCliBuildDir "--config" $BuildType "--target" "mnncli"
 
 $MnnCliExe = Find-FirstFile -Root $MnnCliBuildDir -Filter "mnncli.exe"
 if (-not $MnnCliExe) {

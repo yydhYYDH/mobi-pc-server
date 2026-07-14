@@ -106,23 +106,36 @@ cd ../desktop
 npm install
 ```
 
-不同平台、架构的原生运行时文件会放到独立 staging 目录：
+打包 HarmonyOS 设备功能还需要 `hdc`。可通过以下任一方式获取：
 
-```text
-desktop/resources-win-x64/
-desktop/resources-win-arm64/
-desktop/resources-linux-x64/
-desktop/resources-linux-arm64/
-desktop/resources-mac-x64/
-desktop/resources-mac-arm64/
+1. 安装 [DevEco Studio](https://developer.huawei.com/consumer/cn/deveco-studio/)，并通过其 SDK 管理器安装对应的 HarmonyOS SDK 和设备工具。
+2. 从华为官方 [DevEco Studio 资源与开发工具](https://developer.huawei.com/consumer/cn/deveco-studio/resources/) 下载 **Command Line Tools**，解压后取得 `hdc`。
+
+将 `hdc` 所在目录加入系统环境变量，或在打包前显式指定其路径。
+
+编译并加载submodule:
+
+初始化/更新两个 Git 子模块源码：
+```bash
+git submodule update --init --depth 1 3rdparty/mobiinfer 3rdparty/llama.cpp
 ```
+
+
+submodule 准备好后，可以尝试构建mobiinfer和llama.cpp：
+
+```bash
+./scripts/build-mobiinfer.sh
+./scripts/build-llama-cpp.sh
+```
+
+`build-mobiinfer.sh`脚本会执行两阶段流程：先构建 MobiInfer 静态库，再构建 `mnncli`。
 
 ### Windows x64
 
 在 Windows 原生 PowerShell 或 Developer PowerShell 里执行：
 
 ```powershell
-cd E:\WAIC\pc_server
+cd pc_server
 
 .\scripts\windows\build-backend.ps1
 .\scripts\windows\build-mobiinfer.ps1 -Architecture x64 -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
@@ -184,114 +197,7 @@ Linux arm64 把 `x64` 换成 `arm64`，资源目录换成 `desktop/resources-lin
 - macOS：[docs/packaging-macos.md](docs/packaging-macos.md)
 - Linux/WSL：[docs/packaging-linux.md](docs/packaging-linux.md)
 
-## 运行时后端
 
-当前产品可选后端为：
-
-- llama.cpp CUDA
-- llama.cpp CPU
-- MobiInfer
-
-## MobiInfer
-
-MobiInfer 作为独立运行时接入，用于加载 `runtime: "mobiinfer"` 的模型配置。
-
-初始化或重置 MobiInfer 时，使用浅拉取方式获取远端 `main` 的最新版本：
-
-```bash
-git submodule update --init --depth 1 3rdparty/mobiinfer
-git -C 3rdparty/mobiinfer fetch --depth 1 origin main
-git -C 3rdparty/mobiinfer checkout --detach FETCH_HEAD
-```
-
-如果你是第一次完整初始化第三方依赖，也可以一次性执行：
-
-```bash
-git submodule update --init --depth 1 3rdparty/mobiinfer 3rdparty/llama.cpp
-```
-
-后端默认查找：
-
-```text
-desktop/resources-linux-x64/mobiinfer/mnncli
-desktop/resources-linux-arm64/mobiinfer/mnncli
-desktop/resources-win-x64/mobiinfer/mnncli.exe
-desktop/resources-win-arm64/mobiinfer/mnncli.exe
-desktop/resources-mac-arm64/mobiinfer/mnncli
-desktop/resources-mac-x64/mobiinfer/mnncli
-3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_x64/mnncli
-3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_arm64/mnncli
-3rdparty/mobiinfer/apps/mnncli/build_mnncli_win_x64/mnncli.exe
-3rdparty/mobiinfer/apps/mnncli/build_mnncli_win_arm64/mnncli.exe
-3rdparty/mobiinfer/apps/mnncli/build_mnncli_darwin_arm64/mnncli
-3rdparty/mobiinfer/apps/mnncli/build_mnncli_darwin_x64/mnncli
-3rdparty/mobiinfer/apps/mnncli/build_mnncli/mnncli
-3rdparty/mobiinfer/apps/mnncli/build/mnncli
-3rdparty/mobiinfer/build/apps/mnncli/mnncli
-```
-
-如果二进制在其他位置，启动后端前设置：
-
-```bash
-MOBIINFER_BIN=/absolute/path/to/mnncli
-```
-
-submodule 准备好后，可以尝试：
-
-```bash
-./scripts/build-mobiinfer.sh
-```
-
-该脚本会执行两阶段流程：先构建 MobiInfer 静态库，再构建 `mnncli`。默认期望的二进制路径按平台和架构区分，例如 Linux x64 是：
-
-```text
-3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_x64/mnncli
-```
-
-更多集成说明见 [docs/mobiinfer.md](docs/mobiinfer.md)。
-
-## llama.cpp
-
-llama.cpp 作为 submodule 固定在项目记录的 commit：
-
-```text
-6eab47181cbd3532c88a105682b81b4729ab809b
-```
-
-初始化或重置 llama.cpp 时，显式 shallow fetch 这个 commit：
-
-```bash
-git submodule update --init 3rdparty/llama.cpp
-git -C 3rdparty/llama.cpp fetch --depth 1 origin 6eab47181cbd3532c88a105682b81b4729ab809b
-git -C 3rdparty/llama.cpp checkout --detach 6eab47181cbd3532c88a105682b81b4729ab809b
-```
-
-前端默认使用 llama.cpp 兜底后端。页面顶部和推理服务页可在 llama.cpp CUDA、llama.cpp CPU、MobiInfer 之间切换；CUDA/CPU 选项会按后端探测到的二进制动态显示。后端默认查找：
-
-```text
-3rdparty/llama.cpp/build/bin/llama-server
-3rdparty/llama.cpp/build/bin/server
-```
-
-如果二进制在其他位置，启动后端前设置：
-
-```bash
-LLAMA_SERVER_BIN=/absolute/path/to/llama-server
-```
-
-CUDA 构建、模型下载和测试步骤见 [docs/llama-cpp.md](docs/llama-cpp.md)。
-
-默认 CUDA 构建可直接执行：
-
-```bash
-./scripts/build-llama-cpp.sh
-```
-
-默认产物路径是：
-
-```text
-3rdparty/llama.cpp/build-cuda-native/bin/llama-server
-```
 
 ## 模型
 

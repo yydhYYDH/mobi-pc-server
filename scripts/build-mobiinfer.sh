@@ -41,14 +41,14 @@ cmake -S "$MOBIINFER_DIR" -B "$MNN_BUILD_DIR" \
   -DMNN_SEP_BUILD=OFF \
   -DMNN_USE_OPENCV=ON \
 
-cmake --build "$MNN_BUILD_DIR" --parallel
+cmake --build "$MNN_BUILD_DIR" --target MNN -j8
 
 cmake -S "$MNNCLI_DIR" -B "$MNNCLI_BUILD_DIR" \
   -DCMAKE_BUILD_TYPE=Release \
   -DMNN_BUILD_DIR="$MNN_BUILD_DIR" \
   -DMNN_SOURCE_DIR="$MOBIINFER_DIR"
 
-cmake --build "$MNNCLI_BUILD_DIR" --parallel
+cmake --build "$MNNCLI_BUILD_DIR" --target mnncli -j8
 
 echo "MNNConvert:"
 find "$MNN_BUILD_DIR" -maxdepth 3 -name MNNConvert | sed -n '1,5p'

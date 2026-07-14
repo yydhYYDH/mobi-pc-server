@@ -17,10 +17,6 @@ extraResources:
     to: example-images
   - from: ${env.PC_SERVER_DESKTOP_RESOURCES}/backend
     to: backend
-  - from: ${env.PC_SERVER_DESKTOP_RESOURCES}/mnn
-    to: mnn
-    filter:
-      - "**/*"
   - from: ${env.PC_SERVER_DESKTOP_RESOURCES}/mobiinfer
     to: mobiinfer
     filter:

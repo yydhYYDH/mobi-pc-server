@@ -1,5 +1,5 @@
 import { Menu, app, BrowserWindow, shell } from "electron";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
@@ -218,7 +218,6 @@ function childEnv(): NodeJS.ProcessEnv {
     ...process.env,
     FORCE_COLOR: "0",
     HDC_BIN: process.env.HDC_BIN || path.join(hdcDir, process.platform === "win32" ? "hdc.exe" : "hdc"),
-    MNNCLI_BIN: path.join(resourcesPath, "mnn", process.platform === "win32" ? "mnncli.exe" : "mnncli"),
     MOBIINFER_BIN: path.join(resourcesPath, "mobiinfer", process.platform === "win32" ? "mnncli.exe" : "mnncli"),
     PATH: pathValue,
     PC_SERVER_BACKEND_HOST: BACKEND_HOST,
@@ -269,11 +268,24 @@ async function startFrontendDevServer(): Promise<void> {
 }
 
 function stopBackend(): void {
+  if (process.platform === "win32") {
+    // One-file PyInstaller backends can leave a child process behind; clear the whole tree.
+    const result = spawnSync("taskkill", ["/IM", "pc-server-backend.exe", "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true
+    });
+    if (result.error) {
+      console.warn("[backend] unable to terminate pc-server-backend.exe processes", result.error);
+    }
+    backendProcess = undefined;
+    return;
+  }
+
   if (!backendProcess || backendProcess.killed) {
     return;
   }
 
-  backendProcess.kill(process.platform === "win32" ? undefined : "SIGTERM");
+  backendProcess.kill("SIGTERM");
   backendProcess = undefined;
 }
 
@@ -568,6 +580,10 @@ async function quitGracefully(): Promise<void> {
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   await startFrontendDevServer();
+
+  if (app.isPackaged && !SKIP_BACKEND) {
+    stopBackend();
+  }
 
   if (app.isPackaged && !SKIP_BACKEND && !process.env.PC_SERVER_BACKEND_PORT && !(await isPortFree(backendPort))) {
     const occupiedPort = backendPort;
