@@ -66,22 +66,27 @@ npm run dev
 
 ## 打包
 
-打包前先安装前端和桌面端依赖：
+打包 HarmonyOS 设备功能需要 `hdc`。可通过以下任一方式获取：
 
+1. 安装 [DevEco Studio](https://developer.huawei.com/consumer/cn/deveco-studio/)，并通过其 SDK 管理器安装对应的 HarmonyOS SDK 和设备工具。
+2. 从华为官方 [DevEco Studio 资源与开发工具](https://developer.huawei.com/consumer/cn/deveco-studio/resources/) 下载 **Command Line Tools**，解压后取得 `hdc`。
+
+将 `hdc` 所在目录加入系统环境变量，或在打包前显式指定其路径。
+
+尝试一键运行脚本：
+* Linux/Mac:
 ```bash
-cd frontend
-npm install
-
-cd ../desktop
-npm install
+scripts/release.sh
 ```
 
-更详细说明见：
+* Win
 
+```bash
+scripts/windows/release.ps1
+```
+
+更多详细打包的信息见：
 - Windows：[docs/packaging-windows.md](docs/packaging-windows.md)
 - macOS：[docs/packaging-macos.md](docs/packaging-macos.md)
 - Linux/WSL：[docs/packaging-linux.md](docs/packaging-linux.md)
 
-## HarmonyOS 设备
-
-安装 `hdc` 并确保它在 `PATH` 中，然后通过后端 API 或前端设备面板查看已连接设备。

@@ -1,12 +1,7 @@
 Param(
   [ValidateSet("x64", "arm64")][String]$Architecture = "x64",
-  [Switch]$Cuda,
-  [Int]$CudaArch = 89,
-  [String]$OpenSslRoot,
   [String]$HdcBin,
-  [Switch]$SkipBackend,
-  [Switch]$SkipMobiInfer,
-  [Switch]$SkipLlamaCpp
+  [Switch]$SkipBackend
 )
 
 $ErrorActionPreference = "Stop"
@@ -62,12 +57,6 @@ if (-not $HdcBin) {
 if (-not $HdcBin -or -not (Test-Path $HdcBin)) {
   throw "hdc.exe was not found. Install DevEco Studio or Command Line Tools, then add hdc.exe to PATH or pass -HdcBin C:\path\to\hdc.exe."
 }
-if ($Cuda -and $Architecture -ne "x64") {
-  throw "CUDA packaging is supported only for Windows x64."
-}
-
-Require-Path (Join-Path $RootDir "3rdparty\mobiinfer\CMakeLists.txt") "MobiInfer source"
-Require-Path (Join-Path $RootDir "3rdparty\llama.cpp\CMakeLists.txt") "llama.cpp source"
 Require-Path (Join-Path $FrontendDir "package.json") "frontend package manifest"
 Require-Path (Join-Path $DesktopDir "package.json") "desktop package manifest"
 
@@ -79,25 +68,8 @@ if (-not $SkipBackend) {
   Invoke-Checked "Build backend" { & (Join-Path $RootDir "scripts\windows\build-backend.ps1") }
 }
 
-if (-not $SkipMobiInfer) {
-  $MobiInferArgs = @{ Architecture = $Architecture }
-  if ($OpenSslRoot) {
-    $MobiInferArgs.OpenSslRoot = $OpenSslRoot
-  }
-  Invoke-Checked "Build MobiInfer" { & (Join-Path $RootDir "scripts\windows\build-mobiinfer.ps1") @MobiInferArgs }
-}
-
-if (-not $SkipLlamaCpp) {
-  Invoke-Checked "Build llama.cpp CPU runtime" {
-    & (Join-Path $RootDir "scripts\windows\build-llama-cpp.ps1") -Mode cpu -Architecture $Architecture
-  }
-  if ($Cuda) {
-    Invoke-Checked "Build llama.cpp CUDA runtime" {
-      & (Join-Path $RootDir "scripts\windows\build-llama-cpp.ps1") -Mode cuda -Architecture $Architecture -CudaArch $CudaArch
-    }
-  }
-}
-
+Invoke-Checked "Install frontend dependencies" { Push-Location $FrontendDir; try { npm ci } finally { Pop-Location } }
+Invoke-Checked "Install desktop dependencies" { Push-Location $DesktopDir; try { npm ci } finally { Pop-Location } }
 Invoke-Checked "Build frontend" { Push-Location $FrontendDir; try { npm run build } finally { Pop-Location } }
 $DesktopBuildScript = if ($Architecture -eq "arm64") { "build-win-arm" } else { "build-win-x64" }
 Invoke-Checked "Package Windows $Architecture release" {
