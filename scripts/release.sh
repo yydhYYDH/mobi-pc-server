@@ -119,10 +119,20 @@ require_file() {
   [[ -e "$1" ]] || fail "missing $2: $1"
 }
 
+run() {
+  echo "+ $*"
+  "$@"
+}
+
 require_file "$ROOT_DIR/3rdparty/mobiinfer/CMakeLists.txt" "MobiInfer source"
 require_file "$ROOT_DIR/3rdparty/llama.cpp/CMakeLists.txt" "llama.cpp source"
 require_file "$ROOT_DIR/frontend/package.json" "frontend package manifest"
+require_file "$ROOT_DIR/frontend/package-lock.json" "frontend dependency lockfile"
 require_file "$ROOT_DIR/desktop/package.json" "desktop package manifest"
+require_file "$ROOT_DIR/desktop/package-lock.json" "desktop dependency lockfile"
+
+run npm --prefix "$ROOT_DIR/frontend" ci
+run npm --prefix "$ROOT_DIR/desktop" ci
 
 HDC_BIN="${!HDC_ENV_NAME:-${HDC_BIN:-}}"
 if [[ -z "$HDC_BIN" ]]; then
@@ -133,11 +143,6 @@ export "$HDC_ENV_NAME=$HDC_BIN"
 
 export PC_SERVER_DESKTOP_TARGET_PLATFORM="$TARGET_PLATFORM"
 export PC_SERVER_DESKTOP_TARGET_ARCH="$TARGET_ARCH"
-
-run() {
-  echo "+ $*"
-  "$@"
-}
 
 if [[ "$SKIP_BACKEND" -eq 0 ]]; then
   run "$ROOT_DIR/scripts/build-backend.sh"

@@ -49,6 +49,16 @@ if (-not $HdcBin) {
   $HdcBin = $env:HDC_BIN
 }
 
+Require-Path (Join-Path $RootDir "3rdparty\mobiinfer\CMakeLists.txt") "MobiInfer source"
+Require-Path (Join-Path $RootDir "3rdparty\llama.cpp\CMakeLists.txt") "llama.cpp source"
+Require-Path (Join-Path $FrontendDir "package.json") "frontend package manifest"
+Require-Path (Join-Path $FrontendDir "package-lock.json") "frontend dependency lockfile"
+Require-Path (Join-Path $DesktopDir "package.json") "desktop package manifest"
+Require-Path (Join-Path $DesktopDir "package-lock.json") "desktop dependency lockfile"
+
+Invoke-Checked "Install frontend dependencies" { Push-Location $FrontendDir; try { npm ci } finally { Pop-Location } }
+Invoke-Checked "Install desktop dependencies" { Push-Location $DesktopDir; try { npm ci } finally { Pop-Location } }
+
 if (-not $HdcBin) {
   $HdcCommand = Get-Command hdc.exe -ErrorAction SilentlyContinue
   if (-not $HdcCommand) {
@@ -65,11 +75,6 @@ if (-not $HdcBin -or -not (Test-Path $HdcBin)) {
 if ($Cuda -and $Architecture -ne "x64") {
   throw "CUDA packaging is supported only for Windows x64."
 }
-
-Require-Path (Join-Path $RootDir "3rdparty\mobiinfer\CMakeLists.txt") "MobiInfer source"
-Require-Path (Join-Path $RootDir "3rdparty\llama.cpp\CMakeLists.txt") "llama.cpp source"
-Require-Path (Join-Path $FrontendDir "package.json") "frontend package manifest"
-Require-Path (Join-Path $DesktopDir "package.json") "desktop package manifest"
 
 $env:PC_SERVER_DESKTOP_TARGET_ARCH = $Architecture
 $env:PC_SERVER_DESKTOP_TARGET_PLATFORM = "win32"
