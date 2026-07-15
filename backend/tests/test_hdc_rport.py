@@ -1,4 +1,5 @@
 import subprocess
+import threading
 
 import pytest
 
@@ -60,6 +61,66 @@ def test_ensure_rport_removes_stale_reverse_mapping_even_when_memory_ready(
     assert ["hdc", "-t", target, "fport", "ls"] in calls
     assert ["hdc", "-t", target, "fport", "rm", "tcp:15001", "tcp:18219"] in calls
     assert ["hdc", "-t", target, "rport", "tcp:15001", "tcp:18188"] in calls
+
+
+def test_manual_connect_usb_target_skips_tconn_and_builds_rports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = HdcService()
+    target = "4QE0225916013634"
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(service, "_hdc_path", lambda: "hdc")
+
+    def fake_run(args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args == ["hdc", "list", "targets"]:
+            return completed(args, stdout=f"{target}    Connected\n")
+        if args[-2:] == ["fport", "ls"]:
+            return completed(args)
+        return completed(args, stdout="ok")
+
+    monkeypatch.setattr(service, "_run", fake_run)
+
+    status = service._connect_sync(target, llm_port=8090)  # noqa: SLF001
+
+    assert status.pc_server_rport_ready is True
+    assert status.llm_rport_ready is True
+    assert ["hdc", "tconn", target] not in calls
+    assert ["hdc", "-t", target, "rport", "tcp:15001", "tcp:18188"] in calls
+    assert ["hdc", "-t", target, "rport", "tcp:8090", "tcp:8090"] in calls
+
+
+def test_manual_connect_is_queued_while_auto_connect_is_running(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = HdcService()
+    manual_finished = threading.Event()
+    completed_tasks: list[str] = []
+
+    monkeypatch.setattr(service, "_hdc_path", lambda: "hdc")
+    monkeypatch.setattr(service, "status", lambda: service._status_response(available=True, path="hdc"))  # noqa: SLF001
+
+    def manual_action():
+        completed_tasks.append("manual")
+        manual_finished.set()
+        return service._status_response(available=True, path="hdc", message="manual done")  # noqa: SLF001
+
+    service._connect_task_running = True  # noqa: SLF001
+    service._connect_task_label = "auto"  # noqa: SLF001
+
+    status = service._start_connect_task("manual", manual_action)  # noqa: SLF001
+
+    assert status.message == "Manual HDC connection is queued and will run after the current automatic search."
+    assert completed_tasks == []
+
+    service._run_connect_task(  # noqa: SLF001
+        "auto",
+        lambda: service._status_response(available=True, path="hdc", message="auto done"),  # noqa: SLF001
+    )
+
+    assert manual_finished.wait(timeout=2)
+    assert completed_tasks == ["manual"]
 
 
 def test_disconnect_usb_target_only_cleans_ports_without_tdisconn(
