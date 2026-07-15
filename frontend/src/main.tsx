@@ -113,10 +113,13 @@ function App() {
         if (cancelled) {
           return;
         }
-        const cuda = runtimes.find((runtime) => runtime.id === "llama_cpp_cuda" && runtime.available);
+        const llamaCppOptions = runtimes
+          .filter((runtime) => runtime.available)
+          .map((runtime) => ({ id: runtime.id, label: runtime.label }));
+        const cuda = llamaCppOptions.find((runtime) => runtime.id === "llama_cpp_cuda");
         const mobiInfer = BACKEND_OPTIONS.find((backend) => backend.id === "mobiinfer");
         const nextOptions = [
-          ...(cuda ? [{ id: cuda.id, label: cuda.label }] : []),
+          ...llamaCppOptions,
           ...(mobiInfer ? [mobiInfer] : [])
         ];
         setBackendOptions(nextOptions);
