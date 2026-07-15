@@ -82,6 +82,8 @@ class HdcService:
         self._logs = LogService()
         self._connect_task_lock = threading.Lock()
         self._connect_task_running = False
+        self._connect_task_label = ""
+        self._queued_connect_task = None
         self._connection_monitor_lock = threading.Lock()
         self._connection_monitor_thread: threading.Thread | None = None
         self._last_observed_connected_target = ""
@@ -185,10 +187,19 @@ class HdcService:
 
         with self._connect_task_lock:
             if self._connect_task_running:
+                if label == "manual" and self._connect_task_label == "auto":
+                    self._queued_connect_task = (label, action)
+                    status = self.status()
+                    status.message = (
+                        "Manual HDC connection is queued and will run after the current automatic search."
+                    )
+                    self._log_hdc("Queued manual HDC connection after running automatic search.")
+                    return status
                 status = self.status()
                 status.message = "HDC connection is already running in background."
                 return status
             self._connect_task_running = True
+            self._connect_task_label = label
 
         self._log_hdc(f"Started background HDC {label} connection task.")
         thread = threading.Thread(
@@ -210,12 +221,31 @@ class HdcService:
         except Exception as exc:
             self._log_hdc(f"Background HDC {label} connection task failed: {exc}")
         finally:
+            next_task = None
             with self._connect_task_lock:
-                self._connect_task_running = False
+                if self._queued_connect_task is not None:
+                    next_task = self._queued_connect_task
+                    self._queued_connect_task = None
+                    self._connect_task_running = True
+                    self._connect_task_label = next_task[0]
+                else:
+                    self._connect_task_running = False
+                    self._connect_task_label = ""
+            if next_task is not None:
+                next_label, next_action = next_task
+                self._log_hdc(f"Started queued HDC {next_label} connection task.")
+                thread = threading.Thread(
+                    target=self._run_connect_task,
+                    args=(next_label, next_action),
+                    name=f"hdc-{next_label}-connect",
+                    daemon=True,
+                )
+                thread.start()
 
     def _connect_sync(self, target: str, llm_port: int | None = None) -> HdcStatus:
         llm_port = self._normalize_port(llm_port)
-        if not target.strip():
+        target = target.strip()
+        if not target:
             return self._auto_connect_sync(llm_port=llm_port)
 
         hdc_path = self._hdc_path()
@@ -223,15 +253,26 @@ class HdcService:
             return self._status_response(available=False, message="hdc was not found on PATH.")
         self._ensure_origin_hdc_server()
 
-        result = self._run([hdc_path, "tconn", target.strip()], timeout=10)
-        if result is None:
+        if not self._parse_wireless_target(target):
             current = self._status_live()
-            if self._status_contains_target(current, target.strip()):
-                self._cache_target(target.strip())
-                self._log_hdc(f"Manual hdc tconn timed out but target is connected: {target.strip()}")
+            if self._status_contains_target(current, target):
+                self._log_hdc(f"Manual USB/local target already connected: {target}")
                 return self._with_llm_rport(
                     current,
-                    target.strip(),
+                    target,
+                    llm_port,
+                    "Using existing USB/local HDC target.",
+                )
+
+        result = self._run([hdc_path, "tconn", target], timeout=10)
+        if result is None:
+            current = self._status_live()
+            if self._status_contains_target(current, target):
+                self._cache_target(target)
+                self._log_hdc(f"Manual hdc tconn timed out but target is connected: {target}")
+                return self._with_llm_rport(
+                    current,
+                    target,
                     llm_port,
                     "HDC target connected after tconn timeout.",
                 )
@@ -242,15 +283,15 @@ class HdcService:
             )
         if result.returncode != 0:
             current = self._status_live()
-            if self._status_contains_target(current, target.strip()):
-                self._cache_target(target.strip())
+            if self._status_contains_target(current, target):
+                self._cache_target(target)
                 message = result.stderr.strip() or result.stdout.strip() or "hdc connect returned non-zero"
                 self._log_hdc(
-                    f"Manual hdc tconn returned non-zero but target is connected: {target.strip()}. {message}"
+                    f"Manual hdc tconn returned non-zero but target is connected: {target}. {message}"
                 )
                 return self._with_llm_rport(
                     current,
-                    target.strip(),
+                    target,
                     llm_port,
                     "HDC target connected despite tconn error.",
                 )
@@ -260,10 +301,10 @@ class HdcService:
                 message=result.stderr.strip() or result.stdout.strip() or "hdc connect failed.",
             )
         current = self._status_live()
-        self._cache_target(target.strip())
-        message = result.stdout.strip() or f"Connected to {target.strip()}."
-        self._log_hdc(f"Manual hdc tconn succeeded: {target.strip()}. {message}")
-        return self._with_llm_rport(current, target.strip(), llm_port, message)
+        self._cache_target(target)
+        message = result.stdout.strip() or f"Connected to {target}."
+        self._log_hdc(f"Manual hdc tconn succeeded: {target}. {message}")
+        return self._with_llm_rport(current, target, llm_port, message)
 
     def _auto_connect_sync(self, llm_port: int | None = None) -> HdcStatus:
         llm_port = self._normalize_port(llm_port)
