@@ -1,272 +1,67 @@
 # macOS 打包说明
 
-本文档说明如何生成你的智伴的 macOS 发布包。首版支持两个独立架构包：
-
-- Intel Mac：`x64`
-- Apple Silicon：`arm64`
-
-当前不生成 universal 包。后端、MobiInfer、llama.cpp、hdc 都是原生二进制，分别出包更容易验证，也能避免混入错误架构的运行时文件。
-
-## 产物结构
-
-macOS 包使用独立资源目录：
-
-```text
-desktop/resources-mac-arm64/
-desktop/resources-mac-x64/
-```
-
-每个目录的结构是：
-
-```text
-desktop/resources-mac-<arch>/
-  frontend/                 由 frontend/dist 自动复制
-  configs/                  由 configs/ 自动复制
-  example-images/           示例图片资源
-  backend/
-    pc-server-backend       macOS 后端可执行文件
-  mobiinfer/
-    mnncli                  macOS 版 MobiInfer 命令行/服务程序
-  llama-cpp/
-    cpu/
-      llama-server          macOS 版 llama.cpp OpenAI 兼容服务
-  hdc/
-    hdc                     macOS 版 hdc
-```
-
-Electron Builder 会把选中的 `desktop/resources-mac-<arch>/` 复制到最终 `.app` 的 `Contents/Resources/` 目录。
-
-运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入 `.app`。打包版会使用 `~/Library/Application Support/ClawMate`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
+本文档说明如何构建你的智伴 macOS 发布包。当前分别生成 Intel (`x64`) 和 Apple Silicon (`arm64`) 安装包，不生成 universal 包。
 
 ## 前置要求
 
-建议安装：
-
 - Node.js 20 或更新版本。
-- Python 3.11 或 3.12。发布包不建议使用过新的 Python 预览版本。
-- Xcode Command Line Tools。
-- CMake。
-- Ninja，可选但推荐。
-- Git。
+- Python 3.11 或 3.12。
+- Git 和 Git LFS。
+- HarmonyOS `hdc`。可通过 DevEco Studio 或 Command Line Tools 获取。
 
-检查命令：
+在仓库根目录拉取由 Git LFS 管理的 llama.cpp 二进制文件：
 
 ```bash
-node --version
-npm --version
-python3 --version
-xcode-select -p
-cmake --version
-git --version
+git lfs pull
 ```
 
-如果缺少 Xcode Command Line Tools：
+将 `hdc` 所在目录加入 `PATH`。也可以通过 `HDC_BIN_DARWIN` 指定其实际路径。
+
+## 准备原生运行时
+
+发布脚本会自动从 `3rdparty` 收集原生运行时，生成 `desktop/resources-mac-<arch>/` staging 目录。请勿手动维护该输出目录。
+
+- llama.cpp：参见 [`3rdparty/llama.cpp/README.md`](../3rdparty/llama.cpp/README.md)。仓库仅提供部分预编译文件；缺失的平台或架构请自行编译，并将同一次构建生成的完整 `bin` 目录放到约定位置。
+- MobiInfer：参见 [`3rdparty/mobiinfer/apps/README.md`](../3rdparty/mobiinfer/apps/README.md)。本仓库不提供源码；缺失的平台或架构请自行取得兼容的 `mnncli` 二进制文件。
+
+macOS 不使用 CUDA。Metal 或 CPU 版 llama.cpp 运行时均由打包脚本放入 `llama-cpp/cpu/`。
+
+## 构建安装包
+
+从仓库根目录运行。Apple Silicon：
 
 ```bash
-xcode-select --install
-```
-
-如果缺少 CMake，可用 Homebrew 安装：
-
-```bash
-brew install cmake ninja
-```
-
-## 1. 安装前端和 Electron 依赖
-
-在项目根目录执行：
-
-```bash
-cd frontend
-npm ci
-
-cd ../desktop
-npm ci
-```
-
-## 2. 生成 macOS 后端可执行文件
-
-后端使用 PyInstaller 生成 `pc-server-backend`。建议为发布包准备独立虚拟环境：
-
-```bash
-cd backend
-python3.11 -m venv .venv
-source .venv/bin/activate
-python -m pip install -U pip
-pip install -e .
-pip install pyinstaller
-```
-
-生成 Apple Silicon 后端：
-
-```bash
-cd ..
-PC_SERVER_DESKTOP_TARGET_PLATFORM=darwin \
-PC_SERVER_DESKTOP_TARGET_ARCH=arm64 \
-./scripts/build-backend.sh
-```
-
-成功后应该出现：
-
-```text
-backend/dist/pc-server-backend
-desktop/resources-mac-arm64/backend/pc-server-backend
-```
-
-生成 Intel 后端：
-
-```bash
-# Run from the repository root.
-PC_SERVER_DESKTOP_TARGET_PLATFORM=darwin \
-PC_SERVER_DESKTOP_TARGET_ARCH=x64 \
-./scripts/build-backend.sh
-```
-
-成功后应该出现：
-
-```text
-desktop/resources-mac-x64/backend/pc-server-backend
-```
-
-注意：`PC_SERVER_DESKTOP_TARGET_ARCH` 只决定复制到哪个资源目录。PyInstaller 产物仍取决于当前 Python 解释器和运行环境。如果在 Apple Silicon 上生成 Intel 后端，需要使用 x64 Python/Rosetta 环境，或在 Intel Mac 上构建。
-
-正式执行 `npm run build-mac-*` 前必须先生成对应架构的后端可执行文件；缺少 `pc-server-backend` 时资源准备脚本会中止。
-
-## 3. 准备 llama.cpp
-
-不在本仓库构建 `llama.cpp`。取得目标 macOS 架构的预编译运行时后，复制 `llama-server` 及其全部 `.dylib` 依赖到：
-
-```text
-desktop/resources-mac-arm64/llama-cpp/cpu/
-desktop/resources-mac-x64/llama-cpp/cpu/
-```
-
-macOS 不使用 CUDA；Metal 版或 CPU 版均放在 `cpu/` 目录。运行时文件必须与目标架构一致，且保留可执行权限。
-
-## 4. 准备 MobiInfer
-
-不在本仓库构建 MobiInfer。将目标 macOS 架构的预编译 `mnncli` 及其运行所需的动态库直接复制到：
-
-```text
-desktop/resources-mac-arm64/mobiinfer/mnncli
-desktop/resources-mac-x64/mobiinfer/mnncli
-```
-
-复制后确认 `mnncli` 保留可执行权限。不要将 Intel 和 Apple Silicon 的二进制或动态库混用。
-
-## 5. 准备 hdc
-
-如果 `hdc` 已经在 `PATH` 中，资源准备脚本会尝试复制它。也可以手动放到：
-
-```text
-desktop/resources-mac-arm64/hdc/hdc
-desktop/resources-mac-x64/hdc/hdc
-```
-
-检查：
-
-```bash
-hdc version
-```
-
-如果不内置 `hdc`，应用仍会尝试使用目标机器 `PATH` 中的 `hdc`。
-
-## 6. 生成 macOS 包
-
-Apple Silicon：
-
-```bash
-cd desktop
-npm run build-mac-arm
+scripts/release.sh --arch arm64
 ```
 
 Intel：
 
 ```bash
-cd desktop
-npm run build-mac-x64
+scripts/release.sh --arch x64
 ```
 
-兼容旧命令仍可使用：`npm run dist:mac:arm64` 和 `npm run dist:mac:x64`。
+若 `hdc` 未加入 `PATH`：
 
-产物在：
+```bash
+HDC_BIN_DARWIN=/path/to/hdc scripts/release.sh --arch arm64
+```
+
+脚本会构建后端、执行前端和桌面端的 `npm ci`、构建前端并生成安装包。产物位于：
 
 ```text
 desktop/release/
 ```
 
-常见文件名：
+后端和原生运行时必须与目标架构一致。Apple Silicon 上构建 Intel 包时，应使用 Intel Mac 或 Rosetta x64 Python/工具链；仅传入 `--arch x64` 不会将当前 arm64 Python 生成的后端转换为 x64。
 
-```text
-ClawMate-0.2.0-mac-arm64.dmg
-ClawMate-0.2.0-mac-arm64.zip
-ClawMate-0.2.0-mac-x64.dmg
-ClawMate-0.2.0-mac-x64.zip
-```
+## 发布说明
 
-## 7. 验证
+当前本地打包跳过 macOS 代码签名。未签名或未公证的应用可能被 Gatekeeper 阻止打开；对外发布需要配置 Apple Developer ID、Hardened Runtime、entitlements 和 notarization。
 
-解包后检查 `.app` 内容：
+## 仅重新打包
+
+已生成正确架构的后端可执行文件时，可跳过后端构建：
 
 ```bash
-APP="desktop/release/mac-arm64/ClawMate.app"
-test -f "$APP/Contents/Resources/backend/pc-server-backend"
-test -f "$APP/Contents/Resources/frontend/index.html"
-test -f "$APP/Contents/Resources/configs/models.json"
-test -d "$APP/Contents/Resources/llama-cpp"
+scripts/release.sh --arch arm64 --skip-backend
 ```
-
-启动应用后，确认：
-
-- 窗口能打开。
-- 后端健康检查可用：`/api/health` 返回成功。
-- 推理服务页能识别已打包的 llama.cpp 或 MobiInfer 二进制。
-- 设备页能识别内置或系统 `PATH` 中的 `hdc`。
-
-## 签名和公证
-
-当前 `desktop/electron-builder.yml` 使用：
-
-```yaml
-mac:
-  identity: null
-```
-
-这表示本地打包时跳过签名，适合开发和内部验证。正式对外分发需要：
-
-- Apple Developer ID Application 证书。
-- Hardened Runtime。
-- entitlements 配置。
-- Apple notarization。
-
-未公证的包在其他机器上可能被 Gatekeeper 阻止打开。
-
-## 常见问题
-
-### 在 Apple Silicon 上打 Intel 包能不能直接可用
-
-Electron 壳可以通过 `electron-builder --mac --x64` 获取 x64 Electron 运行时，但后端和原生推理二进制仍需要 x64 产物。建议在 Intel Mac 或 Rosetta x64 工具链中构建这些二进制。
-
-### 缺少 CMake
-
-如果看到：
-
-```text
-cmake was not found on PATH.
-```
-
-安装 CMake：
-
-```bash
-brew install cmake ninja
-```
-
-### 应用启动后后端不可用
-
-优先检查：
-
-```text
-Contents/Resources/backend/pc-server-backend
-```
-
-如果文件不存在，先重新运行对应架构的后端构建命令。

@@ -241,6 +241,37 @@ function patchDarwinRuntimeRpaths(directory) {
   }
 }
 
+function patchLinuxRuntimeRpaths(directory) {
+  if (targetPlatform !== "linux" || !fs.existsSync(directory)) {
+    return;
+  }
+
+  const files = fs
+    .readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join(directory, entry.name));
+  if (files.length === 0) {
+    return;
+  }
+
+  const version = spawnSync("patchelf", ["--version"], { encoding: "utf8" });
+  if (version.error || version.status !== 0) {
+    throw new Error("patchelf is required to package Linux llama.cpp runtimes; install it and retry.");
+  }
+
+  for (const file of files) {
+    const probe = spawnSync("patchelf", ["--print-rpath", file], { stdio: "ignore" });
+    if (probe.status !== 0) {
+      continue;
+    }
+
+    const result = spawnSync("patchelf", ["--set-rpath", "$ORIGIN", file], { stdio: "inherit" });
+    if (result.error || result.status !== 0) {
+      throw new Error(`Failed to set the Linux runtime RPATH for ${file}`);
+    }
+  }
+}
+
 function findOnPath(executable) {
   for (const segment of (process.env.PATH ?? "").split(path.delimiter)) {
     if (!segment) {
@@ -423,6 +454,19 @@ function prepareLinuxRuntimeResources() {
   const platformArch = `linux-${targetArch}`;
 
   copyNativeFileIfCompatible(
+    path.join(
+      repoRoot,
+      "3rdparty",
+      "mobiinfer",
+      "apps",
+      "mnncli",
+      `build_mnncli_${platformArch.replace("-", "_")}`,
+      "mnncli"
+    ),
+    path.join(mobiinferDir, "mnncli"),
+    "MobiInfer executable"
+  ) ||
+    copyNativeFileIfCompatible(
     path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", `build_mnncli_${platformArch}`, "mnncli"),
     path.join(mobiinferDir, "mnncli"),
     "MobiInfer executable"
@@ -449,6 +493,9 @@ function prepareLinuxRuntimeResources() {
       path.join(llamaCppDir, "cuda")
     );
 
+  patchLinuxRuntimeRpaths(path.join(llamaCppDir, "cpu"));
+  patchLinuxRuntimeRpaths(path.join(llamaCppDir, "cuda"));
+
   copyTargetHdcRuntime(hdcDir);
 
   for (const directory of [mobiinferDir, hdcDir]) {
@@ -463,6 +510,19 @@ function prepareDarwinRuntimeResources() {
   const platformArch = `darwin-${targetArch}`;
 
   copyNativeFileIfCompatible(
+    path.join(
+      repoRoot,
+      "3rdparty",
+      "mobiinfer",
+      "apps",
+      "mnncli",
+      `build_mnncli_${platformArch.replace("-", "_")}`,
+      "mnncli"
+    ),
+    path.join(mobiinferDir, "mnncli"),
+    "MobiInfer executable"
+  ) ||
+    copyNativeFileIfCompatible(
     path.join(repoRoot, "3rdparty", "mobiinfer", "apps", "mnncli", `build_mnncli_${platformArch}`, "mnncli"),
     path.join(mobiinferDir, "mnncli"),
     "MobiInfer executable"

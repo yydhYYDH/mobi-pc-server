@@ -451,6 +451,45 @@ pre::-webkit-scrollbar {
   border-top-color: #ffffff;
 }
 
+.readiness-device-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgb(37 99 235 / 16%);
+  border-radius: 16px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  padding: 12px 13px;
+}
+
+.readiness-device-help div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.readiness-device-help strong {
+  font-size: 13px;
+}
+
+.readiness-device-help p {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.readiness-device-help button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  border: 0;
+  background: #ffffff;
+  color: var(--brand);
+  font-size: 13px;
+  padding: 0 12px;
+}
+
 .readiness-summary {
   display: grid;
   gap: 6px;
@@ -1989,6 +2028,15 @@ pre {
   }
 
   .readiness-primary {
+    width: 100%;
+  }
+
+  .readiness-device-help {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .readiness-device-help button {
     width: 100%;
   }
 
