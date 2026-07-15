@@ -4,6 +4,23 @@ PC 侧控制台应用，用于启动和管理本地推理服务、从 ModelScope
 
 英文版 README 保留在 [README.en.md](README.en.md)。
 
+## 安装
+
+请先从 `desktop/release/` 获取对应平台安装包：
+
+- Windows：运行 `.exe` 安装包。
+- macOS：打开 `.dmg` 或解压 `.zip`，将应用拖入 Applications。
+- Linux：给 `.AppImage` 添加执行权限后直接运行。
+
+Linux 示例：
+
+```bash
+chmod +x ClawMate-*-linux-*.AppImage
+./ClawMate-*-linux-*.AppImage
+```
+
+安装后首次启动会把随包配置复制到用户数据目录。模型文件、日志和缓存会保存在系统用户数据目录，覆盖安装或升级应用时不会写入安装目录。
+
 ## 技术栈
 
 - 前端：React + Vite + TypeScript

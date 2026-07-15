@@ -89,7 +89,7 @@ withTempDir((root) => {
     legacyDataRoots: [legacyRoot]
   });
 
-  assert.equal(fs.readFileSync(path.join(configsDir, "models.json"), "utf8"), "[{\"id\":\"user\"}]\n");
+  assert.equal(fs.readFileSync(path.join(configsDir, "models.json"), "utf8"), "[{\"id\":\"bundled\"}]\n");
   assert.equal(
     fs.readFileSync(path.join(configsDir, "nested", "default.json"), "utf8"),
     "{\"ok\":true}\n"
@@ -102,6 +102,14 @@ withTempDir((root) => {
     fs.readFileSync(path.join(dataRoot, "logs", "backend.log"), "utf8"),
     "legacy log"
   );
+
+  initializePersistentData({
+    bundledConfigsDir: bundledConfigs,
+    configsDir,
+    dataRoot,
+    legacyDataRoots: [legacyRoot]
+  });
+  assert.equal(fs.readFileSync(path.join(configsDir, "models.json"), "utf8"), "[{\"id\":\"bundled\"}]\n");
 });
 
 console.log("persistent data tests passed");

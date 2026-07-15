@@ -133,6 +133,17 @@ export function OverviewView(props: {
     }
   }[state];
   const isSearchingDevice = state === "device-missing" && props.autoDiscovering;
+  const [showDiscoveryHelp, setShowDiscoveryHelp] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isSearchingDevice) {
+      setShowDiscoveryHelp(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setShowDiscoveryHelp(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [isSearchingDevice]);
 
   function runPrimaryAction() {
     if (state === "hdc-missing") {
@@ -177,6 +188,16 @@ export function OverviewView(props: {
         {isSearchingDevice ? <span className="inline-spinner" /> : null}
         {content.primary}
       </button>
+
+      {showDiscoveryHelp ? (
+        <div className="readiness-device-help">
+          <div>
+            <strong>暂未发现设备</strong>
+            <p>若长时间未连接，可以使用 USB 连接手机，或在无线调试开启后输入 IP 和端口手动连接。</p>
+          </div>
+          <button onClick={props.onOpenDevices}>去设备页连接</button>
+        </div>
+      ) : null}
 
       <div className="readiness-summary">
         <div className={hdcConnected ? "ready" : hdcAvailable ? "pending" : "blocked"}>
@@ -305,7 +326,7 @@ export function OverviewView(props: {
 
       <div className="readiness-links">
         {hdcAvailable ? <button onClick={() => setManualOpen((open) => !open)}>{hdcConnected ? "切换连接" : "手动连接"}</button> : null}
-        {hdcConnected ? <button onClick={props.onOpenDevices}>设备详情</button> : null}
+        {hdcAvailable ? <button onClick={props.onOpenDevices}>{hdcConnected ? "设备详情" : "设备连接"}</button> : null}
         <button onClick={props.onOpenModels}>管理模型</button>
         <button onClick={props.onOpenServer}>AI 详情</button>
         <button onClick={props.onOpenLogs}>查看日志</button>

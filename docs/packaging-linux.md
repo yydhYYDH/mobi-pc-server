@@ -1,269 +1,183 @@
 # Linux 打包说明
 
-本文档说明如何在 Linux 或 WSL 环境里打包你的智伴的 Linux 版本。
-
-## 产物结构
-
-Linux 包使用 Electron Builder，运行时资源按架构隔离。x64 运行时资源来自：
-
-```text
-desktop/resources-linux-x64/
-  frontend/               由 frontend/dist 自动复制
-  backend/
-    pc-server-backend     Linux 后端可执行文件
-  mobiinfer/
-    mnncli                Linux 版 MobiInfer 命令行/服务程序
-    *.so                  其他 MobiInfer 运行所需动态库
-  llama-cpp/
-    cpu/
-      llama-server        Linux CPU 版 llama.cpp OpenAI 兼容服务
-    cuda/
-      llama-server        Linux CUDA 版 llama.cpp OpenAI 兼容服务
-  hdc/
-    hdc                   Linux 版 hdc
-```
-
-arm64 使用同样结构的 `desktop/resources-linux-arm64/`。Electron Builder 会把选中的 `desktop/resources-linux-<arch>/` 复制到最终应用的 `resources/` 目录。
-
-运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入安装目录或 AppImage 挂载目录。打包版会使用 `$XDG_CONFIG_HOME/ClawMate` 或 `~/.config/ClawMate`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
+本文档说明如何在 Linux 或 WSL 环境中从源码构建 Linux 发布包。`backend`、`mobiinfer`、`llama.cpp` 都需要在目标平台源码构建，不能直接复用 Windows 或 macOS 的二进制文件。
 
 ## 前置要求
 
-建议安装：
-
 - Node.js 20 或更新版本。
-- Python 3.10 或更新版本。
-- CMake。
+- Python 3.11 或 3.12。
+- Git、CMake。
 - Ninja 或 Make。
-- Git。
-
-检查命令：
+- `patchelf`，用于将 llama.cpp 的运行时库路径修正为包内相对路径。
+- 可构建 C/C++ 原生项目的编译器工具链。
+- HarmonyOS `hdc`，可通过 DevEco Studio 或 Command Line Tools 获取。
+- CUDA Toolkit，仅在构建 CUDA 版 llama.cpp 时需要。
 
 ```bash
 node --version
-npm --version
 python3 --version
-cmake --version
 git --version
+cmake --version
+patchelf --version
 ```
 
-如果在 WSL 里运行 Electron 开发窗口，系统还需要可用的图形环境和中文字体。DBus 相关日志在 WSL 里较常见，不一定代表应用启动失败。
-
-## 1. 安装依赖
+Ubuntu/Debian 可通过下面的命令安装 `patchelf`：
 
 ```bash
-cd /mnt/e/WAIC/pc_server
-
-cd frontend
-npm install
-
-cd ../desktop
-npm install
+sudo apt install patchelf
 ```
 
-后端虚拟环境：
+## 初始化源码子模块
+
+在仓库根目录执行：
 
 ```bash
-cd ../backend
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -U pip
-pip install -e .
-pip install pyinstaller
+git submodule update --init --depth 1 3rdparty/mobiinfer 3rdparty/llama.cpp
 ```
 
-## 2. 生成 Linux 后端可执行文件
+MobiInfer 和 llama.cpp 都由本仓库的打包流程从子模块源码构建。
 
-在项目根目录执行：
+## 资源目录
 
-```bash
-cd /mnt/e/WAIC/pc_server
-./scripts/build-backend.sh
-```
-
-成功后应该出现：
+Linux x64 的桌面端资源会进入：
 
 ```text
-backend/dist/pc-server-backend
-desktop/resources-linux-x64/backend/pc-server-backend
+desktop/resources-linux-x64/
+  backend/                  pc-server-backend
+  mobiinfer/                mnncli
+  llama-cpp/cpu/            llama-server；如上游构建产生 .so，也会放在这里
+  llama-cpp/cuda/           CUDA 版 llama-server；如上游构建产生 .so，也会放在这里，可选
+  hdc/                      hdc
+  frontend/                 frontend/dist
 ```
 
-如果要指定 Python：
+arm64 使用 `desktop/resources-linux-arm64/`。这些目录是打包阶段产物，可以删除后重新生成，不建议手动长期维护。
+
+## 一键打包
+
+把 `hdc` 所在目录加入 `PATH`，或通过 `HDC_BIN_LINUX` 指定实际路径。
+
+x64 CPU 包：
 
 ```bash
-PC_SERVER_PYTHON=/absolute/path/to/python ./scripts/build-backend.sh
+scripts/release.sh --arch x64
 ```
 
-如果在 macOS 上生成 Linux x64 安装包，需要先在 Linux 环境里生成后端可执行文件，
-或者用 Docker 生成 Linux ELF 版本：
+x64 CPU + CUDA 包：
 
 ```bash
-docker run --rm --platform linux/amd64 \
-  -v "$PWD":/work -w /work python:3.12-bookworm \
-  bash -lc 'python -m pip install -U pip && PC_SERVER_PYTHON=python PC_SERVER_DESKTOP_TARGET_PLATFORM=linux PC_SERVER_DESKTOP_TARGET_ARCH=x64 bash scripts/build-backend.sh'
+scripts/release.sh --arch x64 --cuda
 ```
 
-打包脚本会校验本地二进制格式。Linux 包只接受 ELF 可执行文件；如果误传 macOS
-Mach-O 或 Windows PE 二进制，脚本会跳过或终止，避免产出安装后无法启动后端的包。
-
-## 3. 构建 Linux 版 MobiInfer
-
-Linux 包需要 Linux 版 MobiInfer 二进制。可以使用项目脚本：
+arm64 包：
 
 ```bash
-cd /mnt/e/WAIC/pc_server
-./scripts/build-mobiinfer.sh
+scripts/release.sh --arch arm64
 ```
 
-默认期望产物类似：
-
-```text
-3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_x64/mnncli
-```
-
-把 Linux 运行时文件复制到：
-
-```text
-desktop/resources-linux-x64/mobiinfer/
-```
-
-至少需要：
-
-```text
-desktop/resources-linux-x64/mobiinfer/mnncli
-```
-
-如果 MobiInfer 构建输出 `.so` 动态库，也复制到同一目录：
-
-```text
-desktop/resources-linux-x64/mobiinfer/*.so
-```
-
-注意：Linux 构建出来的 `mnncli` 不能放进 Windows 包。
-
-## 4. 准备 hdc
-
-把 Linux 版 `hdc` 放到：
-
-```text
-desktop/resources-linux-x64/hdc/hdc
-```
-
-如果 `hdc` 依赖其他 `.so`，也放在同一目录，或者确保目标机器系统路径中能找到。
-
-也可以在打包时通过环境变量指定 Linux 版 `hdc`：
+如果 `hdc` 不在 `PATH`：
 
 ```bash
-HDC_BIN_LINUX=/absolute/path/to/linux/hdc npm run build-linux-x64
+HDC_BIN_LINUX=/path/to/hdc scripts/release.sh --arch x64
 ```
 
-`HDC_BIN_LINUX` 优先于通用的 `HDC_BIN`。在 macOS 上打 Linux 包时，不要传 macOS
-版 `hdc`；脚本会识别并跳过不兼容的二进制。未内置 `hdc` 的包仍会在目标 Linux
-系统启动后从 `PATH` 查找 `hdc`，目标机未安装时界面会显示 `HDC 未找到`。
-
-## 5. 准备前端资源
-
-通常不需要手动复制，打包命令会自动运行：
-
-```bash
-cd desktop
-npm run prepare:resources
-```
-
-该命令会：
-
-- 执行 `frontend/npm run build`。
-- 复制 `frontend/dist` 到 `desktop/resources-linux-<arch>/frontend`。
-- 检查后端可执行文件是否存在。
-
-## 6. 构建 Linux 包
-
-生成 unpacked 目录包：
-
-```bash
-cd /mnt/e/WAIC/pc_server/desktop
-npm run package
-```
-
-产物：
-
-```text
-desktop/release/linux-unpacked/
-```
-
-生成 AppImage：
-
-```bash
-cd /mnt/e/WAIC/pc_server/desktop
-npm run build-linux-x64
-```
-
-arm64 包使用 `npm run build-linux-arm`。兼容旧命令仍可使用：`npm run dist:linux`。
-
-产物：
+脚本会执行依赖安装、构建后端、构建 MobiInfer、构建 llama.cpp、构建前端并生成 Electron 安装包。产物位于：
 
 ```text
 desktop/release/
 ```
 
-## 已验证的基础产物
+## 分阶段手动打包
 
-当前 Linux 目录包验证过：
+如果不使用一键脚本，可以按下面的顺序手动执行。这里以 Linux x64 为例，arm64 时把 `x64` 替换为 `arm64`。
 
-```text
-desktop/release/linux-unpacked/resources/backend/pc-server-backend
-desktop/release/linux-unpacked/resources/frontend/index.html
-desktop/release/linux-unpacked/resources/frontend/assets/...
-```
-
-基础体积参考：
-
-```text
-backend executable: about 48 MB
-linux unpacked app: about 307 MB
-```
-
-体积会随着 MobiInfer、llama.cpp、hdc、CUDA runtime 和模型资源增加。
-
-## 常见问题
-
-### Electron 输出 DBus 错误
-
-在 WSL/Linux 图形环境里可能看到：
-
-```text
-Failed to connect to the bus
-```
-
-如果窗口能打开、前后端能运行，通常可以忽略。真正需要关注的是 `spawn ... ENOENT`、后端健康检查失败、资源文件缺失等错误。
-
-### 中文显示成方块或乱码
-
-安装中文字体，例如：
+先设置目标平台、架构和 `hdc`：
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y fonts-noto-cjk
-fc-cache -f
+export PC_SERVER_DESKTOP_TARGET_PLATFORM=linux
+export PC_SERVER_DESKTOP_TARGET_ARCH=x64
+export HDC_BIN_LINUX=/path/to/hdc
 ```
 
-如果没有 sudo 权限，也可以把已有中文字体放到：
-
-```text
-~/.local/share/fonts/
-```
-
-然后运行：
+安装前端和桌面端依赖：
 
 ```bash
-fc-cache -f ~/.local/share/fonts
-fc-match sans-serif:lang=zh-cn
+npm --prefix frontend ci
+npm --prefix desktop ci
 ```
 
-### `pc-server-backend` 启动慢
+先构建 MobiInfer：
 
-PyInstaller `--onefile` 可执行文件首次启动会先解压依赖，启动比普通 Python 进程慢一些。这是正常现象。
+```bash
+scripts/build-mobiinfer.sh
+```
 
-### Linux 包能不能给 Windows 用
+再构建 llama.cpp CPU 运行时，并复制到桌面资源目录：
 
-不能。Linux 包里的后端和推理运行时都是 Linux 二进制。Windows 包必须在 Windows 原生环境构建。
+```bash
+LLAMA_CPP_BUILD_MODE=cpu \
+LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-linux-x64/llama-cpp/cpu" \
+scripts/build-llama-cpp.sh
+```
+
+当前脚本会传入 `-DBUILD_SHARED_LIBS=OFF`，因此正常情况下只需要 `llama-server` 本体；如果上游或某个后端仍生成运行所需 `.so`，脚本会跟随 `bin/` 目录一起复制。
+
+需要 CUDA 包时，再构建 CUDA 运行时：
+
+```bash
+LLAMA_CPP_BUILD_MODE=cuda \
+LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-linux-x64/llama-cpp/cuda" \
+scripts/build-llama-cpp.sh
+```
+
+然后构建后端：
+
+```bash
+scripts/build-backend.sh
+```
+
+最后构建前端并调用桌面端 npm 打包：
+
+```bash
+npm --prefix frontend run build
+npm --prefix desktop run build-linux-x64
+```
+
+arm64 对应命令为：
+
+```bash
+npm --prefix desktop run build-linux-arm
+```
+
+手动流程完成后，安装包和 `linux-unpacked` 目录同样位于：
+
+```text
+desktop/release/
+```
+
+阶段产物通常在这些位置：
+
+```text
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_linux_x64/mnncli
+3rdparty/llama.cpp/build-linux-x64-cpu/bin/
+3rdparty/llama.cpp/build-linux-x64-cuda/bin/
+backend/dist/pc-server-backend
+desktop/resources-linux-x64/
+```
+
+## 仅重新打包
+
+已有同一平台和架构的构建产物时，可以跳过原生构建：
+
+```bash
+scripts/release.sh --arch x64 --skip-backend --skip-mobiinfer --skip-llama-cpp
+```
+
+手动流程中也可以只重新执行：
+
+```bash
+npm --prefix frontend run build
+npm --prefix desktop run build-linux-x64
+```
+
+注意：Linux 后端和原生运行时必须在 Linux 环境构建。WSL 可用于构建 Linux 包，但产物不能用于 Windows 包。发布脚本不支持跨架构构建，`--arch` 必须与当前主机架构一致。

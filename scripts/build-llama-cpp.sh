@@ -59,6 +59,7 @@ case "$BUILD_MODE" in
       -DGGML_CUDA=ON
       -DGGML_NATIVE=ON
       -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCH"
+      -DBUILD_SHARED_LIBS=OFF
       -DLLAMA_BUILD_UI=OFF
       -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
     )
@@ -67,6 +68,7 @@ case "$BUILD_MODE" in
     BUILD_DIR="${BUILD_DIR:-$LLAMA_CPP_DIR/build-$TARGET_PLATFORM-$TARGET_ARCH-cpu}"
     CMAKE_FLAGS=(
       -DGGML_NATIVE=ON
+      -DBUILD_SHARED_LIBS=OFF
       -DLLAMA_BUILD_UI=OFF
       -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
     )
@@ -77,6 +79,7 @@ case "$BUILD_MODE" in
       -DGGML_METAL=ON
       -DGGML_NATIVE=OFF
       -DLLAMA_OPENSSL=OFF
+      -DBUILD_SHARED_LIBS=OFF
       -DLLAMA_BUILD_UI=OFF
       -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
     )
@@ -148,6 +151,36 @@ patch_darwin_rpaths() {
     fi
   done
 }
+
+patch_linux_rpaths() {
+  local runtime_dir="$1"
+  local file
+  local found_elf=0
+
+  if [[ "$(uname -s)" != "Linux" ]]; then
+    return
+  fi
+  if ! command -v patchelf >/dev/null 2>&1; then
+    echo "patchelf was not found on PATH. Install it before building Linux release runtimes." >&2
+    exit 1
+  fi
+
+  for file in "$runtime_dir"/*; do
+    [[ -f "$file" && ! -L "$file" ]] || continue
+    if ! patchelf --print-rpath "$file" >/dev/null 2>&1; then
+      continue
+    fi
+    found_elf=1
+    patchelf --set-rpath '$ORIGIN' "$file"
+  done
+
+  if [[ "$found_elf" -eq 0 ]]; then
+    echo "No ELF runtime files found under $runtime_dir." >&2
+    exit 1
+  fi
+}
+
+patch_linux_rpaths "$BUILD_DIR/bin"
 
 if [[ -n "${LLAMA_CPP_INSTALL_DIR:-}" ]]; then
   mkdir -p "$LLAMA_CPP_INSTALL_DIR"

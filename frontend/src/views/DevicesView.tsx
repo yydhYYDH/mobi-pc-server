@@ -92,7 +92,7 @@ export function DevicesView(props: {
       </article>
 
       <article className="panel">
-        <PanelTitle kicker="Manual" title="手动连接" />
+        <PanelTitle kicker="Manual" title="USB / 无线调试连接" />
         <div className="device-form">
           <input
             value={props.hdcTarget}
@@ -100,7 +100,7 @@ export function DevicesView(props: {
             placeholder="请输入设备序列号，或无线调试地址，例如 192.168.1.23:5555"
           />
           <div className="device-form-note">
-            请输入 USB/本地设备序列号，或无线调试 IP 和端口。LLM 端口由后端自动映射：{props.hdcLlmPort || "未转发"}
+            可输入 USB 设备序列号，也可输入无线调试 IP:端口，例如 192.168.1.23:5555。LLM 端口由后端自动映射：{props.hdcLlmPort || "未转发"}
           </div>
           {manualError ? <InlineNotice variant="device">{manualError}</InlineNotice> : null}
           <div className="actions">

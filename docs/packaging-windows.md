@@ -1,443 +1,198 @@
-﻿# Windows 打包说明
+# Windows 打包说明
 
-本文档说明如何在 Windows 原生环境里打包你的智伴。
-
-## 产物结构
-
-Windows 包需要这些运行时资源。资源目录按架构隔离，例如 x64 使用：
-
-```text
-desktop/resources-win-x64/
-  frontend/                 由 frontend/dist 自动复制
-  backend/
-    pc-server-backend.exe   Windows 后端可执行文件
-  mobiinfer/
-    mnncli.exe              Windows 版 MobiInfer 命令行/服务程序
-    MNN.dll                 如 MobiInfer 构建产生 DLL，也放这里
-    *.dll                   其他 MobiInfer 运行所需 DLL
-  llama-cpp/
-    cpu/
-      llama-server.exe      Windows CPU 版 llama.cpp OpenAI 兼容服务
-      *.dll                 CPU 运行所需 DLL
-    cuda/
-      llama-server.exe      Windows CUDA 版 llama.cpp OpenAI 兼容服务
-      *.dll                 CUDA 运行所需 DLL
-  hdc/
-    hdc.exe                 Windows 版 hdc
-```
-
-arm64 使用同样结构的 `desktop/resources-win-arm64/`。Electron Builder 会把选中的 `desktop/resources-win-<arch>/` 下的内容复制到最终安装包的 `resources/` 目录。Linux 打包使用独立的 `desktop/resources-linux-<arch>/`，不要再把不同平台或架构的运行时文件混放到同一个 staging 目录。
-
-运行期下载的模型、用户配置、日志和 ModelScope 缓存不会写入安装目录。打包版会使用 `%APPDATA%\ClawMate`，覆盖安装或更新应用时应保留这些数据。详见 [desktop-data.md](desktop-data.md)。
+本文档说明如何在原生 Windows 环境中从源码构建 Windows 安装包。`backend`、`mobiinfer`、`llama.cpp` 都需要在 Windows 上源码构建，不能直接复用 Linux、WSL 或 macOS 的二进制文件。
 
 ## 前置要求
 
-建议安装：
-
 - Node.js 20 或更新版本。
 - Python 3.11 或 3.12。
-- Visual Studio 2022 Build Tools。
-- CMake。
-- Ninja，可选但推荐。
-- Win64 OpenSSL 完整安装包，用于构建 MobiInfer `mnncli` 的 HTTPS 下载能力。
-- CUDA Toolkit，仅打包 CUDA 版 `llama.cpp` 时需要。
 - Git。
+- Visual Studio 2022 Build Tools，包含 MSVC C++ 生成工具。
+- CMake 和 Ninja。
+- 完整版 Win64 OpenSSL，用于构建 MobiInfer `mnncli`。
+- HarmonyOS `hdc.exe`，可通过 DevEco Studio 或 Command Line Tools 获取。
+- CUDA Toolkit，仅在构建 CUDA 版 llama.cpp 时需要。
 
-检查命令：
+建议在 PowerShell 中检查：
 
 ```powershell
 node --version
-npm --version
 python --version
-cmake --version
 git --version
+cmake --version
+ninja --version
 ```
 
-如果安装了 Python Launcher，也可以检查：
+MobiInfer 的构建需要 OpenSSL。推荐安装完整 Win64 OpenSSL，并通过 `-OpenSslRoot` 传入安装目录，例如 `C:\Program Files\OpenSSL-Win64`。
+
+## 初始化源码子模块
+
+在仓库根目录执行：
 
 ```powershell
-py --version
-py -0p
+git submodule update --init --depth 1 3rdparty/mobiinfer 3rdparty/llama.cpp
 ```
 
-### OpenSSL
+## 资源目录
 
-MobiInfer `mnncli` 的 CMake 工程会执行 `find_package(OpenSSL REQUIRED)`。Windows 上推荐安装完整 Win64 OpenSSL，不要安装 Light 版。
-
-推荐安装项：
+Windows x64 的桌面端资源会进入：
 
 ```text
-Win64 OpenSSL v4.x.x
+desktop/resources-win-x64/
+  backend/                  pc-server-backend.exe
+  mobiinfer/                mnncli.exe 和相关 DLL
+  llama-cpp/cpu/            llama-server.exe；如上游构建产生 DLL，也会放在这里
+  llama-cpp/cuda/           CUDA 版 llama-server.exe；如上游构建产生 DLL，也会放在这里，可选
+  hdc/                      hdc.exe 和相关 DLL
+  frontend/                 frontend/dist
 ```
 
-不要选择：
+arm64 使用 `desktop/resources-win-arm64/`。这些目录是打包阶段产物，可以删除后重新生成，不建议手动长期维护。
 
-```text
-Win64 OpenSSL v4.x.x Light
-Win32 OpenSSL v4.x.x
-```
+## 一键打包
 
-默认安装路径通常是：
+把 `hdc.exe` 所在目录加入 `PATH`，或通过 `-HdcBin` 指定实际路径。
 
-```text
-C:\Program Files\OpenSSL-Win64
-```
-
-安装后检查头文件和库文件：
+x64 CPU 包：
 
 ```powershell
-Test-Path "C:\Program Files\OpenSSL-Win64\include\openssl\ssl.h"
-Get-ChildItem "C:\Program Files\OpenSSL-Win64\lib" -Recurse -Filter "*crypto*.lib"
-Get-ChildItem "C:\Program Files\OpenSSL-Win64\lib" -Recurse -Filter "*ssl*.lib"
+.\scripts\windows\release.ps1 `
+  -Architecture x64 `
+  -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
 ```
 
-## 1. 安装前端和 Electron 依赖
-
-在项目根目录执行：
+x64 CPU + CUDA 包：
 
 ```powershell
-cd E:\WAIC\pc_server
-
-cd frontend
-npm install
-
-cd ..\desktop
-npm install
+.\scripts\windows\release.ps1 `
+  -Architecture x64 `
+  -Cuda `
+  -CudaArch 89 `
+  -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
 ```
 
-## 2. 生成 Windows 后端 exe
-
-后端 exe 必须在 Windows 原生环境生成。WSL 里生成的是 Linux ELF，不能放进 Windows 安装包。
-
-推荐使用独立虚拟环境 `.venv-win`，避免和 WSL/Linux 的 `backend/.venv` 混用：
+arm64 包：
 
 ```powershell
-cd E:\WAIC\pc_server\backend
-python -m venv .venv-win
-.\.venv-win\Scripts\Activate.ps1
-
-python -m pip install -U pip
-pip install -e .
-pip install pyinstaller
+.\scripts\windows\release.ps1 `
+  -Architecture arm64 `
+  -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
 ```
 
-如果 `python` 没有指向想使用的解释器，可以改用 Windows Python 的完整路径：
+如果 `hdc.exe` 不在 `PATH`：
 
 ```powershell
-C:\Python311\python.exe -m venv .venv-win
-.\.venv-win\Scripts\Activate.ps1
+.\scripts\windows\release.ps1 `
+  -Architecture x64 `
+  -OpenSslRoot "C:\Program Files\OpenSSL-Win64" `
+  -HdcBin C:\path\to\hdc.exe
 ```
 
-如果 PowerShell 禁止执行激活脚本，执行一次：
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-```
-
-然后回到项目根目录运行：
-
-```powershell
-.\scripts\windows\build-backend.ps1
-```
-
-成功后应该出现：
-
-```text
-backend/dist/pc-server-backend.exe
-desktop/resources-win-x64/backend/pc-server-backend.exe
-```
-
-如果你没有使用 `.venv-win`，可以显式指定 Python：
-
-```powershell
-$env:PC_SERVER_PYTHON="E:\WAIC\pc_server\backend\.venv-win\Scripts\python.exe"
-.\scripts\windows\build-backend.ps1
-```
-
-## 3. 准备 Windows 版 MobiInfer
-
-Windows 包需要 Windows 版 MobiInfer `mnncli.exe`。不要使用 WSL 里构建出来的 Linux `mnncli`。
-
-推荐在 Windows 的 “x64 Native Tools Command Prompt for VS 2022” 或配置好 MSVC 环境的 PowerShell 中构建：
-
-```powershell
-cd E:\WAIC\pc_server
-.\scripts\windows\build-mobiinfer.ps1 -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
-```
-
-脚本会按架构构建：
-
-- `3rdparty/mobiinfer/build_mnn_static_win_x64/` 或 `build_mnn_static_win_arm64/`
-- `3rdparty/mobiinfer/apps/mnncli/build_mnncli_win_x64/` 或 `build_mnncli_win_arm64/`
-
-旧的 `build_mnn_static_win/` 和 `build_mnncli_win/` 只作为历史构建目录，不再是默认输出位置。
-
-并把产物复制到：
-
-```text
-desktop/resources-win-x64/mobiinfer/
-```
-
-至少需要：
-
-```text
-desktop/resources-win-x64/mobiinfer/
-  mnncli.exe
-```
-
-如果构建生成了 DLL，脚本也会一起复制：
-
-```text
-desktop/resources-win-x64/mobiinfer/
-  MNN.dll
-  *.dll
-```
-
-常用参数：
-
-```powershell
-.\scripts\windows\build-mobiinfer.ps1 -Clean
-.\scripts\windows\build-mobiinfer.ps1 -SkipSmokeTest
-.\scripts\windows\build-mobiinfer.ps1 -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
-.\scripts\windows\build-mobiinfer.ps1 -Architecture arm64
-.\scripts\windows\build-mobiinfer.ps1 -InstallDir E:\WAIC\pc_server\desktop\resources-win-x64\mobiinfer
-```
-
-如果脚本失败，通常是缺少 MSVC、CMake、Ninja 或 OpenSSL。可以先检查：
-
-```powershell
-where cmake
-where ninja
-where cl
-where openssl
-```
-
-## 4. 准备 Windows 版 llama.cpp
-
-如果需要在安装包里内置 `llama.cpp` 后端，建议同时构建 CPU 和 CUDA 两套 runtime。后端启动时会优先探测 CUDA 版；如果 CUDA 运行时不可用，会自动回退到 CPU 版，并使用 `--n-gpu-layers 0`。
-
-构建 CPU 版：
-
-```powershell
-cd E:\WAIC\pc_server
-.\scripts\windows\build-llama-cpp.ps1 -Mode cpu
-```
-
-脚本会构建：
-
-```text
-3rdparty/llama.cpp/build-windows-x64/
-```
-
-并把产物复制到：
-
-```text
-desktop/resources-win-x64/llama-cpp/cpu/llama-server.exe
-```
-
-构建 CUDA 版时，先确保 CUDA Toolkit 的 `nvcc` 在 PATH 里，或显式传入 CUDA Toolkit 路径，然后运行：
-
-```powershell
-cd E:\WAIC\pc_server
-.\scripts\windows\build-llama-cpp.ps1 -Mode cuda -CudaArch 89
-```
-
-如果使用 CUDA 11.x 搭配 Visual Studio 2026，`nvcc` 可能报 `unsupported Microsoft Visual Studio version`。更稳的方案是使用 VS2022 工具链或升级到支持当前 MSVC 的 CUDA Toolkit；临时绕过可以加：
-
-```powershell
-.\scripts\windows\build-llama-cpp.ps1 -Mode cuda -CudaArch 89 -AllowUnsupportedCudaCompiler
-```
-
-常用参数：
-
-```powershell
-.\scripts\windows\build-llama-cpp.ps1 -Clean
-.\scripts\windows\build-llama-cpp.ps1 -Mode cpu
-.\scripts\windows\build-llama-cpp.ps1 -Mode cuda -CudaArch 89
-.\scripts\windows\build-llama-cpp.ps1 -Mode cpu -Architecture arm64
-.\scripts\windows\build-llama-cpp.ps1 -Mode cuda -CudaArch 89 -AllowUnsupportedCudaCompiler
-.\scripts\windows\build-llama-cpp.ps1 -SkipSmokeTest
-.\scripts\windows\build-llama-cpp.ps1 -Mode cpu -InstallDir E:\WAIC\pc_server\desktop\resources-win-x64\llama-cpp\cpu
-.\scripts\windows\build-llama-cpp.ps1 -Mode cuda -InstallDir E:\WAIC\pc_server\desktop\resources-win-x64\llama-cpp\cuda
-```
-
-检查命令：
-
-```powershell
-where cmake
-where ninja
-where cl
-where nvcc
-```
-
-`where nvcc` 只在 CUDA 模式下需要。
-
-## 5. 准备 hdc
-
-把 Windows 版 `hdc.exe` 放到：
-
-```text
-desktop/resources-win-x64/hdc/hdc.exe
-```
-
-当前验证过的 DevEco Studio SDK 版本是 `hdc 3.2.0c`，来源目录为：
-
-```text
-E:\Software\DevEco Studio\sdk\default\openharmony\toolchains
-```
-
-这个版本除了 `hdc.exe`，还需要同目录的 `libusb_shared.dll`：
-
-```text
-desktop/resources-win-x64/hdc/hdc.exe
-desktop/resources-win-x64/hdc/libusb_shared.dll
-```
-
-如果后续升级 SDK，重新检查 `toolchains` 目录里是否还有新的 DLL 依赖，并把依赖文件一起放到对应架构的 `desktop/resources-win-<arch>/hdc/`。
-
-## 6. 构建 Windows 安装包
-
-执行：
-
-```powershell
-cd E:\WAIC\pc_server\desktop
-npm run build-win
-```
-
-兼容旧命令仍可使用：`npm run dist:win`。
-
-产物在：
+脚本会执行依赖安装、构建后端、构建 MobiInfer、构建 llama.cpp、构建前端并生成 Electron 安装包。产物位于：
 
 ```text
 desktop/release/
 ```
 
-默认目标是 NSIS 安装包。
+## 分阶段手动打包
 
-### Electron Builder 下载失败时使用离线缓存
+如果不使用一键脚本，可以按下面的顺序手动执行。这里以 Windows x64 为例，arm64 时把 `x64` 替换为 `arm64`。
 
-`electron-builder` 会在打包时下载 Electron 运行时。当前桌面端使用的是 `electron@31.7.0`，实际解析到的 Windows x64 运行时包为：
-
-```text
-electron-v31.7.7-win32-x64.zip
-```
-
-如果 GitHub 下载超时，可以手动下载后放入 Electron 本机缓存：
-
-```text
-C:\Users\32022\AppData\Local\electron\Cache\electron-v31.7.7-win32-x64.zip
-```
-
-也就是：
+先设置目标平台、架构和 `hdc.exe`：
 
 ```powershell
-$env:LOCALAPPDATA\electron\Cache\electron-v31.7.7-win32-x64.zip
+$env:PC_SERVER_DESKTOP_TARGET_PLATFORM = "win32"
+$env:PC_SERVER_DESKTOP_TARGET_ARCH = "x64"
+$env:HDC_BIN_WIN = "C:\path\to\hdc.exe"
 ```
 
-下载链接：
-
-```text
-https://github.com/electron/electron/releases/download/v31.7.7/electron-v31.7.7-win32-x64.zip
-```
-
-备用镜像：
-
-```text
-https://npmmirror.com/mirrors/electron/v31.7.7/electron-v31.7.7-win32-x64.zip
-```
-
-生成 NSIS 安装包时，`electron-builder` 还可能下载 NSIS 工具包：
-
-```text
-nsis-3.0.4.1.7z
-```
-
-如果 GitHub 下载超时，可以手动下载后放入 Electron Builder 缓存：
-
-```text
-C:\Users\32022\AppData\Local\electron-builder\Cache\nsis\nsis-3.0.4.1.7z
-```
-
-也就是：
+安装前端和桌面端依赖：
 
 ```powershell
-$env:LOCALAPPDATA\electron-builder\Cache\nsis\nsis-3.0.4.1.7z
+npm --prefix frontend ci
+npm --prefix desktop ci
 ```
 
-下载链接：
-
-```text
-https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z
-```
-
-备用镜像：
-
-```text
-https://npmmirror.com/mirrors/electron-builder-binaries/nsis-3.0.4.1/nsis-3.0.4.1.7z
-```
-
-放好后重新运行：
+先构建 MobiInfer：
 
 ```powershell
-cd E:\WAIC\pc_server\desktop
-npm run build-win
+.\scripts\windows\build-mobiinfer.ps1 `
+  -Architecture x64 `
+  -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
 ```
 
-## 常见问题
-
-### `py -3.11` 不可用
-
-先检查：
+再构建 llama.cpp CPU 运行时：
 
 ```powershell
-python --version
-where python
+.\scripts\windows\build-llama-cpp.ps1 `
+  -Mode cpu `
+  -Architecture x64
 ```
 
-如果 `python` 是 3.11 或 3.12，直接用：
+当前脚本会传入 `-DBUILD_SHARED_LIBS=OFF`，因此正常情况下只需要 `llama-server.exe` 本体；如果上游或某个后端仍生成运行所需 DLL，脚本会跟随构建目录一起复制。
+
+需要 CUDA 包时，再构建 CUDA 运行时：
 
 ```powershell
-python -m venv .venv-win
+.\scripts\windows\build-llama-cpp.ps1 `
+  -Mode cuda `
+  -Architecture x64 `
+  -CudaArch 89
 ```
 
-### PowerShell 不能激活虚拟环境
-
-执行：
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-```
-
-然后重新运行：
-
-```powershell
-.\.venv-win\Scripts\Activate.ps1
-```
-
-### `pc-server-backend.exe` 在哪里
-
-运行：
+然后构建后端：
 
 ```powershell
 .\scripts\windows\build-backend.ps1
 ```
 
-它会从：
+最后构建前端并调用桌面端 npm 打包：
+
+```powershell
+npm --prefix frontend run build
+npm --prefix desktop run build-win-x64
+```
+
+arm64 对应命令为：
+
+```powershell
+npm --prefix desktop run build-win-arm
+```
+
+手动流程完成后，安装包和 unpacked 目录同样位于：
 
 ```text
+desktop/release/
+```
+
+阶段产物通常在这些位置：
+
+```text
+3rdparty/mobiinfer/apps/mnncli/build_mnncli_win_x64/
+3rdparty/llama.cpp/build-windows-x64/
+3rdparty/llama.cpp/build-cuda-windows-x64/
 backend/dist/pc-server-backend.exe
+desktop/resources-win-x64/
 ```
 
-复制到：
+## 仅重新打包
 
-```text
-desktop/resources-win-x64/backend/pc-server-backend.exe
+已有同一平台和架构的构建产物时，可以跳过原生构建：
+
+```powershell
+.\scripts\windows\release.ps1 `
+  -Architecture x64 `
+  -OpenSslRoot "C:\Program Files\OpenSSL-Win64" `
+  -SkipBackend `
+  -SkipMobiInfer `
+  -SkipLlamaCpp
 ```
 
-### WSL 构建的 MobiInfer 能不能放进 Windows 包
+手动流程中也可以只重新执行：
 
-不能。WSL 里构建的是 Linux 二进制，Windows Electron 包需要 `.exe` 和 Windows DLL。Windows 包里的 MobiInfer 应该在 Windows 原生环境用 MSVC/CMake 构建。
+```powershell
+npm --prefix frontend run build
+npm --prefix desktop run build-win-x64
+```
 
-### CUDA Runtime 要不要放进包
-
-第一版不建议内置完整 CUDA Toolkit。优先检测用户系统是否已安装 NVIDIA Driver/CUDA runtime。后续如果要做 CUDA 可选组件，只打包运行所需 DLL，不打包完整 Toolkit。
+注意：Windows 后端和原生运行时必须在原生 Windows 环境构建。WSL 生成的是 Linux 二进制，不能用于 Windows 安装包。CUDA 打包仅支持 Windows x64。

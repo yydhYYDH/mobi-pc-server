@@ -217,6 +217,7 @@ $ConfigureArgs = @(
   "-G",
   $Generator,
   "-DCMAKE_BUILD_TYPE=$BuildType",
+  "-DBUILD_SHARED_LIBS=OFF",
   "-DLLAMA_BUILD_UI=OFF",
   "-DGGML_NATIVE=ON"
 )
