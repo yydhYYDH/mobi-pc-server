@@ -19,6 +19,7 @@ class HdcStatus(BaseModel):
     path: str | None = None
     devices: list[HdcDevice] = Field(default_factory=list)
     message: str | None = None
+    connect_task: Literal["auto", "manual", "queued_manual"] | None = None
     hdc_server_running: bool = False
     hdc_server_port: int = 9124
     hdc_server_url: str = "http://127.0.0.1:9124"

@@ -8,7 +8,14 @@ type ActionButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 export function ActionButton({ busy, busyText, children, disabled, ...buttonProps }: ActionButtonProps) {
   return (
     <button {...buttonProps} disabled={disabled || busy}>
-      {busy ? busyText ?? "处理中..." : children}
+      {busy ? (
+        <>
+          <span className="inline-spinner" />
+          {busyText ?? "处理中..."}
+        </>
+      ) : (
+        children
+      )}
     </button>
   );
 }

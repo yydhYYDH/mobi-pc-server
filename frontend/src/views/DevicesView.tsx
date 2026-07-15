@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { DeviceBusy, HdcStatus } from "../api/types";
+import type { HdcStatus } from "../api/types";
 import { EmptyState, InlineNotice, PanelTitle, StatusPill } from "../components";
 import { getConnectedHdcTargetAction, normalizeHdcTarget, validateHdcConnectTarget } from "../domain/hdcTarget";
 
@@ -80,7 +80,7 @@ export function DevicesView(props: {
           {(props.hdc?.devices ?? []).map((device) => (
             <div className="device-item" key={device.serial}>
               <div>
-                <span>{device.connection_type === "network" ? "网络设备" : "USB/本地设备"}</span>
+                <span>{device.connection_type === "network" ? "无线调试设备" : "本地设备"}</span>
                 <strong>{device.host ? `${device.host}:${device.port ?? ""}` : device.serial}</strong>
                 <small>Serial: {device.serial}</small>
               </div>
@@ -92,20 +92,27 @@ export function DevicesView(props: {
       </article>
 
       <article className="panel">
-        <PanelTitle kicker="Manual" title="USB / 无线调试连接" />
+        <PanelTitle kicker="Manual" title="无线调试连接" />
         <div className="device-form">
           <input
             value={props.hdcTarget}
             onChange={(event) => updateManualTarget(event.target.value)}
-            placeholder="请输入设备序列号，或无线调试地址，例如 192.168.1.23:5555"
+            placeholder="请输入无线调试地址，例如 192.168.1.23:5555"
           />
           <div className="device-form-note">
-            可输入 USB 设备序列号，也可输入无线调试 IP:端口，例如 192.168.1.23:5555。LLM 端口由后端自动映射：{props.hdcLlmPort || "未转发"}
+            请在手机开启无线调试后输入 IP:端口，例如 192.168.1.23:5555。LLM 端口由后端自动映射：{props.hdcLlmPort || "未转发"}
           </div>
           {manualError ? <InlineNotice variant="device">{manualError}</InlineNotice> : null}
           <div className="actions">
             <button disabled={props.deviceBusy !== null || manualTargetAction.disabled} onClick={connectManualTarget}>
-              {props.deviceBusy === "connect" ? "连接中..." : manualTargetAction.label}
+              {props.deviceBusy === "connect" ? (
+                <>
+                  <span className="inline-spinner" />
+                  连接中...
+                </>
+              ) : (
+                manualTargetAction.label
+              )}
             </button>
             <button disabled={props.deviceBusy !== null} onClick={() => void props.disconnectHdc()}>
               {props.deviceBusy === "disconnect" ? "断开中..." : "断开"}

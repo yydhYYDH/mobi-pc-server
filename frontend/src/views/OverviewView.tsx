@@ -1,6 +1,6 @@
 import React from "react";
 
-import type { BackendId, CatalogModel, DeviceBusy, DownloadStatus, HdcStatus, RuntimeStatus, ModelBusy, ServerBusy } from "../api/types";
+import type { BackendId, CatalogModel, DeviceBusy, DownloadStatus, HdcStatus, ModelBusy, RuntimeStatus, ServerBusy } from "../api/types";
 import { ActionButton, ProgressBar, StatusPill } from "../components";
 import { getConnectedHdcTargetAction, normalizeHdcTarget } from "../domain/hdcTarget";
 import { backendLabel, statusLabel } from "../domain/runtime";
@@ -78,7 +78,7 @@ export function OverviewView(props: {
       ? `${primaryDevice.host}${primaryDevice.port ? `:${primaryDevice.port}` : ""}`
       : primaryDevice.serial
     : "";
-  const deviceType = primaryDevice?.connection_type === "network" ? "无线调试" : "USB 连接";
+  const deviceType = primaryDevice?.connection_type === "network" ? "无线调试" : "本地连接";
   const activeModelLabel =
     props.activeModelName ?? props.runtimeStatus?.active_model_id ?? `${backendLabel(props.selectedBackend)} 服务`;
   const deviceSummary = !hdcAvailable
@@ -193,7 +193,7 @@ export function OverviewView(props: {
         <div className="readiness-device-help">
           <div>
             <strong>暂未发现设备</strong>
-            <p>若长时间未连接，可以使用 USB 连接手机，或在无线调试开启后输入 IP 和端口手动连接。</p>
+            <p>若长时间未连接，请开启手机无线调试，然后输入 IP 和端口手动连接。</p>
           </div>
           <button onClick={props.onOpenDevices}>去设备页连接</button>
         </div>
@@ -299,16 +299,23 @@ export function OverviewView(props: {
 
       {manualOpen && hdcAvailable ? (
         <div className="readiness-manual">
-          <p>自动连接失败了？可输入 USB 设备序列号，或打开无线调试后输入设备地址。</p>
+          <p>自动连接失败了？请打开手机无线调试，然后输入设备地址。</p>
           <div className="readiness-manual-form">
             <input
-              aria-label="设备序列号或 host:port"
+              aria-label="无线调试地址"
               value={props.hdcTarget}
               onChange={(event) => props.setHdcTarget(normalizeHdcTarget(event.target.value))}
-              placeholder="设备序列号，或 192.168.61.99:5555"
+              placeholder="192.168.61.99:5555"
             />
             <button className="product-primary-button" disabled={props.deviceBusy !== null || manualTargetAction.disabled} onClick={() => void props.connectHdc()}>
-              {props.deviceBusy === "connect" ? "连接中" : manualTargetAction.label}
+              {props.deviceBusy === "connect" ? (
+                <>
+                  <span className="inline-spinner" />
+                  连接中
+                </>
+              ) : (
+                manualTargetAction.label
+              )}
             </button>
           </div>
           {props.recentHdcTargets.length > 0 ? (

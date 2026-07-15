@@ -80,7 +80,7 @@ class HdcService:
         self._origin_server_health_cache = False
         self._origin_server_health_failures = 0
         self._logs = LogService()
-        self._connect_task_lock = threading.Lock()
+        self._connect_task_lock = threading.RLock()
         self._connect_task_running = False
         self._connect_task_label = ""
         self._queued_connect_task = None
@@ -253,26 +253,23 @@ class HdcService:
             return self._status_response(available=False, message="hdc was not found on PATH.")
         self._ensure_origin_hdc_server()
 
-        if not self._parse_wireless_target(target):
-            current = self._status_live()
-            if self._status_contains_target(current, target):
-                self._log_hdc(f"Manual USB/local target already connected: {target}")
-                return self._with_llm_rport(
-                    current,
-                    target,
-                    llm_port,
-                    "Using existing USB/local HDC target.",
-                )
+        wireless_target = self._parse_wireless_target(target)
+        if not wireless_target:
+            return self._status_response(
+                available=True,
+                path=hdc_path,
+                message="Please enter a wireless debugging address in IP:port format.",
+            )
 
-        result = self._run([hdc_path, "tconn", target], timeout=10)
+        result = self._run([hdc_path, "tconn", wireless_target], timeout=10)
         if result is None:
             current = self._status_live()
-            if self._status_contains_target(current, target):
-                self._cache_target(target)
-                self._log_hdc(f"Manual hdc tconn timed out but target is connected: {target}")
+            if self._status_contains_target(current, wireless_target):
+                self._cache_target(wireless_target)
+                self._log_hdc(f"Manual hdc tconn timed out but target is connected: {wireless_target}")
                 return self._with_llm_rport(
                     current,
-                    target,
+                    wireless_target,
                     llm_port,
                     "HDC target connected after tconn timeout.",
                 )
@@ -283,15 +280,15 @@ class HdcService:
             )
         if result.returncode != 0:
             current = self._status_live()
-            if self._status_contains_target(current, target):
-                self._cache_target(target)
+            if self._status_contains_target(current, wireless_target):
+                self._cache_target(wireless_target)
                 message = result.stderr.strip() or result.stdout.strip() or "hdc connect returned non-zero"
                 self._log_hdc(
-                    f"Manual hdc tconn returned non-zero but target is connected: {target}. {message}"
+                    f"Manual hdc tconn returned non-zero but target is connected: {wireless_target}. {message}"
                 )
                 return self._with_llm_rport(
                     current,
-                    target,
+                    wireless_target,
                     llm_port,
                     "HDC target connected despite tconn error.",
                 )
@@ -301,10 +298,10 @@ class HdcService:
                 message=result.stderr.strip() or result.stdout.strip() or "hdc connect failed.",
             )
         current = self._status_live()
-        self._cache_target(target)
-        message = result.stdout.strip() or f"Connected to {target}."
-        self._log_hdc(f"Manual hdc tconn succeeded: {target}. {message}")
-        return self._with_llm_rport(current, target, llm_port, message)
+        self._cache_target(wireless_target)
+        message = result.stdout.strip() or f"Connected to {wireless_target}."
+        self._log_hdc(f"Manual hdc tconn succeeded: {wireless_target}. {message}")
+        return self._with_llm_rport(current, wireless_target, llm_port, message)
 
     def _auto_connect_sync(self, llm_port: int | None = None) -> HdcStatus:
         llm_port = self._normalize_port(llm_port)
@@ -678,11 +675,13 @@ class HdcService:
     ) -> HdcStatus:
         current_llm_port = self._current_llm_port()
         mobile_snapshot = mobile_event_state.snapshot()
+        connect_task = self._connect_task_status()
         return HdcStatus(
             available=available,
             path=path,
             devices=devices or [],
             message=message,
+            connect_task=connect_task,
             hdc_server_running=self._origin_hdc_server_running(),
             hdc_server_port=HDC_SERVER_PORT,
             hdc_server_url=HDC_SERVER_URL,
@@ -702,6 +701,14 @@ class HdcService:
             mobile_event_type=mobile_snapshot.last_event_type,
             mobile_event_client=mobile_snapshot.last_client,
         )
+
+    def _connect_task_status(self) -> str | None:
+        with self._connect_task_lock:
+            if self._queued_connect_task is not None:
+                return "queued_manual"
+            if self._connect_task_running and self._connect_task_label:
+                return self._connect_task_label
+        return None
 
     def _current_llm_port(self) -> int:
         status = runtime_service.status()

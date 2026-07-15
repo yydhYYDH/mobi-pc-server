@@ -63,7 +63,7 @@ def test_ensure_rport_removes_stale_reverse_mapping_even_when_memory_ready(
     assert ["hdc", "-t", target, "rport", "tcp:15001", "tcp:18188"] in calls
 
 
-def test_manual_connect_usb_target_skips_tconn_and_builds_rports(
+def test_manual_connect_rejects_non_wireless_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = HdcService()
@@ -84,11 +84,12 @@ def test_manual_connect_usb_target_skips_tconn_and_builds_rports(
 
     status = service._connect_sync(target, llm_port=8090)  # noqa: SLF001
 
-    assert status.pc_server_rport_ready is True
-    assert status.llm_rport_ready is True
+    assert status.message == "Please enter a wireless debugging address in IP:port format."
+    assert status.pc_server_rport_ready is False
+    assert status.llm_rport_ready is False
     assert ["hdc", "tconn", target] not in calls
-    assert ["hdc", "-t", target, "rport", "tcp:15001", "tcp:18188"] in calls
-    assert ["hdc", "-t", target, "rport", "tcp:8090", "tcp:8090"] in calls
+    assert ["hdc", "-t", target, "rport", "tcp:15001", "tcp:18188"] not in calls
+    assert ["hdc", "-t", target, "rport", "tcp:8090", "tcp:8090"] not in calls
 
 
 def test_manual_connect_is_queued_while_auto_connect_is_running(
