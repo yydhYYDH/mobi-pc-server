@@ -47,6 +47,7 @@ export type HdcStatus = {
     connection_type: string;
   }>;
   message: string | null;
+  connect_task?: "auto" | "manual" | "queued_manual" | null;
   hdc_server_running: boolean;
   hdc_server_port: number;
   hdc_server_url: string;

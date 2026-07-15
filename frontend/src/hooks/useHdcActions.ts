@@ -56,6 +56,7 @@ export function useHdcActions(params: {
   const deviceBusyRef = React.useRef<typeof deviceBusy>(null);
   const hdcTargetUserEditedRef = React.useRef(false);
   const lastAutoHdcTargetRef = React.useRef("");
+  const manualConnectPendingRef = React.useRef(false);
   const expectedLlmPort = runtimeStatus?.state === "running" && runtimeStatus.port ? runtimeStatus.port : defaultRuntimePort(selectedBackend);
   const autoDiscovering = shouldPollHdcDiscovery({
     available: hdc?.available ?? false,
@@ -97,7 +98,7 @@ export function useHdcActions(params: {
     }
 
     const intervalId = window.setInterval(() => {
-      if (deviceBusyRef.current !== null) {
+      if (deviceBusyRef.current !== null || manualConnectPendingRef.current) {
         return;
       }
       void autoConnectHdc({ silent: true });
@@ -109,15 +110,25 @@ export function useHdcActions(params: {
     if (!hdc?.available || !hdc.pc_server_rport_ready || hdc.llm_port === expectedLlmPort) {
       return;
     }
-    if (deviceBusyRef.current !== null) {
+    if (deviceBusyRef.current !== null || manualConnectPendingRef.current) {
       return;
     }
     void autoConnectHdc({ silent: true });
   }, [expectedLlmPort, hdc?.available, hdc?.llm_port, hdc?.pc_server_rport_ready]);
 
+  React.useEffect(() => {
+    if (!manualConnectPendingRef.current) {
+      return;
+    }
+    if (hdc?.pc_server_rport_ready || !hdc?.connect_task) {
+      manualConnectPendingRef.current = false;
+      setDeviceBusy((current) => (current === "connect" ? null : current));
+    }
+  }, [hdc?.connect_task, hdc?.pc_server_rport_ready]);
+
   async function connectHdc() {
     if (!hdcTarget.trim()) {
-      setDeviceNotice("请输入设备序列号或 host:port。");
+      setDeviceNotice("请输入无线调试 IP 和端口。");
       return;
     }
     setDeviceBusy("connect");
@@ -126,11 +137,16 @@ export function useHdcActions(params: {
       const nextStatus = await connectHdcTarget(hdcTarget.trim(), expectedLlmPort);
       setHdc(nextStatus);
       setRecentHdcTargets(writeRecentHdcTarget(hdcTarget.trim()));
+      manualConnectPendingRef.current =
+        nextStatus.connect_task === "queued_manual" || nextStatus.connect_task === "manual";
       setDeviceNotice(nextStatus.message ?? "连接请求已完成。");
     } catch (connectError) {
+      manualConnectPendingRef.current = false;
       setDeviceNotice(connectError instanceof Error ? connectError.message : "连接失败。");
     } finally {
-      setDeviceBusy(null);
+      if (!manualConnectPendingRef.current) {
+        setDeviceBusy(null);
+      }
     }
   }
 
@@ -172,7 +188,7 @@ export function useHdcActions(params: {
 
   async function disconnectHdc() {
     if (!hdcTarget.trim()) {
-      setDeviceNotice("请输入要断开的设备序列号或 host:port。");
+      setDeviceNotice("请输入要断开的无线调试 IP 和端口。");
       return;
     }
     setDeviceBusy("disconnect");

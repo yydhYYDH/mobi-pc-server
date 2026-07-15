@@ -13,7 +13,7 @@ export function normalizeHdcTarget(value: string) {
 export function validateHdcConnectTarget(value: string) {
   const target = normalizeHdcTarget(value);
   if (!target) {
-    return "请输入设备序列号或无线调试 IP 和端口。";
+    return "请输入无线调试 IP 和端口。";
   }
 
   const ipPortMatch = /^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/.exec(target);
@@ -23,18 +23,18 @@ export function validateHdcConnectTarget(value: string) {
     if (octets.every((part) => part >= 0 && part <= 255) && port >= 1 && port <= 65535) {
       return null;
     }
-    return "请输入有效的 IP 和端口，或已连接设备的序列号。";
+    return "请输入有效的无线调试 IP 和端口。";
   }
 
   if (target.includes(":")) {
-    return "请输入有效的 IP 和端口，或已连接设备的序列号。";
+    return "请输入有效的无线调试 IP 和端口。";
   }
 
   if (/\s/.test(target)) {
-    return "设备序列号不能包含空格。";
+    return "无线调试地址不能包含空格。";
   }
 
-  return null;
+  return "请输入无线调试地址，例如 192.168.1.23:5555。";
 }
 
 export function getHdcDeviceTarget(device: HdcTargetDevice) {
