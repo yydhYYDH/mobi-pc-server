@@ -61,10 +61,6 @@ textarea {
 }
 
 button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   min-height: 38px;
   border: 1px solid var(--brand-strong);
   border-radius: 999px;
@@ -458,6 +454,13 @@ pre::-webkit-scrollbar {
 button .inline-spinner {
   border-color: rgb(255 255 255 / 36%);
   border-top-color: currentColor;
+}
+
+button:has(.inline-spinner) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .readiness-device-help {
