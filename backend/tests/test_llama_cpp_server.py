@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from app.services.llama_cpp_server import LlamaCppServerAdapter
+from app.services.llama_cpp_server import LlamaCppRuntime, LlamaCppServerAdapter
 
 
 def test_cuda_runtime_requires_a_detected_nvidia_gpu(monkeypatch, tmp_path: Path) -> None:
@@ -68,3 +68,29 @@ def test_configured_runtime_does_not_claim_the_wrong_accelerator(monkeypatch, tm
 
     assert adapter.find_runtime("cuda") is None
     assert adapter.find_runtime("cpu") is not None
+
+
+def test_cpu_command_disables_device_offload(tmp_path: Path) -> None:
+    adapter = LlamaCppServerAdapter()
+    command = adapter.build_command(
+        LlamaCppRuntime(tmp_path / "llama-server", "cpu"),
+        tmp_path / "model.gguf",
+        8090,
+    )
+
+    assert command[command.index("--device") + 1] == "none"
+    assert "--no-op-offload" in command
+    assert command[command.index("--fit") + 1] == "off"
+
+
+def test_cuda_command_keeps_device_selection_to_llama_cpp(tmp_path: Path) -> None:
+    adapter = LlamaCppServerAdapter()
+    command = adapter.build_command(
+        LlamaCppRuntime(tmp_path / "llama-server", "cuda"),
+        tmp_path / "model.gguf",
+        8090,
+    )
+
+    assert "--device" not in command
+    assert "--no-op-offload" not in command
+    assert "--fit" not in command
