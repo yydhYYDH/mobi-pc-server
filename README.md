@@ -1,15 +1,40 @@
-# 你的智伴
+<p align="center">
+  <img src="assets/icon-128.jpg" width="128" alt="图标">
+</p>
 
-PC 侧控制台应用，用于启动和管理本地推理服务、从 ModelScope 下载模型，并通过 `hdc` 连接 HarmonyOS 设备。
+<p align="center">
+  你的智伴：自主感知，自主决策与主动式服务，实现全时陪伴的数字分身
+</p>
 
-英文版 README 保留在 [README.en.md](README.en.md)。
+<p align="center">
+  <a href="README.en.md">English</a> | <a href="README.md">中文</a>
+</p>
+
+-----
+## 关于
+你的智伴(ClawMate) 是一款面向 HarmonyOS NEXT 的端侧智能体应用，支持图库分析、个人画像、推荐事项和数字分身等能力，形成从“理解个人数据”到“执行真实手机操作”的完整移动智能体体验。
+
+<p align="center">
+<img src="assets/app.jpg" height="280" alt="app截屏">
+<img src="assets/mobi-pc-server.png" width="280" alt="pc截屏">
+</p>
+
+本仓库提供鸿蒙和桌面应用的源码，并提供桌面应用的安装包。
 
 ## 安装
+### 鸿蒙App
 
-请先从 `desktop/release/` 获取对应平台安装包：
+### 桌面应用
+桌面应用可以直接从[Release页面](https://github.com/yydhYYDH/mobi-pc-server/releases)下载。
+
+| Platform | Download |
+|--|--|
+|macOS (Apple Silicon) |	ClawMate-desktop-mac-arm64.dmg |
+|Windows | ClawMate-desktop-windows-x64.exe |
+|Linux | ClawMate-desktop-linux-x64.AppImage |
 
 - Windows：运行 `.exe` 安装包。
-- macOS：打开 `.dmg` 或解压 `.zip`，将应用拖入 Applications。
+- macOS：打开 `.dmg` ，将应用拖入 Applications。
 - Linux：给 `.AppImage` 添加执行权限后直接运行。
 
 Linux 示例：
@@ -20,177 +45,3 @@ chmod +x ClawMate-*-linux-*.AppImage
 ```
 
 安装后首次启动会把随包配置复制到用户数据目录。模型文件、日志和缓存会保存在系统用户数据目录，覆盖安装或升级应用时不会写入安装目录。
-
-## 技术栈
-
-- 前端：React + Vite + TypeScript
-- 后端：FastAPI
-- 桌面壳：Electron
-- 原生运行时：`3rdparty/mobiinfer` 下的 MobiInfer，`3rdparty/llama.cpp` 下的 llama.cpp
-- 模型来源：ModelScope
-- 设备桥接：HarmonyOS `hdc`
-
-## 目录结构
-
-```text
-frontend/        浏览器控制台页面
-backend/         本地 API 服务和进程封装
-desktop/         Electron 桌面启动壳
-configs/         模型目录和静态配置
-models/          下载后的模型文件，不提交到 Git
-logs/            运行日志，不提交到 Git
-3rdparty/mobiinfer  作为 Git submodule 引入的 mobiinfer 上游源码
-3rdparty/llama.cpp 作为 Git submodule 引入的 llama.cpp 上游源码
-docs/            项目文档
-scripts/         开发脚本
-```
-
-## 开发运行
-
-需要 Node.js 20 或更新版本：
-
-```bash
-nvm install 20
-nvm use 20
-```
-
-启动后端：
-
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-启动前端：
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-前端默认访问后端地址：
-
-```text
-http://127.0.0.1:8000
-```
-
-启动桌面开发版：
-
-```bash
-cd desktop
-npm install
-npm run dev
-```
-
-开发模式下，Electron 会启动 Vite 前端和 FastAPI 后端，等待
-`http://127.0.0.1:5173` 与 `http://127.0.0.1:8000/api/health` 可用后打开桌面窗口。
-
-
-## 打包
-
-打包前先安装前端和桌面端依赖：
-
-```bash
-cd frontend
-npm install
-
-cd ../desktop
-npm install
-```
-
-打包 HarmonyOS 设备功能还需要 `hdc`。可通过以下任一方式获取：
-
-1. 安装 [DevEco Studio](https://developer.huawei.com/consumer/cn/deveco-studio/)，并通过其 SDK 管理器安装对应的 HarmonyOS SDK 和设备工具。
-2. 从华为官方 [DevEco Studio 资源与开发工具](https://developer.huawei.com/consumer/cn/deveco-studio/resources/) 下载 **Command Line Tools**，解压后取得 `hdc`。
-
-将 `hdc` 所在目录加入系统环境变量，或在打包前显式指定其路径。
-
-编译并加载submodule:
-
-初始化/更新两个 Git 子模块源码：
-```bash
-git submodule update --init --depth 1 3rdparty/mobiinfer 3rdparty/llama.cpp
-```
-
-### Windows x64
-
-在 Windows 原生 PowerShell 或 Developer PowerShell 里执行：
-
-```powershell
-cd pc_server
-
-.\scripts\windows\build-backend.ps1
-.\scripts\windows\build-mobiinfer.ps1 -Architecture x64 -OpenSslRoot "C:\Program Files\OpenSSL-Win64"
-.\scripts\windows\build-llama-cpp.ps1 -Mode cpu -Architecture x64
-
-# 可选：需要 CUDA 版 llama.cpp 时再构建
-.\scripts\windows\build-llama-cpp.ps1 -Mode cuda -Architecture x64 -CudaArch 89
-
-cd desktop
-npm run build-win-x64
-```
-
-产物会写到 `desktop/release/`。Windows arm64 对应使用 `-Architecture arm64` 和 `npm run build-win-arm`。
-
-### macOS
-
-Apple Silicon：
-
-```bash
-cd /path/to/pc_server
-
-PC_SERVER_DESKTOP_TARGET_PLATFORM=darwin PC_SERVER_DESKTOP_TARGET_ARCH=arm64 ./scripts/build-backend.sh
-PC_SERVER_DESKTOP_TARGET_ARCH=arm64 ./scripts/build-mobiinfer.sh
-LLAMA_CPP_BUILD_MODE=metal PC_SERVER_DESKTOP_TARGET_ARCH=arm64 \
-  LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-mac-arm64/llama-cpp/cpu" \
-  ./scripts/build-llama-cpp.sh
-
-cd desktop
-npm run build-mac-arm
-```
-
-Intel Mac 把 `arm64` 换成 `x64`，资源目录换成 `desktop/resources-mac-x64/llama-cpp/cpu`，最后执行 `npm run build-mac-x64`。
-
-### Linux x64
-
-```bash
-cd /mnt/e/WAIC/pc_server
-
-PC_SERVER_DESKTOP_TARGET_PLATFORM=linux PC_SERVER_DESKTOP_TARGET_ARCH=x64 ./scripts/build-backend.sh
-PC_SERVER_DESKTOP_TARGET_ARCH=x64 ./scripts/build-mobiinfer.sh
-LLAMA_CPP_BUILD_MODE=cpu PC_SERVER_DESKTOP_TARGET_ARCH=x64 \
-  LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-linux-x64/llama-cpp/cpu" \
-  ./scripts/build-llama-cpp.sh
-
-# 可选：需要 CUDA 版 llama.cpp 时再构建
-LLAMA_CPP_BUILD_MODE=cuda PC_SERVER_DESKTOP_TARGET_ARCH=x64 \
-  LLAMA_CPP_INSTALL_DIR="$PWD/desktop/resources-linux-x64/llama-cpp/cuda" \
-  ./scripts/build-llama-cpp.sh
-
-cd desktop
-npm run build-linux-x64
-```
-
-Linux arm64 把 `x64` 换成 `arm64`，资源目录换成 `desktop/resources-linux-arm64/...`，最后执行 `npm run build-linux-arm`。
-
-更详细说明见：
-
-- Windows：[docs/packaging-windows.md](docs/packaging-windows.md)
-- macOS：[docs/packaging-macos.md](docs/packaging-macos.md)
-- Linux/WSL：[docs/packaging-linux.md](docs/packaging-linux.md)
-
-
-
-## 模型
-
-模型选项定义在 `configs/models.json`。开发模式下下载后的模型文件放在 `models/<model-id>/`，不提交到 Git。
-
-桌面发布包会把模型、用户配置、日志和 ModelScope 缓存放到系统用户数据目录，避免覆盖安装或更新应用时被删除。详见 [docs/desktop-data.md](docs/desktop-data.md)。
-
-## HarmonyOS 设备
-
-安装 `hdc` 并确保它在 `PATH` 中，然后通过后端 API 或前端设备面板查看已连接设备。
