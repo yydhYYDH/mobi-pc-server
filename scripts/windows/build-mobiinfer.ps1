@@ -8,6 +8,7 @@ Param(
   [String]$InstallDir,
   [String]$OpenSslRoot,
   [String]$CMakeToolchainFile,
+  [String]$VsInstallDir,
   [String]$VcpkgRoot,
   [String]$VcpkgTriplet
 )
@@ -92,6 +93,62 @@ function Find-FirstFile {
     Select-Object -First 1
 }
 
+function Find-VisualStudioInstallDir {
+  if ($VsInstallDir) {
+    return $VsInstallDir
+  }
+
+  if ($env:VSINSTALLDIR) {
+    return $env:VSINSTALLDIR
+  }
+
+  $VsWhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+  if (Test-Path $VsWhere) {
+    $Found = & $VsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    if ($LASTEXITCODE -eq 0 -and $Found) {
+      return ($Found | Select-Object -First 1)
+    }
+  }
+
+  return $null
+}
+
+function Import-VisualStudioEnvironment {
+  if (Get-Command cl.exe -ErrorAction SilentlyContinue) {
+    Write-Host "MSVC compiler found: $((Get-Command cl.exe).Source)"
+    return
+  }
+
+  $InstallDir = Find-VisualStudioInstallDir
+  if (-not $InstallDir) {
+    throw "cl.exe was not found on PATH and Visual Studio could not be located. Run from a Developer PowerShell, or pass -VsInstallDir."
+  }
+
+  $VsDevCmd = Join-Path $InstallDir "Common7\Tools\VsDevCmd.bat"
+  if (-not (Test-Path $VsDevCmd)) {
+    throw "VsDevCmd.bat was not found: $VsDevCmd"
+  }
+
+  Write-Host "Importing MSVC environment: $VsDevCmd"
+  $Cmd = "`"$VsDevCmd`" -arch=$Architecture -host_arch=$Architecture >nul && set"
+  $EnvLines = & cmd.exe /d /s /c $Cmd
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to import Visual Studio environment from $VsDevCmd"
+  }
+
+  foreach ($Line in $EnvLines) {
+    if ($Line -match "^([^=]+)=(.*)$") {
+      [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], "Process")
+    }
+  }
+
+  if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
+    throw "Visual Studio environment was imported, but cl.exe is still not on PATH."
+  }
+
+  Write-Host "MSVC compiler found: $((Get-Command cl.exe).Source)"
+}
+
 function Clear-CMakeScratch {
   Param(
     [Parameter(Mandatory = $true)][String]$BuildDir
@@ -119,9 +176,14 @@ Write-Host "CMake generator: $Generator"
 
 $ExtraCMakeArgs = @()
 $GeneratorArgs = @("-G", $Generator)
+$CompilerArgs = @()
 if ($Generator -like "Visual Studio*") {
   $GeneratorArgs += "-A"
   $GeneratorArgs += $Architecture
+} elseif (($IsWindows -or $env:OS -eq "Windows_NT") -and $Generator -eq "Ninja") {
+  Import-VisualStudioEnvironment
+  $CompilerArgs += "-DCMAKE_C_COMPILER=cl"
+  $CompilerArgs += "-DCMAKE_CXX_COMPILER=cl"
 }
 
 if ($CMakeToolchainFile) {
@@ -178,6 +240,7 @@ $MnnConfigureArgs = @(
   "-DMNN_USE_OPENCV=ON"
 )
 $MnnConfigureArgs += $GeneratorArgs
+$MnnConfigureArgs += $CompilerArgs
 $MnnConfigureArgs += $ExtraCMakeArgs
 Invoke-Checked cmake -BuildDir $MnnBuildDir @MnnConfigureArgs
 
@@ -185,7 +248,10 @@ Invoke-Checked cmake -BuildDir $MnnBuildDir "--build" $MnnBuildDir "--config" $B
 
 $MnnLib = Find-FirstFile -Root $MnnBuildDir -Filter "MNN.lib"
 if (-not $MnnLib) {
-  throw "MNN.lib was not found under $MnnBuildDir"
+  $MnnLib = Find-FirstFile -Root $MnnBuildDir -Filter "libMNN.a"
+}
+if (-not $MnnLib) {
+  throw "MNN static library was not found under $MnnBuildDir"
 }
 
 Write-Host "MNN library: $($MnnLib.FullName)"
@@ -203,6 +269,7 @@ $MnnCliConfigureArgs = @(
   "-DCMAKE_CXX_FLAGS=/utf-8"
 )
 $MnnCliConfigureArgs += $GeneratorArgs
+$MnnCliConfigureArgs += $CompilerArgs
 $MnnCliConfigureArgs += $ExtraCMakeArgs
 Invoke-Checked cmake -BuildDir $MnnCliBuildDir @MnnCliConfigureArgs
 

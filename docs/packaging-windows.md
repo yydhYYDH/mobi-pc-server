@@ -7,7 +7,7 @@
 - Node.js 20 或更新版本。
 - Python 3.11 或 3.12。
 - Git。
-- Visual Studio 2022 Build Tools，包含 MSVC C++ 生成工具。
+- Visual Studio 2022 Build Tools，包含 MSVC C++ 生成工具；Windows 原生构建推荐使用 MSVC。
 - CMake 和 Ninja。
 - 完整版 Win64 OpenSSL，用于构建 MobiInfer `mnncli`。
 - HarmonyOS `hdc.exe`，可通过 DevEco Studio 或 Command Line Tools 获取。
