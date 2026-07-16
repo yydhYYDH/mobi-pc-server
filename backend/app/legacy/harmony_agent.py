@@ -77,7 +77,7 @@ SWIPE_H_START = 0.3
 SWIPE_H_END = 0.7
 
 # LLM Agent 包名
-LLM_APP_BUNDLE = "com.example.mnnllmchat"
+LLM_APP_BUNDLE = "com.clawmate.app"
 LLM_APP_ABILITY = "EntryAbility"
 
 def set_log_sink(sink):
@@ -546,15 +546,13 @@ def bring_llm_app_to_foreground():
 
 def _bring_llm_app_to_foreground_impl():
     # 任务结束或异常时回到本 App，方便用户查看日志、截图和错误原因。
-    print(">> 任务结束/出错，正在自动跳回 MNN LLM Chat App...")
+    agent_log(">> 任务结束/出错，正在自动跳回 Clawmate App...")
+    cmd = f"{hdc_prefix()} shell aa start -a {LLM_APP_ABILITY} -b {LLM_APP_BUNDLE}"
     try:
-        _run_timed_command(
-            "bring_llm_app_to_foreground",
-            f"{hdc_prefix()} shell aa start -b {LLM_APP_BUNDLE} -a {LLM_APP_ABILITY}",
-            timeout=HDC_ACTION_TIMEOUT
-        )
+        agent_log(f">> 执行回到宿主命令: {cmd}")
+        _run_timed_command("bring_llm_app_to_foreground", cmd, timeout=HDC_ACTION_TIMEOUT)
     except Exception as ex:
-        print(f">> [HDC warning] bring app to foreground failed: {ex}")
+        agent_log(f">> [HDC warning] bring app to foreground failed: {ex}")
     time.sleep(1)
 APP_MAPPING = {
     # Planner 输出中文 App 名或包名均可；中文名先映射为 HarmonyOS bundleName。
@@ -1569,10 +1567,8 @@ def _launch_app_impl(app_name, reset_first=True):
         # Last-resort fallback for environments without hmdriver2.
         if bundle == "com.taobao.taobao4hmos":
             cmd = f"{hdc_prefix()} shell aa start -b {bundle} -a Taobao_mainAbility"
-        elif "EntryAbility" in ability_candidates_for_bundle(bundle, ability_name):
-            cmd = f"{hdc_prefix()} shell aa start -a EntryAbility -b {bundle}"
         else:
-            cmd = f"{hdc_prefix()} shell aa start -b {bundle}"
+            cmd = f"{hdc_prefix()} shell aa start -a EntryAbility -b {bundle}"
         agent_log(f">> 执行启动命令 (hdc fallback): {cmd}")
         try:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=HDC_ACTION_TIMEOUT)
