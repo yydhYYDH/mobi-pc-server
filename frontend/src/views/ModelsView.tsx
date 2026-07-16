@@ -22,7 +22,7 @@ export function ModelsView(props: {
   return (
     <section className="panel table-panel">
       <PanelTitle action={<CountPill>{props.models.length}</CountPill>} kicker="ModelScope" title="模型资产" />
-      <DataState error={props.loadError} empty={props.models.length === 0} emptyText="模型目录为空，请检查 configs/models.json。">
+      <DataState error={props.loadError} empty={props.models.length === 0} emptyText={`当前 ${backendLabel(props.selectedBackend)} 后端没有可用模型。`}>
       <div className="model-table">
         <div className="table-row table-head">
           <span>模型</span>

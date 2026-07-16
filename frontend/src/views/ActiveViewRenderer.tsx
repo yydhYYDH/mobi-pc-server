@@ -131,7 +131,7 @@ export function ActiveViewRenderer(props: {
           loadModel={props.loadModel}
           loadError={props.loadError}
           modelBusy={props.modelBusy}
-          models={props.models}
+          models={props.selectableModels}
           pauseDownload={props.pauseDownload}
           selectedBackend={props.selectedBackend}
           serverState={props.serverState}
