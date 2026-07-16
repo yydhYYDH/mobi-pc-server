@@ -7,33 +7,12 @@ PYTHON_BIN="${PC_SERVER_PYTHON:-}"
 HOST="${PC_SERVER_BACKEND_HOST:-127.0.0.1}"
 PORT="${PC_SERVER_BACKEND_PORT:-}"
 
-if [[ -z "$PYTHON_BIN" ]]; then
-  for candidate in "$BACKEND_DIR/.venv/bin/python" "$BACKEND_DIR/.venv-linux/bin/python"; do
-    if [[ -x "$candidate" ]]; then
-      PYTHON_BIN="$candidate"
-      break
-    fi
-  done
-fi
+source "$ROOT_DIR/scripts/backend-python.sh"
 
-if [[ -z "$PYTHON_BIN" ]]; then
-  PYTHON_BIN="$BACKEND_DIR/.venv/bin/python"
-  if [[ ! -x "$PYTHON_BIN" ]]; then
-    PYTHON_CREATE_BIN="$(command -v python3 || command -v python || true)"
-    if [[ -z "$PYTHON_CREATE_BIN" ]]; then
-      echo "python3 was not found on PATH. Install Python 3.10+ or set PC_SERVER_PYTHON." >&2
-      exit 1
-    fi
-    "$PYTHON_CREATE_BIN" -m venv "$BACKEND_DIR/.venv"
-  fi
-fi
-
-if [[ ! -x "$PYTHON_BIN" ]]; then
-  echo "Python interpreter is not executable: $PYTHON_BIN" >&2
-  exit 1
-fi
+PYTHON_BIN="$(pc_server_ensure_backend_python "$BACKEND_DIR")"
 
 if ! "$PYTHON_BIN" -c "import uvicorn" >/dev/null 2>&1; then
+  "$PYTHON_BIN" -m pip install --upgrade "pip>=24.0" "setuptools>=68" wheel
   "$PYTHON_BIN" -m pip install -e "$BACKEND_DIR"
 fi
 

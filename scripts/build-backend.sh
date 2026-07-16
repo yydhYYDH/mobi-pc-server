@@ -3,9 +3,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
-PYTHON_BIN="${PC_SERVER_PYTHON:-$BACKEND_DIR/.venv/bin/python}"
 TARGET_PLATFORM="${PC_SERVER_DESKTOP_TARGET_PLATFORM:-$(uname -s)}"
 TARGET_ARCH="${PC_SERVER_DESKTOP_TARGET_ARCH:-$(uname -m)}"
+
+source "$ROOT_DIR/scripts/backend-python.sh"
 
 case "$TARGET_ARCH" in
   x86_64)
@@ -28,11 +29,10 @@ case "$TARGET_PLATFORM" in
     ;;
 esac
 
-if [ ! -x "$PYTHON_BIN" ]; then
-  PYTHON_BIN="$(command -v python3)"
-fi
+PYTHON_BIN="$(pc_server_ensure_backend_python "$BACKEND_DIR")"
 
 cd "$BACKEND_DIR"
+"$PYTHON_BIN" -m pip install --upgrade "pip>=24.0" "setuptools>=68" wheel
 "$PYTHON_BIN" -m pip install -e .
 "$PYTHON_BIN" -m pip install pyinstaller
 
