@@ -192,7 +192,7 @@ desktop/resources-win-x64/
 
 ```powershell
 npm --prefix frontend run build
-npm --prefix desktop run build-win-x64
+.\scripts\windows\build-final-target.ps1 -Architecture x64
 ```
 
 注意：Windows 后端和原生运行时必须在原生 Windows 环境构建。WSL 生成的是 Linux 二进制，不能用于 Windows 安装包。CUDA 打包仅支持 Windows x64。
