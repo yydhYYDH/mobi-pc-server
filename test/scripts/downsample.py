@@ -15,7 +15,7 @@ def downsample_half(input_path, output_path):
 
     # 3. 保存图片
     cv2.imwrite(output_path, half_img)
-    
+
     # 打印对比信息确认尺寸
     h, w = img.shape[:2]
     nh, nw = half_img.shape[:2]
