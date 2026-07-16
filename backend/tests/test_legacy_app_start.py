@@ -106,7 +106,7 @@ def test_build_app_start_result_errors_when_foreground_verification_fails(
     monkeypatch.setattr(
         hdc_server,
         "detect_current_foreground_package_name",
-        lambda expected_package_name="": "com.example.mnnllmchat.test",
+        lambda expected_package_name="": "com.clawmate.app.test",
     )
 
     result = hdc_server.build_app_start_result("小红书", "", reset_first=False)
@@ -115,10 +115,10 @@ def test_build_app_start_result_errors_when_foreground_verification_fails(
         "status": "error",
         "message": (
             "app_start verification failed: expected com.xingin.xhs_hos, "
-            "current com.example.mnnllmchat.test"
+            "current com.clawmate.app.test"
         ),
         "package_name": "com.xingin.xhs_hos",
-        "current_package_name": "com.example.mnnllmchat.test",
+        "current_package_name": "com.clawmate.app.test",
     }
 
 
@@ -126,10 +126,10 @@ def test_extract_foreground_package_name_from_bracketed_mission_list() -> None:
     mission_list = """
 User ID #100
   current mission lists:{
-    Mission ID #100  mission name #[#com.example.mnnllmchat:entry:EntryAbility]  lockedState #0
+    Mission ID #100  mission name #[#com.clawmate.app:entry:EntryAbility]  lockedState #0
       AbilityRecord ID #1228
-        app name [com.example.mnnllmchat]
-        bundle name [com.example.mnnllmchat]
+        app name [com.clawmate.app]
+        bundle name [com.clawmate.app]
         state #BACKGROUND
         app state #FOREGROUND
     Mission ID #101  mission name #[#com.tencent.wechat:entry:EntryAbility]  lockedState #0
@@ -139,27 +139,27 @@ User ID #100
         bundle name [com.tencent.wechat]
         state #BACKGROUND
         app state #BACKGROUND
-    Mission ID #115  mission name #[#com.example.mnnllmchat:entry:EntryAbility]  lockedState #0
+    Mission ID #115  mission name #[#com.clawmate.app:entry:EntryAbility]  lockedState #0
       AbilityRecord ID #1552
-        app name [com.example.mnnllmchat]
+        app name [com.clawmate.app]
         main name [EntryAbility]
-        bundle name [com.example.mnnllmchat]
+        bundle name [com.clawmate.app]
         state #FOREGROUND
         app state #FOREGROUND
  }
 """
 
-    assert hdc_server.extract_foreground_package_name(mission_list) == "com.example.mnnllmchat"
+    assert hdc_server.extract_foreground_package_name(mission_list) == "com.clawmate.app"
 
 
 def test_extract_foreground_package_name_prefers_ability_state_over_app_state() -> None:
     mission_list = """
 User ID #100
   current mission lists:{
-    Mission ID #154  mission name #[#com.example.mnnllmchat.npu_offline:entry:EntryAbility]  lockedState #0
+    Mission ID #154  mission name #[#com.clawmate.app.npu_offline:entry:EntryAbility]  lockedState #0
       AbilityRecord ID #1555
-        app name [com.example.mnnllmchat.npu_offline]
-        bundle name [com.example.mnnllmchat.npu_offline]
+        app name [com.clawmate.app.npu_offline]
+        bundle name [com.clawmate.app.npu_offline]
         state #BACKGROUND
         app state #FOREGROUND
     Mission ID #157  mission name #[#com.xingin.xhs_hos:redbook:EntryAbility]  lockedState #0
@@ -226,10 +226,10 @@ def test_build_app_start_result_prefers_expected_foreground_package(
     mission_list = """
 User ID #100
   current mission lists:{
-    Mission ID #101  mission name #[#com.example.mnnllmchat.test:entry:EntryAbility]  lockedState #0
+    Mission ID #101  mission name #[#com.clawmate.app.test:entry:EntryAbility]  lockedState #0
       AbilityRecord ID #1229
-        app name [com.example.mnnllmchat.test]
-        bundle name [com.example.mnnllmchat.test]
+        app name [com.clawmate.app.test]
+        bundle name [com.clawmate.app.test]
         state #FOREGROUND
         app state #FOREGROUND
     Mission ID #116  mission name #[#com.huawei.hmos.browser:entry:MainAbility]  lockedState #0
