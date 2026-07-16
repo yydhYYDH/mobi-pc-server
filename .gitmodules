@@ -6,3 +6,8 @@
 	path = 3rdparty/llama.cpp
 	url = https://github.com/ggml-org/llama.cpp.git
 	shallow = true
+[submodule "clawmate-harmonyAPP"]
+	path = clawmate-harmonyAPP
+	url = https://github.com/ggml-org/clawmate-harmonyAPP.git
+	branch = stable
+	
