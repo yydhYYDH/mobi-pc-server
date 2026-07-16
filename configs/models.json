@@ -12,14 +12,14 @@
     "mmproj_file": "mmproj-mobi0402_2B_halfimage_rl-f16.gguf"
   },
   {
-    "id": "ui-venus-1.5-2b-0422",
-    "name": "UI-Venus 1.5 2B MobiInfer W8A8 Vocab Pruned",
-    "modelscope_id": "YYDH21/UI-Venus-1.5-2B-0422-reasoning-halfpixel-1ep_RLv2_4NPUS_bs128_ds5050_step100-w8g128-w8a8-vocab-pruned",
+    "id": "mnn-mobi-visual",
+    "name": "Mobi Visual 2B",
+    "modelscope_id": "doulujiyao/mnn_mobi_gptq_new_sym_e2e_2B_w8a8_half_rl_n64_s512_visual",
     "revision": "master",
-    "description": "UI-Venus 1.5 2B quantized model for the MobiInfer runtime.",
-    "size": "2.2GB",
+    "description": "Mobi Visual 2B",
+    "size": "3.4GB",
     "runtime": "mobiinfer",
-    "local_dir": "models/UI-Venus-1.5-2B-0422-reasoning-halfpixel-1ep_RLv2_4NPUS_bs128_ds5050_step100-w8g128-w8a8-vocab-pruned",
+    "local_dir": "models/mnn_mobi_gptq_new_sym_e2e_2B_w8a8_half_rl_n64_s512_visual",
     "entry_file": "config.json"
   }
 ]

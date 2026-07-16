@@ -28,7 +28,7 @@ mkdir -p "$MNN_BUILD_DIR" "$MNNCLI_BUILD_DIR"
 cmake -S "$MOBIINFER_DIR" -B "$MNN_BUILD_DIR" \
   -DCMAKE_BUILD_TYPE=Release \
   -DMNN_BUILD_SHARED_LIBS=OFF \
-  -DMNN_BUILD_CONVERTER=ON \
+  -DMNN_BUILD_CONVERTER=OFF \
   -DMNN_BUILD_LLM=ON \
   -DMNN_BUILD_LLM_OMNI=ON \
   -DMNN_LOW_MEMORY=ON \
@@ -49,9 +49,6 @@ cmake -S "$MNNCLI_DIR" -B "$MNNCLI_BUILD_DIR" \
   -DMNN_SOURCE_DIR="$MOBIINFER_DIR"
 
 cmake --build "$MNNCLI_BUILD_DIR" --target mnncli -j8
-
-echo "MNNConvert:"
-find "$MNN_BUILD_DIR" -maxdepth 3 -name MNNConvert | sed -n '1,5p'
 
 echo "mnncli:"
 echo "${MNNCLI_BUILD_DIR}/mnncli"
