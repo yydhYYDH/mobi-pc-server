@@ -86,8 +86,37 @@ com.xingin.xhs_hos:
     }
 
 
-def test_browser_has_no_hardcoded_main_ability_candidate() -> None:
-    assert harmony_agent.ability_candidates_for_bundle("com.huawei.hmos.browser") == []
+def test_apps_use_entry_ability_as_generic_launch_candidate() -> None:
+    assert harmony_agent.ability_candidates_for_bundle("com.huawei.hmos.browser") == ["EntryAbility"]
+
+
+def test_launch_app_uses_entry_ability_candidate_when_bm_dump_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[str] = []
+    bundle = "com.tencent.wechat"
+
+    monkeypatch.setattr(harmony_agent, "run_with_device_control", lambda _name, operation: operation())
+    monkeypatch.setattr(harmony_agent, "get_main_ability_for_bundle", lambda _bundle: "")
+    monkeypatch.setattr(harmony_agent, "ensure_driver_available", lambda: False)
+    monkeypatch.setattr(harmony_agent, "hdc_prefix", lambda force=False: "hdc")
+    monkeypatch.setattr(harmony_agent.time, "sleep", lambda _seconds: None)
+
+    def fake_run_timed(
+        label: str,
+        cmd: str,
+        capture_output: bool = True,
+        timeout: float = harmony_agent.HDC_COMMAND_TIMEOUT,
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(cmd)
+        if " shell bm dump -n " in cmd:
+            raise RuntimeError("bm dump unavailable")
+        return completed(cmd)
+
+    monkeypatch.setattr(harmony_agent, "_run_timed_command", fake_run_timed)
+
+    assert harmony_agent.launch_app(bundle, reset_first=False) is True
+    assert f"hdc shell aa start -a EntryAbility -b {bundle}" in commands
 
 
 def test_build_app_start_result_errors_when_foreground_verification_fails(

@@ -86,6 +86,10 @@ def emit_hdc_server_log(message):
             pass
 
 
+if harmony_agent is not None and hasattr(harmony_agent, "set_log_sink"):
+    harmony_agent.set_log_sink(lambda message: emit_hdc_server_log(message))
+
+
 def _compact_log_value(value, limit=160):
     if isinstance(value, (dict, list)):
         text = json.dumps(value, ensure_ascii=False)

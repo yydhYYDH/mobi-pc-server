@@ -51,6 +51,7 @@ POLL_FPORT_REFRESH_INTERVAL = 15.0
 LAST_POLL_FPORT_REFRESH = 0.0
 HDC_MANUAL_CONFIG_NOTICE_INTERVAL = 60.0
 HDC_MANUAL_CONFIG_LAST_NOTICE_AT = 0.0
+LOG_SINK = None
 
 # Agent mode toggle: True = prefix KV cache reuse, False = original chat-based flow
 USE_AGENT_MODE = True
@@ -78,6 +79,23 @@ SWIPE_H_END = 0.7
 # LLM Agent 包名
 LLM_APP_BUNDLE = "com.example.mnnllmchat"
 LLM_APP_ABILITY = "EntryAbility"
+
+def set_log_sink(sink):
+    global LOG_SINK
+    LOG_SINK = sink
+
+def agent_log(message):
+    text = str(message or "").rstrip()
+    if not text:
+        return
+    sink = LOG_SINK
+    if callable(sink):
+        try:
+            sink(text)
+            return
+        except Exception:
+            pass
+    print(text, flush=True)
 
 def quiet_system(cmd):
     try:
@@ -386,6 +404,7 @@ def ability_candidates_for_bundle(bundle, discovered_ability=""):
     if discovered_ability:
         candidates.append(discovered_ability)
     candidates.extend(APP_ABILITY_CANDIDATES.get(bundle, ()))
+    candidates.append("EntryAbility")
 
     deduped = []
     seen = set()
@@ -491,7 +510,7 @@ def start_app_with_explicit_ability(bundle, ability_name, module_name=""):
     if module_name:
         cmd += f" -m {shlex.quote(module_name)}"
     try:
-        print(f">> 执行启动命令 (hdc explicit): {cmd}")
+        agent_log(f">> 执行启动命令 (hdc explicit): {cmd}")
         _run_timed_command("launch_app explicit aa start", cmd)
         time.sleep(APP_LAUNCH_WAIT_TIME)
         return True
@@ -1543,16 +1562,18 @@ def _launch_app_impl(app_name, reset_first=True):
                 return True
 
         if ensure_driver_available():
-            print(f">> 执行启动命令 (hmdriver2 fallback): force_start_app({bundle})")
+            agent_log(f">> 执行启动命令 (hmdriver2 fallback): force_start_app({bundle})")
             run_driver_call("Driver.force_start_app", lambda driver: driver.force_start_app(bundle))
             return True
 
         # Last-resort fallback for environments without hmdriver2.
         if bundle == "com.taobao.taobao4hmos":
             cmd = f"{hdc_prefix()} shell aa start -b {bundle} -a Taobao_mainAbility"
+        elif "EntryAbility" in ability_candidates_for_bundle(bundle, ability_name):
+            cmd = f"{hdc_prefix()} shell aa start -a EntryAbility -b {bundle}"
         else:
             cmd = f"{hdc_prefix()} shell aa start -b {bundle}"
-        print(f">> 执行启动命令 (hdc fallback): {cmd}")
+        agent_log(f">> 执行启动命令 (hdc fallback): {cmd}")
         try:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=HDC_ACTION_TIMEOUT)
         except subprocess.TimeoutExpired:
