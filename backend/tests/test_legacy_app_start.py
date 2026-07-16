@@ -122,6 +122,42 @@ def test_build_app_start_result_errors_when_foreground_verification_fails(
     }
 
 
+def test_build_app_start_result_waits_for_expected_foreground_package(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeHarmonyAgent:
+        APP_MAPPING = {"微信": "com.tencent.wechat"}
+
+        @staticmethod
+        def launch_app(target: str, reset_first: bool = True) -> bool:
+            assert target == "微信"
+            assert reset_first is True
+            return True
+
+    foreground_packages = iter(["com.clawmate.app", "com.tencent.wechat"])
+    sleeps: list[float] = []
+
+    monkeypatch.setattr(hdc_server, "harmony_agent", FakeHarmonyAgent)
+    monkeypatch.setattr(hdc_server, "HDC_APP_START_VERIFY_TIMEOUT", 1.5)
+    monkeypatch.setattr(hdc_server, "HDC_APP_START_VERIFY_INTERVAL", 0.1)
+    monkeypatch.setattr(hdc_server.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(
+        hdc_server,
+        "detect_current_foreground_package_name",
+        lambda expected_package_name="": next(foreground_packages),
+    )
+
+    result = hdc_server.build_app_start_result("微信", "com.tencent.wechat", reset_first=True)
+
+    assert result == {
+        "status": "ok",
+        "message": "app_start 微信",
+        "package_name": "com.tencent.wechat",
+        "current_package_name": "com.tencent.wechat",
+    }
+    assert sleeps == [0.1]
+
+
 def test_extract_foreground_package_name_from_bracketed_mission_list() -> None:
     mission_list = """
 User ID #100

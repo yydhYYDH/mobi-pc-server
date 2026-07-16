@@ -33,6 +33,8 @@ LEGACY_HDC_CONNECT_ENABLED = os.environ.get(
 HDC_HEALTH_CACHE_TTL = float(os.environ.get("HDC_HEALTH_CACHE_TTL", "15"))
 HDC_COMMAND_TIMEOUT = float(os.environ.get("HDC_COMMAND_TIMEOUT", "20"))
 HDC_ACTION_TIMEOUT = float(os.environ.get("HDC_ACTION_TIMEOUT", "6"))
+HDC_APP_START_VERIFY_TIMEOUT = float(os.environ.get("HDC_APP_START_VERIFY_TIMEOUT", "1.5"))
+HDC_APP_START_VERIFY_INTERVAL = float(os.environ.get("HDC_APP_START_VERIFY_INTERVAL", "0.5"))
 HDC_LIST_TARGETS_TIMEOUT = float(os.environ.get("HDC_LIST_TARGETS_TIMEOUT", "3"))
 HDC_STALE_TARGET_GRACE = float(os.environ.get("HDC_STALE_TARGET_GRACE", "30"))
 HDC_WORKFLOW_USE_DRIVER_ACTIONS = os.environ.get(
@@ -1737,6 +1739,20 @@ def detect_current_foreground_package_name(expected_package_name=""):
     return ""
 
 
+def wait_for_foreground_package_name(expected_package_name):
+    deadline = time.monotonic() + max(0.0, HDC_APP_START_VERIFY_TIMEOUT)
+    last_package_name = ""
+    while True:
+        current_package_name = detect_current_foreground_package_name(expected_package_name)
+        if current_package_name:
+            last_package_name = current_package_name
+        if current_package_name == expected_package_name:
+            return current_package_name
+        if time.monotonic() >= deadline:
+            return last_package_name
+        time.sleep(max(0.05, HDC_APP_START_VERIFY_INTERVAL))
+
+
 def expected_package_name_for_app_start(app_name, package_name):
     package = str(package_name or "").strip()
     if package:
@@ -1776,7 +1792,7 @@ def build_app_start_result(app_name, package_name, reset_first):
         }
     current_package_name = ''
     if expected_package_name:
-        current_package_name = detect_current_foreground_package_name(expected_package_name)
+        current_package_name = wait_for_foreground_package_name(expected_package_name)
         if current_package_name != expected_package_name:
             current = current_package_name or "unknown"
             emit_hdc_server_log(
