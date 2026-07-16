@@ -1,7 +1,7 @@
 [
   {
-    "id": "mobi0402-2b-halfimage-rl-q4-k-m-gguf",
-    "name": "mobi0402 2B Halfimage RL Q4_K_M GGUF",
+    "id": "mobimind-2B-llama",
+    "name": "mobimind-2B",
     "modelscope_id": "YYDH21/mobi0402_2B_halfimage_rl-q4_k_m-gguf",
     "revision": "master",
     "description": "Q4_K_M GGUF converted locally from YYDH21/mobi0402_2B_halfimage_rl for llama.cpp.",
@@ -12,8 +12,8 @@
     "mmproj_file": "mmproj-mobi0402_2B_halfimage_rl-f16.gguf"
   },
   {
-    "id": "mnn-mobi-visual",
-    "name": "Mobi Visual 2B",
+    "id": "mnn-mobi-mobiinfer",
+    "name": "mobimind-2B",
     "modelscope_id": "doulujiyao/mnn_mobi_gptq_new_sym_e2e_2B_w8a8_half_rl_n64_s512_visual",
     "revision": "master",
     "description": "Mobi Visual 2B",
