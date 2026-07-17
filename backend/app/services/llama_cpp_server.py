@@ -153,6 +153,8 @@ class LlamaCppServerAdapter:
             "--n-gpu-layers",
             str(int(gpu_layers)),
         ]
+        if runtime.accelerator == "cpu":
+            command.extend(["--device", "none", "--no-op-offload", "--fit", "off"])
         if os.environ.get("LLAMA_CPP_NO_JINJA", "1").lower() not in {"0", "false", "no"}:
             command.append("--no-jinja")
         if mmproj_path is not None:

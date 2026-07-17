@@ -241,6 +241,42 @@ function patchDarwinRuntimeRpaths(directory) {
   }
 }
 
+function assertDarwinRpathLibraries(executable, label) {
+  if (targetPlatform !== "darwin" || !fs.existsSync(executable)) {
+    return;
+  }
+  if (!nativeExecutableMatchesTarget(executable, targetPlatform)) {
+    return;
+  }
+
+  const result = spawnSync("otool", ["-L", executable], {
+    encoding: "utf8"
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(`otool -L failed for ${executable}: ${result.stderr || result.stdout}`);
+  }
+
+  const runtimeDir = path.dirname(executable);
+  const missing = [];
+  for (const line of result.stdout.split(/\r?\n/)) {
+    const match = line.trim().match(/^@rpath\/(\S+)/);
+    if (!match) {
+      continue;
+    }
+    const libraryPath = path.join(runtimeDir, match[1]);
+    if (!fs.existsSync(libraryPath)) {
+      missing.push(match[1]);
+    }
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`${label} is missing Darwin runtime libraries: ${missing.join(", ")}`);
+  }
+}
+
 function patchLinuxRuntimeRpaths(directory) {
   if (targetPlatform !== "linux" || !fs.existsSync(directory)) {
     return;
@@ -635,6 +671,7 @@ for (const [label, executable] of [
 ]) {
   if (fs.existsSync(executable)) {
     assertNativeExecutableForTarget(executable, targetPlatform, label);
+    assertDarwinRpathLibraries(executable, label);
   }
 }
 if (targetPlatform !== "darwin" && !fs.existsSync(llamaCppCudaExecutable)) {
