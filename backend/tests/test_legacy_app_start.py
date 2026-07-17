@@ -1,4 +1,6 @@
 import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -84,6 +86,64 @@ com.xingin.xhs_hos:
         "module_name": "redbook",
         "ability_name": "EntryAbility",
     }
+
+
+def test_launch_app_prefers_static_taobao_launch_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[str] = []
+    bundle = "com.taobao.taobao4hmos"
+
+    monkeypatch.setattr(harmony_agent, "run_with_device_control", lambda _name, operation: operation())
+    monkeypatch.setattr(harmony_agent, "get_main_ability_for_bundle", lambda _bundle: "")
+    monkeypatch.setattr(harmony_agent, "ensure_driver_available", lambda: False)
+    monkeypatch.setattr(harmony_agent, "hdc_prefix", lambda force=False: "hdc -t 192.168.60.179:39435")
+    monkeypatch.setattr(harmony_agent, "stop_app_before_launch", lambda _bundle: None)
+    monkeypatch.setattr(harmony_agent.time, "sleep", lambda _seconds: None)
+
+    def fake_run_timed(
+        label: str,
+        cmd: str,
+        capture_output: bool = True,
+        timeout: float = harmony_agent.HDC_COMMAND_TIMEOUT,
+    ) -> subprocess.CompletedProcess[str]:
+        commands.append(cmd)
+        if " shell bm dump -n " in cmd:
+            return completed(cmd, stdout="")
+        return completed(cmd)
+
+    monkeypatch.setattr(harmony_agent, "_run_timed_command", fake_run_timed)
+
+    assert harmony_agent.launch_app("淘宝", reset_first=True) is True
+
+    start_commands = [command for command in commands if " shell aa start " in command]
+    assert start_commands == [
+        f"hdc -t 192.168.60.179:39435 shell aa start -a Taobao_mainAbility -b {bundle} -m taobao_main"
+    ]
+
+
+def test_top_level_legacy_import_prefers_static_taobao_launch_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    legacy_dir = Path(harmony_agent.__file__).resolve().parent
+    monkeypatch.syspath_prepend(str(legacy_dir))
+    sys.modules.pop("harmony_agent", None)
+
+    import harmony_agent as legacy_harmony_agent
+
+    try:
+        monkeypatch.setattr(
+            legacy_harmony_agent,
+            "get_app_launch_target_from_bm_dump",
+            lambda bundle, fallback_ability="": {"module_name": "", "ability_name": fallback_ability},
+        )
+
+        assert legacy_harmony_agent.app_launch_targets_for_bundle("com.taobao.taobao4hmos", "")[:2] == [
+            ("Taobao_mainAbility", "taobao_main"),
+            ("EntryAbility", ""),
+        ]
+    finally:
+        sys.modules.pop("harmony_agent", None)
 
 
 def test_apps_use_entry_ability_as_generic_launch_candidate() -> None:
@@ -269,6 +329,7 @@ User ID #100
             return True
 
     monkeypatch.setattr(hdc_server, "harmony_agent", FakeHarmonyAgent)
+    monkeypatch.setattr(hdc_server, "hdc_prefix", lambda force=False: "hdc")
     monkeypatch.setattr(
         hdc_server,
         "run_hdc_command_capture",
@@ -316,6 +377,7 @@ User ID #100
             return True
 
     monkeypatch.setattr(hdc_server, "harmony_agent", FakeHarmonyAgent)
+    monkeypatch.setattr(hdc_server, "hdc_prefix", lambda force=False: "hdc")
     monkeypatch.setattr(
         hdc_server,
         "run_hdc_command_capture",

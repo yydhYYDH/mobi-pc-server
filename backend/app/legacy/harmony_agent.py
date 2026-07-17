@@ -384,6 +384,7 @@ def ensure_driver_available():
 
 def get_main_ability_for_bundle(bundle):
     if not ensure_driver_available():
+        agent_log(f">> [Ability解析] Driver 不可用，跳过主 Ability 查询 bundle={bundle}")
         return ""
     try:
         ability = run_driver_call(
@@ -392,10 +393,23 @@ def get_main_ability_for_bundle(bundle):
         )
         if isinstance(ability, dict):
             name = ability.get("name", "")
-            return name if isinstance(name, str) else ""
+            resolved = name if isinstance(name, str) else ""
+            agent_log(
+                ">> [Ability解析] Driver.get_app_main_ability "
+                f"bundle={bundle} raw={ability} resolved={resolved or '<empty>'}"
+            )
+            return resolved
+        agent_log(
+            ">> [Ability解析] Driver.get_app_main_ability "
+            f"bundle={bundle} raw={ability} resolved=<empty>"
+        )
     except Exception as ex:
-        print(f">> [启动警告] 查询 {bundle} 主 Ability 失败: {ex}")
+        agent_log(f">> [启动警告] 查询 {bundle} 主 Ability 失败: {ex}")
     return ""
+
+APP_LAUNCH_TARGET_CANDIDATES = {
+    "com.taobao.taobao4hmos": (("Taobao_mainAbility", "taobao_main"),),
+}
 
 APP_ABILITY_CANDIDATES = {}
 
@@ -479,13 +493,21 @@ def get_app_launch_target_from_bm_dump(bundle, fallback_ability=""):
     try:
         result = _run_timed_command("launch_app bm dump", cmd, timeout=HDC_ACTION_TIMEOUT)
     except Exception as ex:
-        print(f">> [启动警告] 查询 {bundle} bm dump 失败，回退旧启动参数: {ex}")
+        agent_log(f">> [启动警告] 查询 {bundle} bm dump 失败，回退旧启动参数: {ex}")
         return {"module_name": "", "ability_name": fallback_ability}
     output = (result.stdout or "") + "\n" + (result.stderr or "")
-    return parse_app_launch_target_from_bm_dump(output, fallback_ability=fallback_ability)
+    target = parse_app_launch_target_from_bm_dump(output, fallback_ability=fallback_ability)
+    agent_log(
+        ">> [Ability解析] bm dump "
+        f"bundle={bundle} module={target.get('module_name') or '<empty>'} "
+        f"ability={target.get('ability_name') or '<empty>'} "
+        f"fallback={fallback_ability or '<empty>'}"
+    )
+    return target
 
 def app_launch_targets_for_bundle(bundle, discovered_ability=""):
     targets = []
+    targets.extend(APP_LAUNCH_TARGET_CANDIDATES.get(bundle, ()))
     bm_target = get_app_launch_target_from_bm_dump(bundle, discovered_ability)
     if bm_target.get("ability_name"):
         targets.append((bm_target["ability_name"], bm_target.get("module_name", "")))
@@ -501,6 +523,10 @@ def app_launch_targets_for_bundle(bundle, discovered_ability=""):
         if ability_name and key not in seen:
             deduped.append(key)
             seen.add(key)
+    agent_log(
+        ">> [Ability解析] 启动候选 "
+        f"bundle={bundle} discovered={discovered_ability or '<empty>'} candidates={deduped}"
+    )
     return deduped
 
 def start_app_with_explicit_ability(bundle, ability_name, module_name=""):
