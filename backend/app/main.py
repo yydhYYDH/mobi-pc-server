@@ -63,6 +63,7 @@ def shutdown() -> dict[str, object]:
         log_service.append(BACKEND_SERVER_LOG, f">> [Backend] HDC shutdown failed: {exc}")
 
     status = "ok" if not errors else "partial"
+    log_service.append(BACKEND_SERVER_LOG, f">> [Backend] shutdown finished status={status} steps={steps}")
     return {"status": status, "steps": steps, "errors": errors}
 
 

@@ -15,6 +15,7 @@ let backendProcess: ChildProcessWithoutNullStreams | undefined;
 let frontendProcess: ChildProcessWithoutNullStreams | undefined;
 let mainWindow: BrowserWindow | undefined;
 let isQuitting = false;
+let desktopLogPath: string | undefined;
 
 function repoRoot(): string {
   return path.resolve(__dirname, "..", "..");
@@ -66,16 +67,55 @@ function hostResourceDirectory(): string {
   return `resources-linux-${arch}`;
 }
 
+function desktopLogsDir(): string {
+  return path.join(appDataRoot(), "logs");
+}
+
+function ensureDesktopLogPath(): string {
+  if (!desktopLogPath) {
+    desktopLogPath = path.join(desktopLogsDir(), "desktop.log");
+  }
+  fs.mkdirSync(path.dirname(desktopLogPath), { recursive: true });
+  return desktopLogPath;
+}
+
+function formatLogLine(level: string, label: string, message: string): string {
+  const timestamp = new Date().toISOString();
+  const prefix = label ? `[${label}] ` : "";
+  return `[${timestamp}] [${level}] ${prefix}${message}`;
+}
+
+function writeDesktopLogLine(line: string): void {
+  try {
+    fs.appendFileSync(ensureDesktopLogPath(), `${line}\n`, "utf8");
+  } catch (error) {
+    console.error("[desktop] failed to write desktop log", error);
+  }
+}
+
+function desktopLog(level: "info" | "warn" | "error", label: string, message: string, error?: unknown): void {
+  const text = error ? `${message} ${error instanceof Error ? error.stack || error.message : String(error)}` : message;
+  const line = formatLogLine(level, label, text);
+  writeDesktopLogLine(line);
+  if (level === "error") {
+    console.error(line);
+  } else if (level === "warn") {
+    console.warn(line);
+  } else {
+    console.log(line);
+  }
+}
+
 function logBuffer(label: string, data: Buffer, error = false): void {
   const text = data.toString("utf8").trimEnd();
   if (!text) {
     return;
   }
 
-  if (error) {
-    console.error(`[${label}] ${text}`);
-  } else {
-    console.log(`[${label}] ${text}`);
+  for (const line of text.split(/\r?\n/)) {
+    if (line) {
+      desktopLog(error ? "error" : "info", label, line);
+    }
   }
 }
 
@@ -153,7 +193,7 @@ function attachProcessLogging(label: string, processRef: ChildProcessWithoutNull
   });
 
   processRef.on("error", (error) => {
-    console.error(`[${label}] failed to start`, error);
+    desktopLog("error", label, "failed to start", error);
   });
 
   processRef.on("exit", (code, signal) => {
@@ -163,16 +203,18 @@ function attachProcessLogging(label: string, processRef: ChildProcessWithoutNull
     if (frontendProcess === processRef) {
       frontendProcess = undefined;
     }
-    console.log(`[${label}] exited with code=${code ?? "null"} signal=${signal ?? "null"}`);
+    desktopLog("info", label, `exited with code=${code ?? "null"} signal=${signal ?? "null"}`);
   });
 }
 
 function startBackend(): void {
   if (SKIP_BACKEND) {
+    desktopLog("info", "backend", "Skipping backend startup because PC_SERVER_SKIP_BACKEND=1");
     return;
   }
 
   if (app.isPackaged) {
+    desktopLog("info", "backend", `Starting packaged backend: ${backendExecutablePath()}`);
     backendProcess = spawn(backendExecutablePath(), [], {
       cwd: process.resourcesPath,
       env: childEnv(),
@@ -182,6 +224,7 @@ function startBackend(): void {
     return;
   }
 
+  desktopLog("info", "backend", `Starting dev backend at ${backendBaseUrl()} with ${devPythonCommand()}`);
   backendProcess = spawn(
     devPythonCommand(),
     ["-m", "uvicorn", "app.main:app", "--host", BACKEND_HOST, "--port", String(backendPort)],
@@ -241,15 +284,13 @@ async function startFrontendDevServer(): Promise<void> {
   }
 
   if (await urlCheck(frontendDevUrl)) {
-    console.log(`[frontend] Reusing existing Vite server at ${frontendDevUrl}`);
+    desktopLog("info", "frontend", `Reusing existing Vite server at ${frontendDevUrl}`);
     return;
   }
 
   const viteBin = frontendViteBin();
   if (!fs.existsSync(viteBin)) {
-    console.error(
-      `[frontend] Vite is not installed. Run "npm install" in ${path.join(repoRoot(), "frontend")} first.`
-    );
+    desktopLog("error", "frontend", `Vite is not installed. Run "npm install" in ${path.join(repoRoot(), "frontend")} first.`);
     return;
   }
 
@@ -259,6 +300,7 @@ async function startFrontendDevServer(): Promise<void> {
   }
 
   const frontendPort = String(parsePort(frontendDevUrl));
+  desktopLog("info", "frontend", `Starting Vite dev server at ${frontendDevUrl}`);
   frontendProcess = spawn(nodeCommand(), [viteBin, "--host", "127.0.0.1", "--port", frontendPort, "--strictPort"], {
     cwd: path.join(repoRoot(), "frontend"),
     env: childEnv(),
@@ -275,7 +317,7 @@ function stopBackend(): void {
       windowsHide: true
     });
     if (result.error) {
-      console.warn("[backend] unable to terminate pc-server-backend.exe processes", result.error);
+      desktopLog("warn", "backend", "unable to terminate pc-server-backend.exe processes", result.error);
     }
     backendProcess = undefined;
     return;
@@ -403,7 +445,7 @@ async function createWindow(): Promise<void> {
     try {
       await mainWindow.loadURL(frontendDevUrl);
     } catch (error) {
-      console.error(`[frontend] failed to load ${frontendDevUrl}`, error);
+      desktopLog("error", "frontend", `failed to load ${frontendDevUrl}`, error);
       await mainWindow.loadURL(
         `data:text/html;charset=utf-8,${encodeURIComponent(`
           <!doctype html>
@@ -564,9 +606,12 @@ async function quitGracefully(): Promise<void> {
   isQuitting = true;
   const startedAt = Date.now();
   await showClosingNotice();
+  desktopLog("info", "backend", `Requesting backend shutdown at ${backendBaseUrl()}/api/shutdown`);
   const shutdownOk = await postJson(`${backendBaseUrl()}/api/shutdown`, 20000);
   if (!shutdownOk) {
-    console.warn(`[backend] shutdown endpoint did not complete successfully at ${backendBaseUrl()}/api/shutdown`);
+    desktopLog("warn", "backend", `shutdown endpoint did not complete successfully at ${backendBaseUrl()}/api/shutdown`);
+  } else {
+    desktopLog("info", "backend", "Backend shutdown endpoint completed successfully.");
   }
   const visibleForMs = Date.now() - startedAt;
   if (visibleForMs < 1200) {
@@ -579,6 +624,7 @@ async function quitGracefully(): Promise<void> {
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
+  desktopLog("info", "desktop", `Desktop log file: ${ensureDesktopLogPath()}`);
   await startFrontendDevServer();
 
   if (app.isPackaged && !SKIP_BACKEND) {
@@ -589,11 +635,11 @@ app.whenReady().then(async () => {
     const occupiedPort = backendPort;
     backendPort = await pickBackendPort(backendPort + 1);
     process.env.PC_SERVER_BACKEND_PORT = String(backendPort);
-    console.log(`[backend] Port ${occupiedPort} is occupied; starting packaged backend at ${backendBaseUrl()}`);
+    desktopLog("info", "backend", `Port ${occupiedPort} is occupied; starting packaged backend at ${backendBaseUrl()}`);
   }
 
   if (!app.isPackaged && (await healthCheck())) {
-    console.log(`[backend] Reusing existing backend at ${backendBaseUrl()}`);
+    desktopLog("info", "backend", `Reusing existing backend at ${backendBaseUrl()}`);
   } else {
     startBackend();
   }
@@ -601,7 +647,7 @@ app.whenReady().then(async () => {
   try {
     await Promise.all([waitForBackend(), app.isPackaged ? Promise.resolve() : waitForFrontend()]);
   } catch (error) {
-    console.error(error);
+    desktopLog("error", "desktop", "startup wait failed", error);
   }
 
   await createWindow();

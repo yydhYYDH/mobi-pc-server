@@ -1,5 +1,6 @@
 import subprocess
 import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -61,6 +62,36 @@ def test_ensure_rport_removes_stale_reverse_mapping_even_when_memory_ready(
     assert ["hdc", "-t", target, "fport", "ls"] in calls
     assert ["hdc", "-t", target, "fport", "rm", "tcp:15001", "tcp:18219"] in calls
     assert ["hdc", "-t", target, "rport", "tcp:15001", "tcp:18188"] in calls
+
+
+def test_with_llm_rport_maps_embedded_hdc_server_actual_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = HdcService()
+    target = "192.168.60.179:39435"
+    calls: list[list[str]] = []
+
+    service._origin_server_port = 56162  # noqa: SLF001
+    monkeypatch.setattr(service, "_hdc_path", lambda: "hdc")
+
+    def fake_run(args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args[-2:] == ["fport", "ls"]:
+            return completed(args)
+        return completed(args)
+
+    monkeypatch.setattr(service, "_run", fake_run)
+
+    status = service._with_llm_rport(  # noqa: SLF001
+        service._status_response(available=True, path="hdc"),  # noqa: SLF001
+        target,
+        8090,
+        "connected",
+    )
+
+    assert status.hdc_server_rport_ready is True
+    assert status.phone_hdc_server_url == "http://127.0.0.1:19124"
+    assert ["hdc", "-t", target, "rport", "tcp:19124", "tcp:56162"] in calls
 
 
 def test_manual_connect_rejects_non_wireless_target(
@@ -225,6 +256,36 @@ def test_cleanup_ports_filters_listed_mappings_by_target(
     ]
 
 
+def test_shutdown_kills_hdc_server_after_port_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = HdcService()
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(service, "_hdc_path", lambda: "hdc")
+    monkeypatch.setattr(service, "_log_hdc", lambda _message: None)
+    monkeypatch.setattr(service, "_log_hdc_server", lambda _message: None)
+
+    def fake_run(args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args == ["hdc", "fport", "ls"]:
+            return completed(
+                args,
+                stdout="4QE0225916013634    tcp:15001 tcp:18188    [Reverse]\n",
+            )
+        return completed(args)
+
+    monkeypatch.setattr(service, "_run", fake_run)
+
+    service.shutdown()
+
+    assert calls == [
+        ["hdc", "fport", "ls"],
+        ["hdc", "-t", "4QE0225916013634", "fport", "rm", "tcp:15001", "tcp:18188"],
+        ["hdc", "kill"],
+    ]
+
+
 def test_disconnect_network_target_uses_tconn_remove(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -276,3 +337,31 @@ def test_install_legacy_log_bridge_writes_to_hdc_server_log() -> None:
             ">> [Workflow] request action=gui_action payload={action=click}",
         )
     ]
+
+
+def test_embedded_hdc_server_falls_back_when_default_port_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeServer:
+        def __init__(self, address, _handler) -> None:
+            host, port = address
+            if port == 9124:
+                raise OSError("permission denied")
+            self.server_address = (host, 49152 if port == 0 else port)
+
+        def server_close(self) -> None:
+            return
+
+    service = HdcService()
+    logs: list[str] = []
+    monkeypatch.setenv("HDC_SERVER_BIND_HOST", "127.0.0.1")
+    monkeypatch.setenv("HDC_SERVER_BIND_PORT", "9124")
+    monkeypatch.setattr("app.services.hdc.ThreadingHTTPServer", FakeServer)
+    monkeypatch.setattr(service, "_log_hdc_server", logs.append)
+
+    fallback_server = service._bind_origin_hdc_server(  # noqa: SLF001
+        SimpleNamespace(HDCServerHandler=object)
+    )
+
+    assert fallback_server.server_address == ("127.0.0.1", 49152)
+    assert any("retrying with an available local port" in line for line in logs)

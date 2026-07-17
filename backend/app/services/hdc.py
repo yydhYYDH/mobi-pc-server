@@ -22,8 +22,11 @@ from app.services.runtime_state import runtime_service
 
 DEFAULT_LLM_PORT = 8090
 DEFAULT_PC_SERVER_PORT = int(os.getenv("PC_SERVER_BACKEND_PORT", "18188"))
-HDC_SERVER_PORT = 9124
-HDC_SERVER_URL = f"http://127.0.0.1:{HDC_SERVER_PORT}"
+HDC_SERVER_HOST = os.getenv("HDC_SERVER_HOST", "127.0.0.1")
+HDC_SERVER_PORT = int(os.getenv("HDC_SERVER_PORT", "9124"))
+HDC_SERVER_URL = f"http://{HDC_SERVER_HOST}:{HDC_SERVER_PORT}"
+PHONE_HDC_SERVER_PORT = 19124
+PHONE_HDC_SERVER_URL = f"http://127.0.0.1:{PHONE_HDC_SERVER_PORT}"
 PHONE_LLM_PORT = 8090
 PHONE_LLM_URL = f"http://127.0.0.1:{PHONE_LLM_PORT}"
 PHONE_PC_SERVER_PORT = 15001
@@ -67,10 +70,13 @@ class HdcService:
         self._pc_server_port = DEFAULT_PC_SERVER_PORT
         self._llm_rport_ready = False
         self._pc_server_rport_ready = False
+        self._hdc_server_rport_ready = False
         self._llm_rport_target = ""
         self._pc_server_rport_target = ""
+        self._hdc_server_rport_target = ""
         self._llm_rport_pc_port = 0
         self._pc_server_rport_pc_port = 0
+        self._hdc_server_rport_pc_port = 0
         self._last_device_connected_broadcast_target = ""
         self._origin_server_lock = threading.RLock()
         self._origin_server_thread: threading.Thread | None = None
@@ -79,6 +85,8 @@ class HdcService:
         self._origin_server_health_checked_at = 0.0
         self._origin_server_health_cache = False
         self._origin_server_health_failures = 0
+        self._origin_server_host = HDC_SERVER_HOST
+        self._origin_server_port = HDC_SERVER_PORT
         self._logs = LogService()
         self._connect_task_lock = threading.RLock()
         self._connect_task_running = False
@@ -147,10 +155,13 @@ class HdcService:
         if not devices:
             self._llm_rport_ready = False
             self._pc_server_rport_ready = False
+            self._hdc_server_rport_ready = False
             self._llm_rport_target = ""
             self._pc_server_rport_target = ""
+            self._hdc_server_rport_target = ""
             self._llm_rport_pc_port = 0
             self._pc_server_rport_pc_port = 0
+            self._hdc_server_rport_pc_port = 0
             self._last_device_connected_broadcast_target = ""
             self._last_observed_connected_target = ""
         status = self._status_response(available=True, path=hdc_path, devices=devices)
@@ -312,9 +323,9 @@ class HdcService:
 
         current = self._status_live()
         if current.devices:
-            target = current.devices[0].serial
-            self._log_hdc(f"Using existing HDC target from hdc list targets: {target}")
-            return self._with_llm_rport(current, target, llm_port, "Using existing HDC target.")
+            targets = [device.serial for device in current.devices]
+            self._log_hdc(f"Using existing HDC target(s) from hdc list targets: {', '.join(targets)}")
+            return self._with_rports_for_targets(current, targets, llm_port, "Using existing HDC target.")
 
         candidates = self._discover_candidates(hdc_path)
         if not candidates:
@@ -376,15 +387,22 @@ class HdcService:
         return current
 
     def shutdown(self) -> None:
+        self._log_hdc("Shutdown requested; cleaning HDC port mappings and embedded HDC server.")
         self._shutdown_event.set()
         self.cleanup_ports()
+        self._log_hdc("HDC port cleanup finished.")
         server = self._origin_http_server
         if server is not None:
+            self._log_hdc_server("Stopping embedded HDC server.")
             server.shutdown()
             server.server_close()
             self._origin_http_server = None
             self._origin_server_started = False
             self._origin_server_health_cache = False
+            self._log_hdc_server("Embedded HDC server stopped.")
+        else:
+            self._log_hdc_server("Embedded HDC server was not running.")
+        self._shutdown_hdc_server()
 
     def _ensure_active(self) -> None:
         if self._shutdown_event.is_set():
@@ -412,9 +430,9 @@ class HdcService:
                     if is_new_target:
                         self._last_observed_connected_target = target
                         self._log_hdc(f"HDC monitor observed connected target: {target}")
-                    status = self._with_llm_rport(
+                    status = self._with_rports_for_targets(
                         status,
-                        target,
+                        targets,
                         self._normalize_port(None),
                         "HDC monitor refreshed connected target." if not is_new_target else "HDC monitor observed connected target.",
                     )
@@ -579,7 +597,7 @@ class HdcService:
             return self._origin_server_health_cache
 
         try:
-            with urllib.request.urlopen(f"{HDC_SERVER_URL}/api/health", timeout=0.4) as response:
+            with urllib.request.urlopen(f"{self._origin_server_url()}/api/health", timeout=0.4) as response:
                 healthy = 200 <= response.status < 500
         except Exception:
             healthy = False
@@ -603,16 +621,20 @@ class HdcService:
         if legacy_dir not in sys.path:
             sys.path.insert(0, legacy_dir)
 
+        server = None
         try:
             from app.legacy import hdc_server as module
 
             module.LEGACY_LOOP_ENABLED = False
             self._install_legacy_log_bridge(module)
-            server = ThreadingHTTPServer(("0.0.0.0", module.SERVER_PORT), module.HDCServerHandler)
+            server = self._bind_origin_hdc_server(module)
             self._origin_http_server = server
+            self._origin_server_host = server.server_address[0]
+            self._origin_server_port = int(server.server_address[1])
+            module.SERVER_PORT = self._origin_server_port
             self._origin_server_started = True
             self._origin_server_health_cache = True
-            self._origin_server_message = f"HDC server started on port {module.SERVER_PORT}."
+            self._origin_server_message = f"HDC server started on {self._origin_server_url()}."
             self._log_hdc_server(self._origin_server_message)
             server.serve_forever()
         except OSError as exc:
@@ -626,6 +648,30 @@ class HdcService:
             if server is not None:
                 server.server_close()
                 self._origin_http_server = None
+
+    def _origin_server_url(self) -> str:
+        return f"http://{self._origin_server_host}:{self._origin_server_port}"
+
+    def _bind_origin_hdc_server(self, module) -> ThreadingHTTPServer:
+        bind_host = os.getenv("HDC_SERVER_BIND_HOST", HDC_SERVER_HOST)
+        bind_port = int(os.getenv("HDC_SERVER_BIND_PORT", str(HDC_SERVER_PORT)))
+        attempts = [(bind_host, bind_port)]
+        if bind_port != 0:
+            attempts.append((bind_host, 0))
+
+        last_error: OSError | None = None
+        for host, port in attempts:
+            try:
+                return ThreadingHTTPServer((host, port), module.HDCServerHandler)
+            except OSError as exc:
+                last_error = exc
+                if port != 0:
+                    self._log_hdc_server(
+                        f"HDC server bind failed on {host}:{port}, retrying with an available local port: {exc}"
+                    )
+
+        assert last_error is not None
+        raise last_error
 
     def _install_legacy_log_bridge(self, module) -> None:
         set_log_sink = getattr(module, "set_log_sink", None)
@@ -664,6 +710,25 @@ class HdcService:
         except subprocess.TimeoutExpired:
             return None
 
+    def _shutdown_hdc_server(self) -> None:
+        hdc_path = self._hdc_path()
+        if not hdc_path:
+            self._log_hdc("Skipping hdc kill because no usable hdc executable was found.")
+            return
+
+        args = [hdc_path, "kill"]
+        self._log_hdc(f"Executing HDC server shutdown: {self._format_command(args)}")
+        result = self._run(args, timeout=5)
+        if result is None:
+            self._log_hdc("HDC server shutdown timed out: hdc kill")
+            return
+        self._log_hdc(f"HDC server shutdown result: {self._format_result(result)}")
+        if result.returncode == 0:
+            self._log_hdc("HDC server stopped.")
+            return
+        message = result.stderr.strip() or result.stdout.strip() or "hdc kill failed"
+        self._log_hdc(f"HDC server shutdown failed: {message}")
+
     def _status_response(
         self,
         available: bool,
@@ -683,9 +748,11 @@ class HdcService:
             message=message,
             connect_task=connect_task,
             hdc_server_running=self._origin_hdc_server_running(),
-            hdc_server_port=HDC_SERVER_PORT,
-            hdc_server_url=HDC_SERVER_URL,
+            hdc_server_port=self._origin_server_port,
+            hdc_server_url=self._origin_server_url(),
             hdc_server_message=self._origin_server_message,
+            phone_hdc_server_url=PHONE_HDC_SERVER_URL,
+            hdc_server_rport_ready=self._hdc_server_rport_ready,
             llm_port=current_llm_port,
             phone_llm_url=PHONE_LLM_URL,
             llm_rport_ready=self._llm_rport_ready if llm_rport_ready is None else llm_rport_ready,
@@ -744,6 +811,16 @@ class HdcService:
             ready_target=self._pc_server_rport_target,
             ready_pc_port=self._pc_server_rport_pc_port,
         )
+        hdc_server_ready, hdc_server_message = self._ensure_rport(
+            target=target,
+            phone_port=PHONE_HDC_SERVER_PORT,
+            pc_port=self._origin_server_port,
+            label="HDC Server",
+            phone_url=PHONE_HDC_SERVER_URL,
+            already_ready=self._hdc_server_rport_ready,
+            ready_target=self._hdc_server_rport_target,
+            ready_pc_port=self._hdc_server_rport_pc_port,
+        )
         status.llm_port = llm_port
         status.phone_llm_url = PHONE_LLM_URL
         status.llm_rport_ready = llm_ready
@@ -756,10 +833,38 @@ class HdcService:
         self._pc_server_rport_ready = pc_server_ready
         self._pc_server_rport_target = target if pc_server_ready else ""
         self._pc_server_rport_pc_port = self._pc_server_port if pc_server_ready else 0
-        status.message = f"{message} {llm_message} {pc_server_message}".strip()
+        status.phone_hdc_server_url = PHONE_HDC_SERVER_URL
+        status.hdc_server_rport_ready = hdc_server_ready
+        self._hdc_server_rport_ready = hdc_server_ready
+        self._hdc_server_rport_target = target if hdc_server_ready else ""
+        self._hdc_server_rport_pc_port = self._origin_server_port if hdc_server_ready else 0
+        status.message = f"{message} {llm_message} {pc_server_message} {hdc_server_message}".strip()
         if target != self._last_device_connected_broadcast_target:
             self._broadcast_device_connected(status, target)
             self._last_device_connected_broadcast_target = target
+        return status
+
+    def _with_rports_for_targets(
+        self,
+        status: HdcStatus,
+        targets: list[str],
+        llm_port: int,
+        message: str,
+    ) -> HdcStatus:
+        deduped_targets: list[str] = []
+        for target in targets:
+            text = str(target or "").strip()
+            if text and text not in deduped_targets:
+                deduped_targets.append(text)
+        if not deduped_targets:
+            return status
+
+        primary = deduped_targets[0]
+        for index, target in enumerate(deduped_targets):
+            target_message = message if index == 0 else f"Refreshing additional HDC target {target}."
+            mapped = self._with_llm_rport(status, target, llm_port, target_message)
+            if target == primary:
+                status = mapped
         return status
 
     def _broadcast_device_connected(self, status: HdcStatus, target: str) -> None:
@@ -912,6 +1017,12 @@ class HdcService:
                 self._pc_server_rport_pc_port or self._pc_server_port,
                 "PC Server",
             ),
+            (
+                self._hdc_server_rport_target,
+                PHONE_HDC_SERVER_PORT,
+                self._hdc_server_rport_pc_port or self._origin_server_port,
+                "HDC Server",
+            ),
         ]
         for known_target, phone_port, pc_port, label in cleanup_specs:
             cleanup_target = (target or known_target).strip()
@@ -927,10 +1038,13 @@ class HdcService:
     def _reset_port_state(self) -> None:
         self._llm_rport_ready = False
         self._pc_server_rport_ready = False
+        self._hdc_server_rport_ready = False
         self._llm_rport_target = ""
         self._pc_server_rport_target = ""
+        self._hdc_server_rport_target = ""
         self._llm_rport_pc_port = 0
         self._pc_server_rport_pc_port = 0
+        self._hdc_server_rport_pc_port = 0
 
     def _cleanup_all_listed_port_mappings(self, target: str | None = None) -> bool:
         mappings = self._list_all_port_mappings()
