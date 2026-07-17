@@ -24,6 +24,8 @@ class HdcStatus(BaseModel):
     hdc_server_port: int = 9124
     hdc_server_url: str = "http://127.0.0.1:9124"
     hdc_server_message: str | None = None
+    phone_hdc_server_url: str = "http://127.0.0.1:19124"
+    hdc_server_rport_ready: bool = False
     llm_port: int = 8090
     phone_llm_url: str = "http://127.0.0.1:8090"
     llm_rport_ready: bool = False

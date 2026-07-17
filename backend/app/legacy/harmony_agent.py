@@ -111,6 +111,29 @@ def quiet_system(cmd):
         print(f">> [HDC timeout] command exceeded {HDC_COMMAND_TIMEOUT}s: {cmd}")
         return 124
 
+def hdc_executable():
+    return os.environ.get("HDC_BIN", "").strip() or "hdc"
+
+def shell_quote_arg(value):
+    text = str(value or "")
+    if os.name == "nt":
+        return subprocess.list2cmdline([text])
+    return shlex.quote(text)
+
+def hdc_shell_command():
+    return shell_quote_arg(hdc_executable())
+
+def ensure_hdc_bin_on_path():
+    hdc_bin = os.environ.get("HDC_BIN", "").strip()
+    if not hdc_bin:
+        return
+    hdc_dir = os.path.dirname(hdc_bin)
+    if not hdc_dir:
+        return
+    path_parts = os.environ.get("PATH", "").split(os.pathsep)
+    if hdc_dir not in path_parts:
+        os.environ["PATH"] = os.pathsep.join([hdc_dir, os.environ.get("PATH", "")])
+
 def is_wireless_hdc_target(target):
     return ":" in target
 
@@ -129,11 +152,12 @@ def parse_hdc_targets(output):
     return targets
 
 def list_hdc_targets(return_error=False):
+    ensure_hdc_bin_on_path()
     targets = []
     error = ""
     try:
         result = subprocess.run(
-            ["hdc", "list", "targets"],
+            [hdc_executable(), "list", "targets"],
             capture_output=True,
             text=True,
             timeout=HDC_LIST_TARGETS_TIMEOUT
@@ -245,13 +269,13 @@ def hdc_prefix(force=False):
     # 所有 hdc 命令统一走这里，保证多设备场景下始终带 -t target。
     target = get_hdc_target(force=force)
     if target:
-        return f"hdc -t {target}"
-    return "hdc"
+        return f"{hdc_shell_command()} -t {shell_quote_arg(target)}"
+    return hdc_shell_command()
 
 def hdc_prefix_for_target(target):
     if target:
-        return f"hdc -t {target}"
-    return "hdc"
+        return f"{hdc_shell_command()} -t {shell_quote_arg(target)}"
+    return hdc_shell_command()
 
 def refresh_hdc_forwarding(verbose=False):
     return run_with_device_control(
@@ -905,6 +929,7 @@ def reset_driver():
     with DEVICE_CONTROL_LOCK:
         try:
             import sys
+            ensure_hdc_bin_on_path()
             normalize_hmdriver_loggers()
             target = get_hdc_target(force=True)
             # 强制把 hmdriver2 相关的模块从缓存中剔除，打破单例

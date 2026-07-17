@@ -52,6 +52,8 @@ export type HdcStatus = {
   hdc_server_port: number;
   hdc_server_url: string;
   hdc_server_message: string | null;
+  phone_hdc_server_url: string;
+  hdc_server_rport_ready: boolean;
   llm_port: number;
   phone_llm_url: string;
   llm_rport_ready: boolean;

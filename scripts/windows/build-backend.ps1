@@ -50,25 +50,47 @@ if (-not (Test-Path $PythonBin)) {
 Push-Location $BackendDir
 & $PythonBin -m pip install -e .
 & $PythonBin -m pip install pyinstaller
-& $PythonBin -m PyInstaller `
-  --name pc-server-backend `
-  --onefile `
-  --clean `
-  --noconfirm `
-  --hidden-import app.legacy.hdc_server `
-  --hidden-import harmony_agent `
-  --hidden-import wechat_collect `
-  --hidden-import wechat_collect.service `
-  --hidden-import wechat_collect.collector `
-  --hidden-import wechat_collect.config `
-  --hidden-import wechat_collect.device `
-  --hidden-import wechat_collect.parser `
-  --hidden-import wechat_collect.render `
-  --add-data "app\legacy\harmony_agent.py;app\legacy" `
-  --add-data "app\legacy\serve_model.py;app\legacy" `
-  --add-data "app\legacy\prompts;app\legacy\prompts" `
-  --add-data "app\legacy\wechat_collect;app\legacy\wechat_collect" `
-  app\main.py
+$HmDriver2AssetsDir = & $PythonBin -c "import pathlib, hmdriver2; print(pathlib.Path(hmdriver2.__file__).resolve().parent / 'assets')"
+$HmDriver2AgentAssets = Get-ChildItem -Path $HmDriver2AssetsDir -Filter "uitest_agent*.so" -File | Sort-Object Name
+if (-not $HmDriver2AgentAssets -or $HmDriver2AgentAssets.Count -eq 0) {
+  throw "No hmdriver2 uitest_agent assets were found; cannot build packaged backend."
+}
+$PyInstallerArgs = @(
+  "--name", "pc-server-backend",
+  "--onefile",
+  "--clean",
+  "--noconfirm",
+  "--hidden-import", "app.legacy.hdc_server",
+  "--hidden-import", "harmony_agent",
+  "--hidden-import", "hmdriver2",
+  "--hidden-import", "hmdriver2._client",
+  "--hidden-import", "hmdriver2._gesture",
+  "--hidden-import", "hmdriver2._screenrecord",
+  "--hidden-import", "hmdriver2._swipe",
+  "--hidden-import", "hmdriver2._uiobject",
+  "--hidden-import", "hmdriver2._xpath",
+  "--hidden-import", "hmdriver2.driver",
+  "--hidden-import", "hmdriver2.exception",
+  "--hidden-import", "hmdriver2.hdc",
+  "--hidden-import", "hmdriver2.proto",
+  "--hidden-import", "hmdriver2.utils",
+  "--hidden-import", "wechat_collect",
+  "--hidden-import", "wechat_collect.service",
+  "--hidden-import", "wechat_collect.collector",
+  "--hidden-import", "wechat_collect.config",
+  "--hidden-import", "wechat_collect.device",
+  "--hidden-import", "wechat_collect.parser",
+  "--hidden-import", "wechat_collect.render",
+  "--add-data", "app\legacy\harmony_agent.py;app\legacy",
+  "--add-data", "app\legacy\serve_model.py;app\legacy",
+  "--add-data", "app\legacy\prompts;app\legacy\prompts",
+  "--add-data", "app\legacy\wechat_collect;app\legacy\wechat_collect"
+)
+foreach ($Asset in $HmDriver2AgentAssets) {
+  $PyInstallerArgs += @("--add-binary", "$($Asset.FullName);hmdriver2\assets")
+}
+$PyInstallerArgs += "app\main.py"
+& $PythonBin -m PyInstaller @PyInstallerArgs
 Pop-Location
 
 New-Item -ItemType Directory -Force -Path $DesktopBackendDir | Out-Null

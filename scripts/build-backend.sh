@@ -35,6 +35,20 @@ cd "$BACKEND_DIR"
 "$PYTHON_BIN" -m pip install --upgrade "pip>=24.0" "setuptools>=68" wheel
 "$PYTHON_BIN" -m pip install -e .
 "$PYTHON_BIN" -m pip install pyinstaller
+mapfile -t HMDRIVER2_AGENT_ASSETS < <("$PYTHON_BIN" - <<'PY'
+import pathlib
+import hmdriver2
+
+assets_dir = pathlib.Path(hmdriver2.__file__).resolve().parent / "assets"
+for asset in sorted(assets_dir.glob("uitest_agent*.so")):
+    print(asset)
+PY
+)
+
+if [[ "${#HMDRIVER2_AGENT_ASSETS[@]}" -eq 0 ]]; then
+  echo "No hmdriver2 uitest_agent assets were found; cannot build packaged backend." >&2
+  exit 1
+fi
 
 PYINSTALLER_ARGS=(
   --name pc-server-backend
@@ -43,6 +57,18 @@ PYINSTALLER_ARGS=(
   --noconfirm
   --hidden-import app.legacy.hdc_server
   --hidden-import harmony_agent
+  --hidden-import hmdriver2
+  --hidden-import hmdriver2._client
+  --hidden-import hmdriver2._gesture
+  --hidden-import hmdriver2._screenrecord
+  --hidden-import hmdriver2._swipe
+  --hidden-import hmdriver2._uiobject
+  --hidden-import hmdriver2._xpath
+  --hidden-import hmdriver2.driver
+  --hidden-import hmdriver2.exception
+  --hidden-import hmdriver2.hdc
+  --hidden-import hmdriver2.proto
+  --hidden-import hmdriver2.utils
   --hidden-import wechat_collect
   --hidden-import wechat_collect.service
   --hidden-import wechat_collect.collector
@@ -55,6 +81,10 @@ PYINSTALLER_ARGS=(
   --add-data "app/legacy/prompts:app/legacy/prompts"
   --add-data "app/legacy/wechat_collect:app/legacy/wechat_collect"
 )
+
+for asset in "${HMDRIVER2_AGENT_ASSETS[@]}"; do
+  PYINSTALLER_ARGS+=(--add-binary "$asset:hmdriver2/assets")
+done
 
 
 "$PYTHON_BIN" -m PyInstaller "${PYINSTALLER_ARGS[@]}" app/main.py

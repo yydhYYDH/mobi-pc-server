@@ -1228,6 +1228,8 @@ class HdcService:
     ) -> HdcStatus | None:
         if candidates:
             self._log_hdc(f"Auto-connect candidates: {', '.join(candidates)}")
+        connected_status: HdcStatus | None = None
+        connected_targets: list[str] = []
         for target in candidates:
             self._log_hdc(f"Trying hdc tconn {target}")
             result = self._run([hdc_path, "tconn", target], timeout=HDC_AUTO_TCONN_TIMEOUT)
@@ -1235,13 +1237,11 @@ class HdcService:
                 connected = self._status_live()
                 if self._status_contains_target(connected, target):
                     self._cache_target(target)
+                    connected_status = connected
+                    if target not in connected_targets:
+                        connected_targets.append(target)
                     self._log_hdc(f"hdc tconn timed out but target is connected: {target}")
-                    return self._with_llm_rport(
-                        connected,
-                        target,
-                        llm_port,
-                        "HDC target connected after tconn timeout.",
-                    )
+                    continue
                 message = f"{target}: timed out"
                 self._log_hdc(f"hdc tconn failed: {message}")
                 errors.append(message)
@@ -1250,21 +1250,33 @@ class HdcService:
             if result.returncode == 0 and self._tconn_output_succeeded(result.stdout, result.stderr):
                 self._cache_target(target)
                 connected = self._status_live()
+                connected_status = connected
+                if target not in connected_targets:
+                    connected_targets.append(target)
                 message = result.stdout.strip() or f"Auto-connected to {target}."
                 self._log_hdc(f"hdc tconn succeeded: {target}. {message}")
-                return self._with_llm_rport(connected, target, llm_port, message)
+                continue
             connected = self._status_live()
             if self._status_contains_target(connected, target):
                 self._cache_target(target)
+                connected_status = connected
+                if target not in connected_targets:
+                    connected_targets.append(target)
                 self._log_hdc(f"hdc tconn returned error but target is connected: {target}: {message}")
-                return self._with_llm_rport(
-                    connected,
-                    target,
-                    llm_port,
-                    "HDC target connected despite tconn error.",
-                )
+                continue
             self._log_hdc(f"hdc tconn failed: {target}: {message}")
             errors.append(f"{target}: {message}")
+        if connected_status and connected_targets:
+            known_targets = {device.serial for device in connected_status.devices}
+            for target in connected_targets:
+                if target not in known_targets:
+                    connected_status.devices.append(self._device_from_target(target))
+            return self._with_rports_for_targets(
+                connected_status,
+                connected_targets,
+                llm_port,
+                "HDC target(s) connected.",
+            )
         return None
 
     def _status_contains_target(self, status: HdcStatus, target: str) -> bool:

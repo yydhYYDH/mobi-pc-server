@@ -94,6 +94,46 @@ def test_with_llm_rport_maps_embedded_hdc_server_actual_port(
     assert ["hdc", "-t", target, "rport", "tcp:19124", "tcp:56162"] in calls
 
 
+def test_auto_connect_refreshes_rports_for_all_connected_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = HdcService()
+    targets = ["192.168.60.179:39435", "192.168.61.166:34223"]
+    connected_targets: list[str] = []
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(service, "_hdc_path", lambda: "hdc")
+    monkeypatch.setattr(service, "_broadcast_device_connected", lambda _status, _target: None)
+
+    def fake_status_live():
+        return service._status_response(  # noqa: SLF001
+            available=True,
+            path="hdc",
+            devices=[service._device_from_target(target) for target in connected_targets],  # noqa: SLF001
+        )
+
+    def fake_run(args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if args[:2] == ["hdc", "tconn"]:
+            connected_targets.append(args[2])
+            return completed(args, stdout="Connect OK")
+        if args[-2:] == ["fport", "ls"]:
+            return completed(args)
+        return completed(args)
+
+    monkeypatch.setattr(service, "_status_live", fake_status_live)
+    monkeypatch.setattr(service, "_run", fake_run)
+
+    status = service._connect_first_candidate("hdc", targets, [], 8090)  # noqa: SLF001
+
+    assert status is not None
+    assert [device.serial for device in status.devices] == targets
+    for target in targets:
+        assert ["hdc", "-t", target, "rport", "tcp:15001", "tcp:18188"] in calls
+        assert ["hdc", "-t", target, "rport", "tcp:19124", "tcp:9124"] in calls
+        assert ["hdc", "-t", target, "rport", "tcp:8090", "tcp:8090"] in calls
+
+
 def test_manual_connect_rejects_non_wireless_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

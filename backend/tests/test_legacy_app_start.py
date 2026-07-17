@@ -150,6 +150,32 @@ def test_apps_use_entry_ability_as_generic_launch_candidate() -> None:
     assert harmony_agent.ability_candidates_for_bundle("com.huawei.hmos.browser") == ["EntryAbility"]
 
 
+def test_hdc_prefix_uses_hdc_bin_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(harmony_agent.os, "name", "posix")
+    monkeypatch.setenv("HDC_BIN", "/opt/Harmony SDK/hdc")
+    monkeypatch.setattr(harmony_agent, "get_hdc_target", lambda force=False: "192.168.60.179:39435")
+
+    assert (
+        harmony_agent.hdc_prefix()
+        == "'/opt/Harmony SDK/hdc' -t 192.168.60.179:39435"
+    )
+
+
+def test_hdc_prefix_quotes_hdc_bin_for_windows_cmd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(harmony_agent.os, "name", "nt")
+    monkeypatch.setenv("HDC_BIN", r"E:\WAIC\pc server\desktop\resources-win-x64\hdc\hdc.exe")
+    monkeypatch.setattr(harmony_agent, "get_hdc_target", lambda force=False: "192.168.60.179:39435")
+
+    assert (
+        harmony_agent.hdc_prefix()
+        == r'"E:\WAIC\pc server\desktop\resources-win-x64\hdc\hdc.exe" -t 192.168.60.179:39435'
+    )
+
+
 def test_launch_app_uses_entry_ability_candidate_when_bm_dump_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
